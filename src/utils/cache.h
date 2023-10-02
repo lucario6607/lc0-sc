@@ -29,6 +29,7 @@
 
 #include <cassert>
 #include <cstring>
+#include <deque>
 #include <memory>
 #include <string>
 
