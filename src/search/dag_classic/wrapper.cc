@@ -42,6 +42,10 @@ const OptionId kThreadsOptionId{
 const OptionId kClearTree{"", "ClearTree",
                           "Clear the tree before the next search."};
 
+#ifdef FIX_TT
+const OptionId kHashId{"hash", "Hash", "Size of the transposition table."};
+#endif
+
 class DagClassicSearch : public SearchBase {
  public:
   DagClassicSearch(UciResponder* responder, const OptionsDict* options)
@@ -92,7 +96,11 @@ MoveList StringsToMovelist(const std::vector<std::string>& moves,
 }
 
 void DagClassicSearch::NewGame() {
+#ifndef FIX_TT
   tt_.clear();
+#else
+  tt_.Clear();
+#endif
   search_.reset();
   tree_.reset();
   time_manager_ = MakeTimeManager(*options_);
@@ -102,6 +110,10 @@ void DagClassicSearch::SetPosition(const GameState& pos) {
   if (!tree_) tree_ = std::make_unique<NodeTree>();
   const bool is_same_game = tree_->ResetToPosition(pos);
   if (!is_same_game) time_manager_ = MakeTimeManager(*options_);
+#ifdef FIX_TT
+  // Transposition table size.
+  tt_.SetCapacity(options_->Get<int>(kHashId));
+#endif
 }
 
 void DagClassicSearch::StartSearch(const GoParams& params) {
@@ -130,6 +142,9 @@ class DagClassicSearchFactory : public SearchFactory {
 
   void PopulateParams(OptionsParser* parser) const override {
     parser->Add<IntOption>(kThreadsOptionId, 0, 128) = 0;
+#ifdef FIX_TT
+    parser->Add<IntOption>(kHashId, 0, 999999999) = 2000000;
+#endif
     SearchParams::Populate(parser);
     PopulateTimeManagementOptions(RunType::kUci, parser);
 

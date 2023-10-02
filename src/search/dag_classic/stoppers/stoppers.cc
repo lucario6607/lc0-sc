@@ -94,7 +94,10 @@ bool PlayoutsStopper::ShouldStop(const IterationStats& stats,
 namespace {
 // FIXME: This is too conservative.
 const size_t kAvgNodeSize =
-    sizeof(Node) + sizeof(LowNode) + sizeof(TranspositionTable::slot_type) +
+    sizeof(Node) + sizeof(LowNode) +
+#ifndef FIX_TT
+    sizeof(TranspositionTable::slot_type) +
+#endif
     MemoryWatchingStopper::kAvgMovesPerPosition * sizeof(Edge);
 const size_t kAvgCacheItemSize =
     3 * sizeof(float) + sizeof(std::unique_ptr<float[]>) +
