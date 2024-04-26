@@ -552,32 +552,17 @@ std::string Converter::MakeEncoderLayer(
   flow = builder->Reshape(name + "/mha/V/reshape", flow, mha_shape);
   auto V = builder->Transpose(name + "/mha/V/transpose", flow, {0, 2, 1, 3});
 #else
-  auto merge_w = builder->Concat(
-      name + "/mha/w",
-      {builder->AddInitializer(
-           name + "/mha/Q/w",
-           *GetWeghtsConverter(layer.mha.q_w, {embedding_size, d_model},
-                               {1, 0})),
-       builder->AddInitializer(
-           name + "/mha/K/w",
-           *GetWeghtsConverter(layer.mha.k_w, {embedding_size, d_model},
-                               {1, 0})),
-       builder->AddInitializer(
-           name + "/mha/V/w",
-           *GetWeghtsConverter(layer.mha.v_w, {embedding_size, d_model},
-                               {1, 0}))},
-      1);
-  auto merge_b = builder->Concat(
-      name + "/mha/b",
-      {builder->AddInitializer(name + "/mha/Q/b",
-                               *GetWeghtsConverter(layer.mha.q_b, {d_model})),
-       builder->AddInitializer(name + "/mha/K/b",
-                               *GetWeghtsConverter(layer.mha.k_b, {d_model})),
-       builder->AddInitializer(name + "/mha/V/b",
-                               *GetWeghtsConverter(layer.mha.v_b, {d_model}))},
-      0);
-  auto flow = builder->MatMul(name + "/mha/mul", encoder_in, merge_w);
-  flow = builder->Add(name + "/mha/add", flow, merge_b);
+  auto merge_w = layer.mha.q_w;
+  merge_w.insert(merge_w.end(), layer.mha.k_w.begin(), layer.mha.k_w.end());
+  merge_w.insert(merge_w.end(), layer.mha.v_w.begin(), layer.mha.v_w.end());
+  auto merge_b = layer.mha.q_b;
+  merge_b.insert(merge_b.end(), layer.mha.k_b.begin(), layer.mha.k_b.end());
+  merge_b.insert(merge_b.end(), layer.mha.v_b.begin(), layer.mha.v_b.end());
+  auto flow = builder->MatMul(
+      name + "/mha/mul", encoder_in,
+      *GetWeghtsConverter(merge_w, {embedding_size, 3 * d_model}, {1, 0}));
+  flow = builder->Add(name + "/mha/add", flow,
+                      *GetWeghtsConverter(merge_b, {3 * d_model}));
   auto QKV =
       builder->Split(name + "/mha/split", flow, 1, {d_model, d_model, d_model});
   auto Q = builder->Reshape(name + "/mha/Q/reshape", QKV[0], mha_shape);
