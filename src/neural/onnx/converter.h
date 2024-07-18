@@ -36,7 +36,7 @@ namespace lczero {
 
 // Options to use when converting "old" weights to ONNX weights format.
 struct WeightsToOnnxConverterOptions {
-  enum class DataType { kFloat32, kFloat16, kBFloat16, kFloat8E5M2 };
+  enum class DataType { kFloat32, kFloat16, kBFloat16 };
   DataType data_type = DataType::kFloat32;
   enum class QuantizeType { kNone, kInt8, kInt8Weights, kFloat8E4M3 };
   QuantizeType quantize_type = QuantizeType::kNone;
