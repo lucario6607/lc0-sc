@@ -91,6 +91,18 @@ class Float8E5M2OnnxWeightsAdapter : public FloatOnnxWeightsAdapter {
   std::string GetRawData() const override;
 };
 
+class Float8E4M3FnOnnxWeightsAdapter : public FloatOnnxWeightsAdapter {
+ public:
+  Float8E4M3FnOnnxWeightsAdapter(const std::vector<float>& weights,
+                                 std::initializer_list<int> dims,
+                                 std::initializer_list<int> order = {})
+      : FloatOnnxWeightsAdapter(weights, dims, order) {}
+
+ private:
+  pblczero::TensorProto::DataType GetDataType() const override;
+  std::string GetRawData() const override;
+};
+
 class Int8OnnxWeightsAdapter : public FloatOnnxWeightsAdapter {
  public:
   Int8OnnxWeightsAdapter(const std::vector<float>& weights,
@@ -187,6 +199,16 @@ class Float8E5M2OnnxConst : public GenericOnnxConst<uint8_t> {
  private:
   pblczero::TensorProto::DataType GetDataType() const override {
     return pblczero::TensorProto::FLOAT8E5M2;
+  }
+};
+
+class Float8E4M3FnOnnxConst : public GenericOnnxConst<uint8_t> {
+ public:
+  using GenericOnnxConst<uint8_t>::GenericOnnxConst;
+
+ private:
+  pblczero::TensorProto::DataType GetDataType() const override {
+    return pblczero::TensorProto::FLOAT8E4M3FN;
   }
 };
 

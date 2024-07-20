@@ -38,7 +38,7 @@ namespace lczero {
 struct WeightsToOnnxConverterOptions {
   enum class DataType { kFloat32, kFloat16, kBFloat16 };
   DataType data_type = DataType::kFloat32;
-  enum class QuantizeType { kNone, kInt8, kInt8Weights, kFloat8E4M3 };
+  enum class QuantizeType { kNone, kInt8, kInt8_QDQ, kFloat8E4M3_QDQ };
   QuantizeType quantize_type = QuantizeType::kNone;
   std::string input_planes_name = "/input/planes";
   std::string output_policy_head = "/output/policy";

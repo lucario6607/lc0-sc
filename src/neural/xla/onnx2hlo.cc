@@ -431,6 +431,8 @@ class Onnx2HloConverter {
     onnx_op_to_builder_["Clip"] = &Onnx2HloConverter::OpClip;
     onnx_op_to_builder_["Concat"] = &Onnx2HloConverter::OpConcat;
     onnx_op_to_builder_["Conv"] = &Onnx2HloConverter::OpConv;
+    onnx_op_to_builder_["DequantizeLinear"] =
+        &Onnx2HloConverter::OpDequantizeLinear;
     onnx_op_to_builder_["Div"] = &Onnx2HloConverter::OpDiv;
     onnx_op_to_builder_["Gather"] = &Onnx2HloConverter::OpGather;
     onnx_op_to_builder_["GlobalAveragePool"] =
@@ -443,6 +445,8 @@ class Onnx2HloConverter {
     onnx_op_to_builder_["MatMulInteger"] = &Onnx2HloConverter::OpMatMulInteger;
     onnx_op_to_builder_["Mish"] = &Onnx2HloConverter::OpMish;
     onnx_op_to_builder_["Mul"] = &Onnx2HloConverter::OpMul;
+    onnx_op_to_builder_["QuantizeLinear"] =
+        &Onnx2HloConverter::OpQuantizeLinear;
     onnx_op_to_builder_["Reciprocal"] = &Onnx2HloConverter::OpReciprocal;
     onnx_op_to_builder_["ReduceMean"] = &Onnx2HloConverter::OpReduceMean;
     onnx_op_to_builder_["ReduceProd"] = &Onnx2HloConverter::OpReduceProd;
@@ -820,9 +824,8 @@ class Onnx2HloConverter {
 
     // Normalize each batch by subtracting the maximum value.
     auto* max = builder_.Reduce(
-        input,
-        MakeScalar(-std::numeric_limits<float>::infinity(),
-                   input->shape().element_type()),
+        input, MakeScalar(-std::numeric_limits<float>::infinity(),
+                          input->shape().element_type()),
         MakeMaxComputation(input->shape().element_type()), {axis});
     std::vector<int64_t> broadcast_dims;
     for (size_t i = 0; i < input->shape().dimensions_size(); ++i) {
@@ -899,9 +902,15 @@ class Onnx2HloConverter {
   }
 
   std::vector<HloFlow> OpReduceProd(const pblczero::NodeProto& node) {
-    CheckKnownAttributes(node, 1, {"axes", "keepdims"});
+    if (opset_version_ < 18) {
+      CheckKnownAttributes(node, 1, {"axes", "keepdims"});
+    } else {
+      CheckKnownAttributes(node, 2, {"keepdims"});
+    }
     auto* input = GetInput(node, 0);
-    auto axes = GetAttributeAsVec<int64_t>(node, "axes");
+    auto axes = opset_version_ < 18
+                    ? GetAttributeAsVec<int64_t>(node, "axes")
+                    : GetConstantInputAsVec<int64_t>(node, 1).value();
     bool keepdims =
         GetOptionalAttributeAs<bool>(node, "keepdims").value_or(true);
     HloFlow flow;
@@ -920,9 +929,15 @@ class Onnx2HloConverter {
   }
 
   std::vector<HloFlow> OpReduceSumSquare(const pblczero::NodeProto& node) {
-    CheckKnownAttributes(node, 1, {"axes", "keepdims"});
+    if (opset_version_ < 18) {
+      CheckKnownAttributes(node, 1, {"axes", "keepdims"});
+    } else {
+      CheckKnownAttributes(node, 2, {"keepdims"});
+    }
     auto* input = GetInput(node, 0);
-    auto axes = GetAttributeAsVec<int64_t>(node, "axes");
+    auto axes = opset_version_ < 18
+                    ? GetAttributeAsVec<int64_t>(node, "axes")
+                    : GetConstantInputAsVec<int64_t>(node, 1).value();
     bool keepdims =
         GetOptionalAttributeAs<bool>(node, "keepdims").value_or(true);
     auto flow = builder_.Multiply(input, input);
@@ -1387,6 +1402,70 @@ class Onnx2HloConverter {
 
   std::vector<HloFlow> OpMatMulInteger(const pblczero::NodeProto& node) {
     return MakeMatMul(node, pblczero::XlaShapeProto::S32);
+  }
+
+  std::vector<HloFlow> OpQuantizeLinear(const pblczero::NodeProto& node) {
+    CheckKnownAttributes(node, 3, {"saturate"});
+    auto* input = GetInput(node, 0);
+    auto* scale = GetInput(node, 1);
+    auto* zero_point = GetInput(node, 2, true);
+    bool saturate =
+        GetOptionalAttributeAs<bool>(node, "saturate").value_or(true);
+    HloTensorType shape(input->shape());
+    scale = builder_.Broadcast(scale, shape, {});
+    auto flow = builder_.Divide(input, scale);
+    const auto in_type = input->shape().element_type();
+    auto out_type = pblczero::XlaShapeProto::U8;
+    if (zero_point) {
+      out_type = zero_point->shape().element_type();
+      zero_point = builder_.Broadcast(zero_point, shape, {});
+      flow = builder_.Add(flow, zero_point);
+    }
+    switch (out_type) {
+      case pblczero::XlaShapeProto::S8: {
+        auto* min = MakeScalar(-128, in_type);
+        auto* max = MakeScalar(127, in_type);
+        min = builder_.Broadcast(min, shape, {});
+        max = builder_.Broadcast(max, shape, {});
+        flow = builder_.Clamp(min, flow, max);
+      } break;
+      case pblczero::XlaShapeProto::U8: {
+        auto* min = MakeScalar(0, in_type);
+        auto* max = MakeScalar(255, in_type);
+        min = builder_.Broadcast(min, shape, {});
+        max = builder_.Broadcast(max, shape, {});
+        flow = builder_.Clamp(min, flow, max);
+      } break;
+      case pblczero::XlaShapeProto::F8E4M3FN: {
+        if (!saturate) break;
+        auto* min = MakeScalar(-448, in_type);
+        auto* max = MakeScalar(448, in_type);
+        min = builder_.Broadcast(min, shape, {});
+        max = builder_.Broadcast(max, shape, {});
+        flow = builder_.Clamp(min, flow, max);
+      } break;
+      default:
+        throw Exception("Unsupported quantization type: " +
+                        pblczero::XlaShapeProto::Type_Name(out_type));
+    }
+    return {builder_.Convert(input, out_type)};
+  }
+
+  std::vector<HloFlow> OpDequantizeLinear(const pblczero::NodeProto& node) {
+    CheckKnownAttributes(node, 3, {});
+    auto* input = GetInput(node, 0);
+    auto* scale = GetInput(node, 1);
+    auto* zero_point = GetInput(node, 2, true);
+    const auto type = scale->shape().element_type();
+    auto flow = builder_.Convert(input, type);
+    HloTensorType shape(flow->shape());
+    if (zero_point) {
+      zero_point = builder_.Convert(zero_point, type);
+      zero_point = builder_.Broadcast(zero_point, shape, {});
+      flow = builder_.Subtract(flow, zero_point);
+    }
+    scale = builder_.Broadcast(scale, shape, {});
+    return {builder_.Multiply(flow, scale)};
   }
 
   /////////////////////////////////////////////////////////////////////////////
