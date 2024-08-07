@@ -59,10 +59,10 @@ void ChainedSearchStopper::OnSearchDone(const IterationStats& stats) {
 bool VisitsStopper::ShouldStop(const IterationStats& stats,
                                StoppersHints* hints) {
   if (populate_remaining_playouts_) {
-    hints->UpdateEstimatedRemainingPlayouts(nodes_limit_ - stats.total_nodes);
+    hints->UpdateEstimatedRemainingPlayouts(nodes_limit_ - stats.total_visits);
   }
-  if (stats.total_nodes >= nodes_limit_) {
-    LOGFILE << "Stopped search: Reached visits limit: " << stats.total_nodes
+  if (stats.total_visits >= nodes_limit_) {
+    LOGFILE << "Stopped search: Reached visits limit: " << stats.total_visits
             << ">=" << nodes_limit_;
     return true;
   }
@@ -94,7 +94,8 @@ bool PlayoutsStopper::ShouldStop(const IterationStats& stats,
 namespace {
 // FIXME: This is too conservative.
 const size_t kAvgNodeSize =
-    sizeof(Node) + sizeof(LowNode) + sizeof(TranspositionTable::slot_type) +
+    sizeof(Node) + sizeof(LowNode) +
+    sizeof(NodeTree::TranspositionTable::slot_type) +
     MemoryWatchingStopper::kAvgMovesPerPosition * sizeof(Edge);
 const size_t kAvgCacheItemSize =
     NNCache::GetItemStructSize() + sizeof(CachedNNRequest) + sizeof(NNEval) +
@@ -110,7 +111,21 @@ MemoryWatchingStopper::MemoryWatchingStopper(int cache_size, int ram_limit_mb,
   LOGFILE << "RAM limit " << ram_limit_mb << "MB. Cache takes "
           << cache_size * kAvgCacheItemSize / 1000000
           << "MB. Remaining memory is enough for " << GetVisitsLimit()
-          << " nodes.";
+          << " allocated nodes.";
+}
+
+bool MemoryWatchingStopper::ShouldStop(const IterationStats& stats,
+                                       StoppersHints* hints) {
+  if (populate_remaining_playouts_) {
+    hints->UpdateEstimatedRemainingPlayouts(nodes_limit_ -
+                                            stats.total_allocated_nodes);
+  }
+  if (stats.total_allocated_nodes >= nodes_limit_) {
+    LOGFILE << "Stopped search: Reached allocated node limit: "
+            << stats.total_allocated_nodes << ">=" << nodes_limit_;
+    return true;
+  }
+  return false;
 }
 
 ///////////////////////////
@@ -145,6 +160,17 @@ bool DepthStopper::ShouldStop(const IterationStats& stats, StoppersHints*) {
 }
 
 ///////////////////////////
+// MateStopper
+///////////////////////////
+bool MateStopper::ShouldStop(const IterationStats& stats, StoppersHints*) {
+  if (stats.mate_depth <= mate_) {
+    LOGFILE << "Stopped search: Found mate.";
+    return true;
+  }
+  return false;
+}
+
+///////////////////////////
 // KldGainStopper
 ///////////////////////////
 
@@ -153,7 +179,7 @@ KldGainStopper::KldGainStopper(float min_gain, int average_interval)
 
 bool KldGainStopper::ShouldStop(const IterationStats& stats, StoppersHints*) {
   Mutex::Lock lock(mutex_);
-  const auto new_child_nodes = stats.total_nodes - 1.0;
+  const auto new_child_nodes = stats.total_visits - 1.0;
   if (new_child_nodes < prev_child_nodes_ + average_interval_) return false;
 
   const auto new_visits = stats.edge_n;
@@ -196,7 +222,8 @@ bool SmartPruningStopper::ShouldStop(const IterationStats& stats,
     LOGFILE << "Only one possible move. Moving immediately.";
     return true;
   }
-  if (stats.edge_n.size() <= static_cast<size_t>(stats.num_losing_edges + 1)) {
+  if (stats.edge_n.size() <= static_cast<size_t>(stats.num_losing_edges) +
+                                 (stats.may_resign ? 0 : 1)) {
     LOGFILE << "At most one non losing move, stopping search.";
     return true;
   }
@@ -243,8 +270,9 @@ bool SmartPruningStopper::ShouldStop(const IterationStats& stats,
   }
 
   if (remaining_playouts < (largest_n - second_largest_n)) {
-    LOGFILE << remaining_playouts << " playouts remaining. Best move has "
-            << largest_n << " visits, second best -- " << second_largest_n
+    LOGFILE << std::fixed << remaining_playouts
+            << " playouts remaining. Best move has " << largest_n
+            << " visits, second best -- " << second_largest_n
             << ". Difference is " << (largest_n - second_largest_n)
             << ", so stopping the search after "
             << stats.batches_since_movestart << " batches.";

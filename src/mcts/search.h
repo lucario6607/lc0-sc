@@ -1,6 +1,6 @@
 /*
   This file is part of Leela Chess Zero.
-  Copyright (C) 2018 The LCZero Authors
+  Copyright (C) 2018-2023 The LCZero Authors
 
   Leela Chess is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -45,7 +45,6 @@
 #include "syzygy/syzygy.h"
 #include "utils/logging.h"
 #include "utils/mutex.h"
-#include "utils/numa.h"
 
 namespace lczero {
 
@@ -53,12 +52,12 @@ typedef std::vector<std::tuple<Node*, int, int>> BackupPath;
 
 class Search {
  public:
-  Search(const NodeTree& tree, Network* network,
+  Search(NodeTree* dag, Network* network,
          std::unique_ptr<UciResponder> uci_responder,
          const MoveList& searchmoves,
          std::chrono::steady_clock::time_point start_time,
-         std::unique_ptr<SearchStopper> stopper, bool infinite,
-         const OptionsDict& options, NNCache* cache, TranspositionTable* tt,
+         std::unique_ptr<SearchStopper> stopper, bool infinite, bool ponder,
+         const OptionsDict& options, NNCache* cache,
          SyzygyTablebase* syzygy_tb);
 
   ~Search();
@@ -102,7 +101,7 @@ class Search {
   // Returns NN eval for a given node from cache, if that node is cached.
   NNCacheLock GetCachedNNEval(const PositionHistory& history) const;
 
-  TranspositionTable* GetTT() const { return tt_; }
+  const NodeTree::TranspositionTable* GetTT() const { return dag_->GetTT(); }
 
  private:
   // Computes the best move, maybe with temperature (according to the settings).
@@ -169,7 +168,7 @@ class Search {
 
   Node* root_node_;
   NNCache* cache_;
-  TranspositionTable* tt_;
+  NodeTree* dag_;
   SyzygyTablebase* syzygy_tb_;
   // Fixed positions which happened before the search.
   const PositionHistory& played_history_;
@@ -207,7 +206,7 @@ class Search {
       GUARDED_BY(nodes_mutex_);
 
   std::unique_ptr<UciResponder> uci_responder_;
-
+  ContemptMode contempt_mode_;
   friend class SearchWorker;
 };
 
@@ -222,14 +221,31 @@ class SearchWorker {
         params_(params),
         moves_left_support_(search_->network_->GetCapabilities().moves_left !=
                             pblczero::NetworkFormat::MOVES_LEFT_NONE) {
-    Numa::BindThread(id);
-    for (int i = 0; i < params.GetTaskWorkersPerSearchWorker(); i++) {
+    search_->network_->InitThread(id);
+    task_workers_ = params.GetTaskWorkersPerSearchWorker();
+    if (task_workers_ < 0) {
+      if (search_->network_->IsCpu()) {
+        task_workers_ = 0;
+      } else {
+        int working_threads = std::max(
+            search_->thread_count_.load(std::memory_order_acquire) - 1, 1);
+        task_workers_ = std::min(
+            std::thread::hardware_concurrency() / working_threads - 1, 4U);
+      }
+    }
+    for (int i = 0; i < task_workers_; i++) {
       task_workspaces_.emplace_back();
       task_threads_.emplace_back([this, i]() {
-        Numa::BindThread(i);
         this->RunTasks(i);
       });
     }
+    target_minibatch_size_ = params_.GetMiniBatchSize();
+    if (target_minibatch_size_ == 0) {
+      target_minibatch_size_ = search_->network_->GetMiniBatchSize();
+    }
+    max_out_of_order_ =
+        std::max(1, static_cast<int>(params_.GetMaxOutOfOrderEvalsFactor() *
+                                     target_minibatch_size_));
   }
 
   ~SearchWorker() {
@@ -263,7 +279,7 @@ class SearchWorker {
   // Does one full iteration of MCTS search:
   // 1. Initialize internal structures.
   // 2. Gather minibatch.
-  // 3. Prefetch into cache.
+  // 3.
   // 4. Run NN computation.
   // 5. Retrieve NN computations (and terminal values) into nodes.
   // 6. Propagate the new nodes' information to all their parents in the tree.
@@ -280,9 +296,6 @@ class SearchWorker {
 
   // 2b. Copy collisions into shared_collisions_.
   void CollectCollisions();
-
-  // 3. Prefetch into cache.
-  void MaybePrefetchIntoCache();
 
   // 4. Run NN computation.
   void RunNNComputation();
@@ -312,11 +325,11 @@ class SearchWorker {
     BackupPath path;
     // The node to extend.
     Node* node;
-    int multivisit = 0;
+    uint32_t multivisit = 0;
     // If greater than multivisit, and other parameters don't imply a lower
     // limit, multivist could be increased to this value without additional
     // change in outcome of next selection.
-    int maxvisit = 0;
+    uint32_t maxvisit = 0;
     bool nn_queried = false;
     bool is_tt_hit = false;
     bool is_cache_hit = false;
@@ -324,7 +337,7 @@ class SearchWorker {
 
     // Details that are filled in as we go.
     uint64_t hash;
-    std::shared_ptr<LowNode> tt_low_node;
+    LowNode* tt_low_node;
     NNCacheLock lock;
     PositionHistory history;
     bool ooo_completed = false;
@@ -359,7 +372,7 @@ class SearchWorker {
         auto nl = n->GetLowNode();
         oss << n << ":" << n->GetNInFlight();
         if (nl) {
-          oss << "(" << nl << ":" << nl->GetNInFlight() << ")";
+          oss << "(" << nl << ")";
         }
       }
       oss << " --- " << std::get<0>(path.back())->DebugString();
@@ -370,7 +383,8 @@ class SearchWorker {
     }
 
    private:
-    NodeToProcess(const BackupPath& path, int multivisit, int max_count)
+    NodeToProcess(const BackupPath& path, uint32_t multivisit,
+                  uint32_t max_count)
         : path(path),
           node(std::get<0>(path.back())),
           multivisit(multivisit),
@@ -433,14 +447,11 @@ class SearchWorker {
   };
 
   NodeToProcess PickNodeToExtend(int collision_limit);
-  bool AddNodeToComputation(Node* node);
-  int PrefetchIntoCache(Node* node, int budget, bool is_odd_depth);
   // Adjust parameters for updating node @n and its parent low node if node is
   // terminal or its child low node is a transposition. Also update bounds and
   // terminal status of node @n using information from its child low node.
   // Return true if adjustment happened.
-  bool MaybeAdjustForTerminalOrTransposition(Node* n, int nr, int nm,
-                                             std::shared_ptr<LowNode>& nl,
+  bool MaybeAdjustForTerminalOrTransposition(Node* n, const LowNode* nl,
                                              float& v, float& d, float& m,
                                              uint32_t& n_to_fix, float& v_delta,
                                              float& d_delta, float& m_delta,
@@ -476,9 +487,12 @@ class SearchWorker {
   // List of nodes to process.
   std::vector<NodeToProcess> minibatch_;
   std::unique_ptr<CachingComputation> computation_;
+  int task_workers_;
+  int target_minibatch_size_;
+  int max_out_of_order_;
   // History is reset and extended by PickNodeToExtend().
   PositionHistory history_;
-  int number_out_of_order_ = 0;
+  uint32_t number_out_of_order_ = 0;
   const SearchParams& params_;
   std::unique_ptr<Node> precached_node_;
   const bool moves_left_support_;

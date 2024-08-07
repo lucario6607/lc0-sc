@@ -35,15 +35,15 @@
 
 #include "mcts/search.h"
 #include "mcts/stoppers/factory.h"
+#include "utils/commandline.h"
 #include "utils/configfile.h"
 #include "utils/logging.h"
 
 namespace lczero {
 namespace {
-const int kDefaultThreads = 2;
-
-const OptionId kThreadsOptionId{"threads", "Threads",
-                                "Number of (CPU) worker threads to use.", 't'};
+const OptionId kThreadsOptionId{
+    "threads", "Threads",
+    "Number of (CPU) worker threads to use, 0 for the backend default.", 't'};
 const OptionId kLogFileId{"logfile", "LogFile",
                           "Write log to that file. Special value <stderr> to "
                           "output the log to the console.",
@@ -53,7 +53,7 @@ const OptionId kSyzygyTablebaseId{
     "List of Syzygy tablebase directories, list entries separated by system "
     "separator (\";\" for Windows, \":\" for Linux).",
     's'};
-const OptionId kPonderId{"ponder", "Ponder",
+const OptionId kPonderId{"", "Ponder",
                          "This option is ignored. Here to please chess GUIs."};
 const OptionId kUciChess960{
     "chess960", "UCI_Chess960",
@@ -68,6 +68,13 @@ const OptionId kStrictUciTiming{"strict-uci-timing", "StrictTiming",
                                 "only then starts timing."};
 const OptionId kPreload{"preload", "",
                         "Initialize backend and load net on engine startup."};
+const OptionId kValueOnly{
+    "value-only", "ValueOnly",
+    "In value only mode all search parameters are ignored and the position is "
+    "evaluated by getting the valuation of every child position and choosing "
+    "the worst for the opponent."};
+const OptionId kClearTree{"", "ClearTree",
+                          "Clear the tree before the next search."};
 
 MoveList StringsToMovelist(const std::vector<std::string>& moves,
                            const ChessBoard& board) {
@@ -95,12 +102,21 @@ EngineController::EngineController(std::unique_ptr<UciResponder> uci_responder,
 
 void EngineController::PopulateOptions(OptionsParser* options) {
   using namespace std::placeholders;
-
+  const bool is_simple =
+      CommandLine::BinaryName().find("simple") != std::string::npos;
   NetworkFactory::PopulateOptions(options);
-  options->Add<IntOption>(kThreadsOptionId, 1, 128) = kDefaultThreads;
-  options->Add<IntOption>(kNNCacheSizeId, 0, 999999999) = 2000000;
+  options->Add<IntOption>(kThreadsOptionId, 0, 128) = 0;
+  options->Add<IntOption>(kNNCacheSizeId, 0, 999999999) = 2000;
   SearchParams::Populate(options);
 
+  ConfigFile::PopulateOptions(options);
+  if (is_simple) {
+    options->HideAllOptions();
+    options->UnhideOption(kThreadsOptionId);
+    options->UnhideOption(NetworkFactory::kWeightsId);
+    options->UnhideOption(SearchParams::kContemptId);
+    options->UnhideOption(SearchParams::kMultiPvId);
+  }
   options->Add<StringOption>(kSyzygyTablebaseId);
   // Add "Ponder" option to signal to GUIs that we support pondering.
   // This option is currently not used by lc0 in any way.
@@ -109,13 +125,16 @@ void EngineController::PopulateOptions(OptionsParser* options) {
   options->Add<BoolOption>(kShowWDL) = false;
   options->Add<BoolOption>(kShowMovesleft) = false;
 
-  ConfigFile::PopulateOptions(options);
-  PopulateTimeManagementOptions(RunType::kUci, options);
+  PopulateTimeManagementOptions(is_simple ? RunType::kSimpleUci : RunType::kUci,
+                                options);
 
   options->Add<BoolOption>(kStrictUciTiming) = false;
   options->HideOption(kStrictUciTiming);
 
   options->Add<BoolOption>(kPreload) = false;
+  options->Add<BoolOption>(kValueOnly) = false;
+  options->Add<ButtonOption>(kClearTree);
+  options->HideOption(kClearTree);
 }
 
 void EngineController::ResetMoveTimer() {
@@ -134,9 +153,11 @@ void EngineController::UpdateFromUciOptions() {
     if (!syzygy_tb_->init(tb_paths)) {
       CERR << "Failed to load Syzygy tablebases!";
       syzygy_tb_ = nullptr;
-    } else {
-      tb_paths_ = tb_paths;
     }
+    tb_paths_ = tb_paths;
+  } else if (tb_paths.empty()) {
+    syzygy_tb_ = nullptr;
+    tb_paths_.clear();
   }
 
   // Network.
@@ -167,7 +188,6 @@ void EngineController::NewGame() {
   ResetMoveTimer();
   SharedLock lock(busy_mutex_);
   cache_.Clear();
-  tt_.clear();
   search_.reset();
   tree_.reset();
   CreateFreshTimeManager();
@@ -207,7 +227,7 @@ void EngineController::SetupPosition(
 
   UpdateFromUciOptions();
 
-  if (!tree_) tree_ = std::make_unique<NodeTree>();
+  if (!tree_) tree_ = std::make_unique<NodeTree>(options_);
 
   std::vector<Move> moves;
   for (const auto& move : moves_str) moves.emplace_back(move);
@@ -239,6 +259,7 @@ class PonderResponseTransformer : public TransformingUciResponder {
         if (ponder_info.score) ponder_info.score = -*ponder_info.score;
         if (ponder_info.depth > 1) ponder_info.depth--;
         if (ponder_info.seldepth > 1) ponder_info.seldepth--;
+        if (ponder_info.wdl) std::swap(ponder_info.wdl->w, ponder_info.wdl->l);
         ponder_info.pv.clear();
       }
       if (!info.pv.empty() && info.pv[0].as_string() == ponder_move_) {
@@ -253,23 +274,88 @@ class PonderResponseTransformer : public TransformingUciResponder {
   std::string ponder_move_;
 };
 
+void ValueOnlyGo(NodeTree* tree, Network* network, const OptionsDict& options,
+                 std::unique_ptr<UciResponder> responder) {
+  auto input_format = network->GetCapabilities().input_format;
+
+  const auto& board = tree->GetPositionHistory().Last().GetBoard();
+  auto legal_moves = board.GenerateLegalMoves();
+  PositionHistory history = tree->GetPositionHistory();
+  std::vector<InputPlanes> planes;
+  for (auto move : legal_moves) {
+    history.Append(move);
+    if (history.ComputeGameResult() == GameResult::UNDECIDED) {
+      planes.emplace_back(EncodePositionForNN(
+          input_format, history, 8, FillEmptyHistory::FEN_ONLY, nullptr));
+    }
+    history.Pop();
+  }
+
+  std::vector<float> comp_q;
+  int batch_size = options.Get<int>(SearchParams::kMiniBatchSizeId);
+  if (batch_size == 0) batch_size = network->GetMiniBatchSize();
+
+  for (size_t i = 0; i < planes.size(); i += batch_size) {
+    auto comp = network->NewComputation();
+    for (int j = 0; j < batch_size; j++) {
+      comp->AddInput(std::move(planes[i + j]));
+      if (i + j + 1 == planes.size()) break;
+    }
+    comp->ComputeBlocking();
+
+    for (int j = 0; j < batch_size; j++) comp_q.push_back(comp->GetQVal(j));
+  }
+
+  Move best;
+  int comp_idx = 0;
+  float max_q = std::numeric_limits<float>::lowest();
+  for (auto move : legal_moves) {
+    history.Append(move);
+    auto result = history.ComputeGameResult();
+    float q = -1;
+    if (result == GameResult::UNDECIDED) {
+      // NN eval is for side to move perspective - so if its good, its bad for
+      // us.
+      q = -comp_q[comp_idx];
+      comp_idx++;
+    } else if (result == GameResult::DRAW) {
+      q = 0;
+    } else {
+      // A legal move to a non-drawn terminal without tablebases must be a
+      // win.
+      q = 1;
+    }
+    if (q >= max_q) {
+      max_q = q;
+      if (tree->GetPositionHistory().IsBlackToMove()) move.Mirror();
+      best = move;
+    }
+    history.Pop();
+  }
+  std::vector<ThinkingInfo> infos;
+  ThinkingInfo thinking;
+  thinking.depth = 1;
+  infos.push_back(thinking);
+  responder->OutputThinkingInfo(&infos);
+  BestMoveInfo info(best);
+  responder->OutputBestMove(&info);
+}
+
 }  // namespace
 
 void EngineController::CmdDump(unsigned int nodes) {
   SharedLock lock(busy_mutex_);
   if (search_) {
     for (auto& l : *search_->GetTT()) {
-      auto x = l.second.lock();
+      auto x = l.second.get();
       if (x && x->GetN() > nodes) {
         std::string move;
         unsigned int n = 0;
-        auto child = x->GetChild()->get();
-        while (child) {
-          if (child->GetN() >= n) {
-            n = child->GetN() + 1;
-            move = child->GetOwnEdge()->GetMove(x->GetFlipped()).as_string();
+        for (auto& child : Edge_Iterator<false>(x)) {
+          if (child.GetN() >= n) {
+            n = child.GetN() + 1;
+            move = child.edge()->GetMove(x->GetFlipped()).as_string();
           }
-          child = child->GetSibling()->get();
         }
         if (n == 0) continue;
         uint64_t hash = l.first ^ Hash(x->GetRule50Ply());
@@ -320,13 +406,21 @@ void EngineController::Go(const GoParams& params) {
     // Strip movesleft information from the response.
     responder = std::make_unique<MovesLeftResponseFilter>(std::move(responder));
   }
+  if (options_.Get<bool>(kValueOnly)) {
+    ValueOnlyGo(tree_.get(), network_.get(), options_, std::move(responder));
+    return;
+  }
+
+  if (options_.Get<Button>(kClearTree).TestAndReset()) {
+    tree_->TrimTreeAtHead();
+  }
 
   auto stopper = time_manager_->GetStopper(params, *tree_.get());
   search_ = std::make_unique<Search>(
-      *tree_, network_.get(), std::move(responder),
+      tree_.get(), network_.get(), std::move(responder),
       StringsToMovelist(params.searchmoves, tree_->HeadPosition().GetBoard()),
-      *move_start_time_, std::move(stopper), params.infinite || params.ponder,
-      options_, &cache_, &tt_, syzygy_tb_.get());
+      *move_start_time_, std::move(stopper), params.infinite, params.ponder,
+      options_, &cache_, syzygy_tb_.get());
 
   LOGFILE << "Timer started at "
           << FormatTime(SteadyClockToSystemClock(*move_start_time_));

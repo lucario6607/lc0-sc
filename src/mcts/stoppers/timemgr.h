@@ -43,15 +43,18 @@ namespace lczero {
 struct IterationStats {
   int64_t time_since_movestart = 0;
   int64_t time_since_first_batch = 0;
-  int64_t total_nodes = 0;
+  int64_t total_visits = 0;
+  int64_t total_allocated_nodes = 0;
   int64_t nodes_since_movestart = 0;
   int64_t batches_since_movestart = 0;
   int average_depth = 0;
+  int mate_depth = std::numeric_limits<int>::max();
   std::vector<uint32_t> edge_n;
 
   // TODO: remove this in favor of time_usage_hint_=kImmediateMove when
   // smooth time manager is the default.
   bool win_found = false;
+  bool may_resign = false;
   int num_losing_edges = 0;
 
   enum class TimeUsageHint { kNormal, kNeedMoreTime, kImmediateMove };
