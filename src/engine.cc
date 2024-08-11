@@ -349,18 +349,16 @@ void EngineController::CmdDump(unsigned int nodes) {
     for (auto& l : *search_->GetTT()) {
       auto x = l.second.get();
       if (x && x->GetN() > nodes) {
-        std::string move;
-        unsigned int n = 0;
+        uint64_t hash = l.first ^ Hash(x->GetRule50Ply());
         for (auto& child : Edge_Iterator<false>(x)) {
-          if (child.GetN() >= n) {
-            n = child.GetN() + 1;
-            move = child.edge()->GetMove(x->GetFlipped()).as_string();
+          if (child.GetN() >= nodes) {
+            std::string move =
+                child.edge()->GetMove(x->GetFlipped()).as_string();
+            std::cout << "info string hash " << std::hex << hash << std::dec
+                      << " move " << move << " nodes " << child.GetN()
+                      << std::endl;
           }
         }
-        if (n == 0) continue;
-        uint64_t hash = l.first ^ Hash(x->GetRule50Ply());
-        std::cout << "info string hash " << std::hex << hash << std::dec
-                  << " move " << move << " nodes " << x->GetN() << std::endl;
       }
     }
   }
