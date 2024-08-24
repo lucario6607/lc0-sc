@@ -1448,7 +1448,7 @@ class Onnx2HloConverter {
         throw Exception("Unsupported quantization type: " +
                         pblczero::XlaShapeProto::Type_Name(out_type));
     }
-    return {builder_.Convert(input, out_type)};
+    return {builder_.Convert(flow, out_type)};
   }
 
   std::vector<HloFlow> OpDequantizeLinear(const pblczero::NodeProto& node) {
