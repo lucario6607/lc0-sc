@@ -97,8 +97,7 @@ bool ProcessParameters(OptionsParser* options) {
   options->Add<IntOption>(kOnnxOpsetId, 7, 19) = 17;
   options->Add<IntOption>(kHloBatchSizeId, 1, 2048) = 333;
   options->Add<ChoiceOption>(
-      kOnnxDataTypeId,
-      std::vector<std::string>{"f32", "f16", "bf16"}) = "f32";
+      kOnnxDataTypeId, std::vector<std::string>{"f32", "f16", "bf16"}) = "f32";
   options->Add<ChoiceOption>(
       kOnnxQuantizeTypeId,
       std::vector<std::string>{"none", "int8", "int8_qdq", "f8e4m3_qdq"}) =
@@ -125,7 +124,7 @@ bool ProcessParameters(OptionsParser* options) {
       !dict.OwnExists<std::string>(kHloTextOutputFilenameId) &&
       !dict.OwnExists<std::string>(kHloProtoOutputFilenameId)) {
     throw Exception(
-        "At least one of --output, --hlo-output or --hlo-proto-output "
+        "At least one of --output, --hlo-text-output or --hlo-proto-output "
         "must be specified.");
   }
   return true;
