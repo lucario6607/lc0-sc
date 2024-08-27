@@ -1515,6 +1515,7 @@ class Onnx2HloConverter {
     auto out_type = pblczero::XlaShapeProto::U8;
     if (zero_point) {
       out_type = zero_point->shape().element_type();
+      zero_point = builder_.Convert(zero_point, in_type);
       zero_point = builder_.Broadcast(zero_point, shape, {});
       flow = builder_.Add(flow, zero_point);
     }
