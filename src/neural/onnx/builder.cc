@@ -84,6 +84,14 @@ void AddFloatAttribute(pblczero::NodeProto* node, const std::string& name,
   attr->set_f(val);
 }
 
+void AddStringAttribute(pblczero::NodeProto* node, const std::string& name,
+                        std::string val) {
+  auto* attr = node->add_attribute();
+  attr->set_name(name);
+  attr->set_type(pblczero::AttributeProto::STRING);
+  attr->set_s(val);
+}
+
 void AddIntsAttribute(pblczero::NodeProto* node, const std::string& name,
                       std::initializer_list<int> vals) {
   auto* attr = node->add_attribute();
@@ -476,6 +484,20 @@ std::string OnnxBuilder::ReduceMean(const std::string& name,
   }
   AddIntAttribute(node, "keepdims", keepdims);
   return out;
+}
+
+std::string OnnxBuilder::Einsum(const std::string& name,
+                                const std::vector<std::string>& input,
+                                std::string equation) {
+  auto* node = model_.mutable_graph()->add_node();
+  node->set_name(name);
+  node->set_op_type("Einsum");
+  for (const auto& in : input) {
+    node->add_input(in);
+  }
+  node->add_output(name);
+  AddStringAttribute(node, "equation", equation);
+  return name;
 }
 
 }  // namespace lczero
