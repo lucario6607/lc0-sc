@@ -179,6 +179,7 @@ class Converter {
   const ActivationFunction default_activation_;
   const float default_eps_;
   bool se_reshape_init_ = false;
+  std::vector<float> rpe_map_;
 };
 
 pblczero::TensorProto::DataType Converter::GetDataType() const {
@@ -524,6 +525,29 @@ std::string Converter::MakeEncoderLayer(
   const int d_model = layer.mha.q_b.size();
   const int depth = d_model / heads;
 
+  if ((layer.mha.rpe_q.size() > 0 || layer.mha.rpe_k.size() > 0 ||
+       layer.mha.rpe_v.size() > 0) &&
+      rpe_map_.size() == 0) {
+    int rows = 15 * 15;
+    int cols = 64 * 64;
+    int row, col;
+    rpe_map_.resize(rows * cols, 0.0f);
+    // 15 * 15 in units for distance pairs to 64 * 64 pairs of squares.
+    // Distance pairs mapped on rows, while square pairs mapped on columns.
+    for (auto i = 0; i < 8; i++) {
+      for (auto j = 0; j < 8; j++) {
+        for (auto k = 0; k < 8; k++) {
+          for (auto l = 0; l < 8; l++) {
+            row = 15 * (i - k + 7) + (j - l + 7);
+            col = 64 * (i * 8 + j) + k * 8 + l;
+            rpe_map_[row * cols + col] = 1.0f;
+          }
+        }
+      }
+    }
+    builder->AddInitializer("/const/rpe_map",
+                            *GetWeghtsConverter(rpe_map_, {rows, cols}));
+  }
   auto mha_shape =
       builder->AddInitializer("/const" + name + "/mha/shape",
                               Int64OnnxConst({-1, 64, heads, depth}, {4}));
@@ -539,8 +563,8 @@ std::string Converter::MakeEncoderLayer(
       *GetWeghtsConverter(layer.mha.k_w, {embedding_size, d_model}, {1, 0}));
   flow = builder->Add(name + "/mha/K/b", flow,
                       *GetWeghtsConverter(layer.mha.k_b, {d_model}));
-  flow = builder->Reshape(name + "/mha/K/reshape", flow, mha_shape);
-  auto K = builder->Transpose(name + "/mha/K/transpose", flow, {0, 2, 3, 1});
+  auto K = builder->Reshape(name + "/mha/K/reshape", flow, mha_shape);
+  auto K_T = builder->Transpose(name + "/mha/K/transpose", K, {0, 2, 3, 1});
   flow = builder->MatMul(
       name + "/mha/V/w", encoder_in,
       *GetWeghtsConverter(layer.mha.v_w, {embedding_size, d_model}, {1, 0}));
@@ -548,7 +572,36 @@ std::string Converter::MakeEncoderLayer(
                       *GetWeghtsConverter(layer.mha.v_b, {d_model}));
   flow = builder->Reshape(name + "/mha/V/reshape", flow, mha_shape);
   auto V = builder->Transpose(name + "/mha/V/transpose", flow, {0, 2, 1, 3});
-  flow = builder->MatMul(name + "/mha/QK/matmul", Q, K);
+  flow = builder->MatMul(name + "/mha/QK/matmul", Q, K_T);
+
+  if (layer.mha.rpe_q.size() > 0) {
+    auto rpe_q = builder->AddInitializer(
+        name + "/mha/QK/rpe_q/w0",
+        *GetWeghtsConverter(layer.mha.rpe_q, {depth * heads, 15 * 15}, {1, 0}));
+    rpe_q = builder->MatMul(name + "/mha/QK/rpe_q/w", rpe_q, "/const/rpe_map");
+    rpe_q = builder->Reshape(
+        name + "/mha/QK/rpe_q/w/reshape", rpe_q,
+        builder->AddInitializer("/const" + name + "/mha/QK/rpe_q/w/shape",
+                                Int64OnnxConst({depth, heads, 64, 64}, {4})));
+    rpe_q = builder->Einsum(name + "/mha/QK/rpe_q/einsum", {Q, rpe_q},
+                            "bhqd, dhqk->bhqk");
+    flow = builder->Add(name + "/mha/QK/rpe_q", flow, rpe_q);
+  }
+  if (layer.mha.rpe_k.size() > 0) {
+    auto rpe_k = builder->AddInitializer(
+        name + "/mha/QK/rpe_k/w0",
+        *GetWeghtsConverter(layer.mha.rpe_k, {depth * heads, 15 * 15}, {1, 0}));
+    rpe_k = builder->MatMul(name + "/mha/QK/rpe_k/w", rpe_k, "/const/rpe_map");
+    rpe_k = builder->Reshape(
+        name + "/mha/QK/rpe_k/w/reshape", rpe_k,
+        builder->AddInitializer("/const" + name + "/mha/QK/rpe_k/w/shape",
+                                Int64OnnxConst({depth, heads, 64, 64}, {4})));
+    // Note the orignal equation is "bhkd, dhqk->bhqk", K has a different order.
+    rpe_k = builder->Einsum(name + "/mha/QK/rpe_k/einsum", {K, rpe_k},
+                            "bkhd, dhqk->bhqk");
+    flow = builder->Add(name + "/mha/QK/rpe_k", flow, rpe_k);
+  }
+
   flow = builder->Mul(name + "/mha/QK/scale", flow,
                       *GetScalarConverter(1.0f / sqrtf(depth)));
   if (layer.mha.has_smolgen) {
@@ -556,8 +609,24 @@ std::string Converter::MakeEncoderLayer(
         MakeSmolgen(builder, layer, embedding_size, heads, encoder_in, name);
     flow = builder->Add(name + "/smolgen_weights", flow, smolgen_weights);
   }
-  flow = builder->Softmax(name + "/mha/QK/softmax", flow, 3);
-  flow = builder->MatMul(name + "/mha/QKV/matmul", flow, V);
+  auto QK = builder->Softmax(name + "/mha/QK/softmax", flow, 3);
+
+  flow = builder->MatMul(name + "/mha/QKV/matmul", QK, V);
+
+  if (layer.mha.rpe_v.size() > 0) {
+    auto rpe_v = builder->AddInitializer(
+        name + "/mha/QKV/rpe_v/w0",
+        *GetWeghtsConverter(layer.mha.rpe_v, {depth * heads, 15 * 15}, {1, 0}));
+    rpe_v = builder->MatMul(name + "/mha/QKV/rpe_v/w", rpe_v, "/const/rpe_map");
+    rpe_v = builder->Reshape(
+        name + "/mha/QKV/rpe_v/w/reshape", rpe_v,
+        builder->AddInitializer("/const" + name + "/mha/QKV/rpe_v/w/shape",
+                                Int64OnnxConst({depth, heads, 64, 64}, {4})));
+    rpe_v = builder->Einsum(name + "/mha/QKV/rpe_v/einsum", {QK, rpe_v},
+                            "bhqk, dhqk->bhqd");
+    flow = builder->Add(name + "/mha/QKV/rpe_v", flow, rpe_v);
+  }
+
   if (heads > 1) {
     flow = builder->Transpose(name + "/mha/out/transpose", flow, {0, 2, 1, 3});
   }
