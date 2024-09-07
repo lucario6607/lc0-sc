@@ -420,11 +420,8 @@ std::string Converter::MakeSmolgen(OnnxBuilder* builder,
       name + "/smolgen/compress", encoder_in,
       *GetWeghtsConverter(layer.mha.smolgen.compress,
                           {embedding_size, smolgen_hidden_channels}, {1, 0}));
-  flow = builder->Reshape(
-      name + "/smolgen/compress/reshape", flow,
-      builder->AddInitializer(
-          "/const" + name + "/smolgen/compress/shape",
-          Int64OnnxConst({-1, 64 * smolgen_hidden_channels}, {2})));
+  flow = builder->Reshape(name + "/smolgen/compress/reshape", flow,
+                          {-1, 64 * smolgen_hidden_channels});
   flow = builder->MatMul(
       name + "/smolgen/dense1/w", flow,
       *GetWeghtsConverter(layer.mha.smolgen.dense1_w,
@@ -453,17 +450,12 @@ std::string Converter::MakeSmolgen(OnnxBuilder* builder,
                        *GetWeghtsConverter(layer.mha.smolgen.ln2_betas,
                                            {smolgen_gen_sz * heads}),
                        1e-3);
-  flow =
-      builder->Reshape(name + "/smolgen/gen_from/reshape", flow,
-                       builder->AddInitializer(
-                           "/const" + name + "/smolgen/gen_from/shape",
-                           Int64OnnxConst({-1, heads, smolgen_gen_sz}, {3})));
+  flow = builder->Reshape(name + "/smolgen/gen_from/reshape", flow,
+                          {-1, heads, smolgen_gen_sz});
   flow = builder->MatMul(name + "/smolgen/smol_weight_gen", flow,
                          "/const/smolgen_w");
-  flow = builder->Reshape(
-      name + "/smolgen/out/reshape", flow,
-      builder->AddInitializer("/const" + name + "/smolgen/out/shape",
-                              Int64OnnxConst({-1, heads, 64, 64}, {4})));
+  flow = builder->Reshape(name + "/smolgen/out/reshape", flow,
+                          {-1, heads, 64, 64});
   return flow;
 }
 
@@ -635,10 +627,7 @@ std::string Converter::MakeEncoderLayer(
   if (heads > 1) {
     flow = builder->Transpose(name + "/mha/out/transpose", flow, {0, 2, 1, 3});
   }
-  flow = builder->Reshape(
-      name + "/mha/out/reshape", flow,
-      builder->AddInitializer("/const" + name + "/mha/out/shape",
-                              Int64OnnxConst({-1, d_model}, {2})));
+  flow = builder->Reshape(name + "/mha/out/reshape", flow, {-1, d_model});
   flow =
       builder->MatMul(name + "/mha/out/dense/w", flow,
                       *GetWeghtsConverter(layer.mha.dense_w,
@@ -670,18 +659,12 @@ std::string Converter::MakeEncoderLayer(
 std::string Converter::AttentionBodyMapEmbedding(OnnxBuilder* builder,
                                                  const std::string& input) {
   auto flow = input;
-  flow = builder->Reshape(
-      "/attn_body/reshape", flow,
-      builder->AddInitializer("/const/att_body_shape",
-                              Int64OnnxConst({-1, 64, 112}, {3})));
+  flow = builder->Reshape("/attn_body/reshape", flow, {-1, 64, 112});
   std::string pad;
   if (options_.opset < 8 || (options_.no_shape && options_.batch_size < 0)) {
     pad = builder->Slice("/attn_body/pad/slice", flow, {0, 0, 0},
                          {INT_MAX, 1, 1});
-    pad =
-        builder->Reshape("/attn_body/pad/reshape_in", pad,
-                         builder->AddInitializer("/const/pad_in_shape",
-                                                 Int64OnnxConst({-1, 1}, {2})));
+    pad = builder->Reshape("/attn_body/pad/reshape_in", pad, {-1, 1});
     pad = builder->Sub("/attn_body/pad/zeros_vec", pad, pad);
     pad =
         builder->Add("/attn_body/pad/one_vec", pad, *GetScalarConverter(1.0f));
@@ -693,10 +676,7 @@ std::string Converter::AttentionBodyMapEmbedding(OnnxBuilder* builder,
                 std::vector<float>(kPosEncoding[0], kPosEncoding[0] + 64 * 64),
                 {1, 64 * 64})));
 
-    pad = builder->Reshape(
-        "/attn_body/pad/reshape_out", pad,
-        builder->AddInitializer("/const/pad_out_shape",
-                                Int64OnnxConst({-1, 64, 64}, {3})));
+    pad = builder->Reshape("/attn_body/pad/reshape_out", pad, {-1, 64, 64});
   } else if (options_.batch_size < 0) {
     pad = builder->Shape("/attn_body/shape", flow);
     pad = builder->Slice("/attn_body/batch", pad, {0}, {1});
@@ -727,10 +707,7 @@ std::string Converter::AttentionBodyMapEmbedding(OnnxBuilder* builder,
         pad);
   }
   flow = builder->Concat("/attn_body/padded_input", {flow, pad}, 2);
-  flow =
-      builder->Reshape("/attn_body/reshape2", flow,
-                       builder->AddInitializer("/const/att_body_shape2",
-                                               Int64OnnxConst({-1, 176}, {2})));
+  flow = builder->Reshape("/attn_body/reshape2", flow, {-1, 176});
   return flow;
 }
 
@@ -739,16 +716,11 @@ std::string Converter::AttentionBodyDenseEmbedding(
     const MultiHeadWeights& weights, int embedding_dense_size) {
   auto flow = input;
 
-  flow = builder->Reshape(
-      "/attn_body/reshape", flow,
-      builder->AddInitializer("/const/att_body_shape",
-                              Int64OnnxConst({-1, 64, 112}, {3})));
+  flow = builder->Reshape("/attn_body/reshape", flow, {-1, 64, 112});
   auto pos_info = builder->Slice("/attn_body/embedding/slice", flow, {0, 0, 0},
                                  {INT_MAX, 64, 12});
-  pos_info = builder->Reshape(
-      "/attn_body/embedding/reshape", pos_info,
-      builder->AddInitializer("/const/pos_info_shape",
-                              Int64OnnxConst({-1, 64 * 12}, {2})));
+  pos_info =
+      builder->Reshape("/attn_body/embedding/reshape", pos_info, {-1, 64 * 12});
 
   pos_info = builder->MatMul(
       "/attn_body/embedding/preprocess/matmul", pos_info,
@@ -758,19 +730,13 @@ std::string Converter::AttentionBodyDenseEmbedding(
                           *GetWeghtsConverter(weights.ip_emb_preproc_b,
                                               {64 * embedding_dense_size}));
 
-  pos_info = builder->Reshape(
-      "/attn_body/embedding/preprocess/reshape", pos_info,
-      builder->AddInitializer(
-          "/const/pos_info_processed_shape",
-          Int64OnnxConst({-1, 64, embedding_dense_size}, {3})));
+  pos_info = builder->Reshape("/attn_body/embedding/preprocess/reshape",
+                              pos_info, {-1, 64, embedding_dense_size});
 
   flow = builder->Concat("/attn_body/embedding/concat", {flow, pos_info}, 2);
 
-  flow = builder->Reshape(
-      "/attn_body/embedding/out/reshape", flow,
-      builder->AddInitializer(
-          "/const/embedding/out_shape",
-          Int64OnnxConst({-1, 112 + embedding_dense_size}, {2})));
+  flow = builder->Reshape("/attn_body/embedding/out/reshape", flow,
+                          {-1, 112 + embedding_dense_size});
 
   return flow;
 }
@@ -791,10 +757,7 @@ std::string Converter::MakeAttentionBody(OnnxBuilder* builder,
   int fist_stage_out_C = 0;
 
   if (NumResBlocks() > 0) {
-    flow = builder->Reshape(
-        "/attn_body/reshape", flow,
-        builder->AddInitializer("/const/att_body_shape",
-                                Int64OnnxConst({-1, NumFilters()}, {2})));
+    flow = builder->Reshape("/attn_body/reshape", flow, {-1, NumFilters()});
     fist_stage_out_C = NumFilters();
   } else if (input_embedding == network_format::INPUT_EMBEDDING_PE_MAP) {
     flow = AttentionBodyMapEmbedding(builder, flow);
@@ -825,10 +788,8 @@ std::string Converter::MakeAttentionBody(OnnxBuilder* builder,
   }
 
   if (weights.ip_mult_gate.size() > 0 || weights.ip_add_gate.size() > 0) {
-    flow = builder->Reshape(
-        "/attn_body/ma_gating/rehape1", flow,
-        builder->AddInitializer("/const/ma_gating/shape1",
-                                Int64OnnxConst({-1, 64, embedding_size}, {3})));
+    flow = builder->Reshape("/attn_body/ma_gating/rehape1", flow,
+                            {-1, 64, embedding_size});
     if (weights.ip_mult_gate.size() > 0) {
       flow = builder->Mul("/ip_mul_gate", flow,
                           *GetWeghtsConverter(weights.ip_mult_gate,
@@ -839,10 +800,8 @@ std::string Converter::MakeAttentionBody(OnnxBuilder* builder,
                           *GetWeghtsConverter(weights.ip_add_gate,
                                               {64, embedding_size}, {1, 0}));
     }
-    flow = builder->Reshape(
-        "/attn_body/ma_gating/rehape2", flow,
-        builder->AddInitializer("/const/ma_gating/shape2",
-                                Int64OnnxConst({-1, embedding_size}, {2})));
+    flow = builder->Reshape("/attn_body/ma_gating/rehape2", flow,
+                            {-1, embedding_size});
   }
 
   float alpha = std::pow(2.0f * NumEncBlocks(), -0.25f);
@@ -896,10 +855,7 @@ std::string Converter::MakeAttentionPolicy(
   if (NumEncBlocks() == 0) {
     flow = builder->Transpose("/policy/dense1/transpose", flow, {0, 2, 3, 1});
 
-    flow = builder->Reshape(
-        "/policy/dense1/reshape", flow,
-        builder->AddInitializer("/const/policy_shape",
-                                Int64OnnxConst({-1, NumFilters()}, {2})));
+    flow = builder->Reshape("/policy/dense1/reshape", flow, {-1, NumFilters()});
   }
   flow = builder->MatMul(
       "/policy/dense1/matmul", flow,
@@ -926,17 +882,16 @@ std::string Converter::MakeAttentionPolicy(
                           {policy_embedding_size, policy_d_model}, {1, 0}));
   flow = builder->Add("/policy/Q/add", flow,
                       *GetWeghtsConverter(head.ip2_pol_b, {policy_d_model}));
-  auto Q = builder->Reshape(
-      "/policy/Q/reshape", flow,
-      builder->AddInitializer("/const/QK_shape",
-                              Int64OnnxConst({-1, 64, policy_d_model}, {3})));
+  auto Q =
+      builder->Reshape("/policy/Q/reshape", flow, {-1, 64, policy_d_model});
   flow = builder->MatMul(
       "/policy/K/matmul", encoder_out,
       *GetWeghtsConverter(head.ip3_pol_w,
                           {policy_embedding_size, policy_d_model}, {1, 0}));
   flow = builder->Add("/policy/K/add", flow,
                       *GetWeghtsConverter(head.ip3_pol_b, {policy_d_model}));
-  auto K = builder->Reshape("/policy/K/reshape", flow, "/const/QK_shape");
+  auto K =
+      builder->Reshape("/policy/K/reshape", flow, {-1, 64, policy_d_model});
   flow = builder->Transpose("/policy/K/transpose", K, {0, 2, 1});
   flow = builder->MatMul("/policy/matmul", Q, flow);
   flow = builder->Mul("/policy/scale", flow,
@@ -950,31 +905,16 @@ std::string Converter::MakeAttentionPolicy(
   auto prom2 = builder->Split("/policy/promotion/split", prom, 1, {3, 1});
   prom = builder->Add("/policy/promotion/add", prom2[0], prom2[1]);
   prom = builder->Transpose("/policy/promotion/transpose2", prom, {0, 2, 1});
-  prom = builder->Reshape(
-      "/policy/promotion/reshape", prom,
-      builder->AddInitializer("/const/policy_promotion_shape",
-                              Int64OnnxConst({-1, 1, 24}, {3})));
+  prom = builder->Reshape("/policy/promotion/reshape", prom, {-1, 1, 24});
   auto sl = builder->Slice("policy/promotion/slice2", flow, {0, 48, 56},
                            {INT_MAX, 56, 64});
-  sl = builder->Reshape(
-      "/policy/promotion/reshape2", sl,
-      builder->AddInitializer("/const/policy_promotion_shape2",
-                              Int64OnnxConst({-1, 64, 1}, {3})));
+  sl = builder->Reshape("/policy/promotion/reshape2", sl, {-1, 64, 1});
   sl = builder->Concat("/policy/promotion/concat", {sl, sl, sl}, 2);
-  sl = builder->Reshape(
-      "/policy/promotion/reshape3", sl,
-      builder->AddInitializer("/const/policy_promotion_shape3",
-                              Int64OnnxConst({-1, 8, 24}, {3})));
+  sl = builder->Reshape("/policy/promotion/reshape3", sl, {-1, 8, 24});
   prom = builder->Add("/policy/promotion/add2", sl, prom);
-  prom = builder->Reshape(
-      "/policy/promotion/reshape4", prom,
-      builder->AddInitializer("/const/policy_promotion_shape4",
-                              Int64OnnxConst({-1, 3, 64}, {3})));
+  prom = builder->Reshape("/policy/promotion/reshape4", prom, {-1, 3, 64});
   flow = builder->Concat("/policy/concat", {flow, prom}, 1);
-  flow = builder->Reshape(
-      "/policy/reshape", flow,
-      builder->AddInitializer("/const/policy_out_shape",
-                              Int64OnnxConst({-1, 67 * 64}, {2})));
+  flow = builder->Reshape("/policy/reshape", flow, {-1, 67 * 64});
   return builder->Gather(
       options_.output_policy_head, flow,
       builder->AddInitializer(
@@ -1014,10 +954,7 @@ void Converter::MakePolicyHead(pblczero::OnnxModel* onnx, OnnxBuilder* builder,
                               input, "/policy/conv1");
     flow = MakeConvBlock(builder, head.policy, NumFilters(), 80, flow,
                          "/policy/conv2", nullptr, "", false);
-    flow = builder->Reshape(
-        "/policy/flatten", flow,
-        builder->AddInitializer("/const/policy_shape",
-                                Int64OnnxConst({-1, 80 * 8 * 8}, {2})));
+    flow = builder->Reshape("/policy/flatten", flow, {-1, 80 * 8 * 8});
     auto output = builder->Gather(
         options_.output_policy_head, flow,
         builder->AddInitializer(
@@ -1037,10 +974,7 @@ void Converter::MakePolicyHead(pblczero::OnnxModel* onnx, OnnxBuilder* builder,
     auto flow = MakeConvBlock(builder, head.policy, NumFilters(), pol_channels,
                               input, "/policy/conv", nullptr, "", true, 1);
     flow =
-        builder->Reshape("/policy/reshape", flow,
-                         builder->AddInitializer(
-                             "/const/policy_shape",
-                             Int64OnnxConst({-1, pol_channels * 8 * 8}, {2})));
+        builder->Reshape("/policy/reshape", flow, {-1, pol_channels * 8 * 8});
     flow = builder->MatMul(
         "/policy/dense/matmul", flow,
         *GetWeghtsConverter(head.ip_pol_w,
@@ -1082,10 +1016,7 @@ void Converter::MakeValueHead(pblczero::OnnxModel* onnx, OnnxBuilder* builder,
     flow = MakeConvBlock(builder, head.value, NumFilters(), val_channels, input,
                          "/value/conv", nullptr, "", true, 1);
   }
-  flow = builder->Reshape(
-      "/value/reshape", flow,
-      builder->AddInitializer("/const/value_shape",
-                              Int64OnnxConst({-1, val_channels * 8 * 8}, {2})));
+  flow = builder->Reshape("/value/reshape", flow, {-1, val_channels * 8 * 8});
   flow = builder->MatMul(
       "/value/dense1/matmul", flow,
       *GetWeghtsConverter(head.ip1_val_w, {val_channels * 8 * 8, 128}, {1, 0}));
@@ -1143,10 +1074,7 @@ void Converter::MakeMovesLeftHead(pblczero::OnnxModel* onnx,
         MakeConvBlock(builder, weights.moves_left, NumFilters(), mlh_channels,
                       input, "/mlh/conv", nullptr, "", true, 1);
   }
-  flow = builder->Reshape(
-      "/mlh/reshape", flow,
-      builder->AddInitializer("/const/mlh_shape",
-                              Int64OnnxConst({-1, mlh_channels * 8 * 8}, {2})));
+  flow = builder->Reshape("/mlh/reshape", flow, {-1, mlh_channels * 8 * 8});
   flow = builder->MatMul(
       "/mlh/dense1/matmul", flow,
       *GetWeghtsConverter(weights.ip1_mov_w,
