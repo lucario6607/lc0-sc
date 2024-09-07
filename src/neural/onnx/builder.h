@@ -85,6 +85,8 @@ class OnnxBuilder {
   std::string AddInitializer(const std::string& name, const OnnxConst& weights);
   std::string Reshape(const std::string& name, const std::string& input,
                       const std::string& shape);
+  std::string Reshape(const std::string& name, const std::string& input,
+                      std::initializer_list<int> shape);
   std::vector<std::string> Split(const std::string& name,
                                  const std::string& input, int axis,
                                  std::initializer_list<int> split = {});
@@ -129,6 +131,8 @@ class OnnxBuilder {
   std::string Einsum(const std::string& name,
                      const std::vector<std::string>& input,
                      std::string equation);
+  std::string Unsqueeze(const std::string& name, const std::string& input,
+                        std::initializer_list<int> axes);
   // Returns ONNX model as protobuf.
   const pblczero::ModelProto& as_proto() const { return model_; }
   // Returns serialized model.
