@@ -254,6 +254,18 @@ std::string OnnxBuilder::Reshape(const std::string& name,
   return out;
 }
 
+std::string OnnxBuilder::Reshape(const std::string& name,
+                                 const std::string& input,
+                                 std::initializer_list<int> shape) {
+  auto* node = model_.mutable_graph()->add_node();
+  auto out = PopulateStdNodeFields(node, name, input, "Reshape");
+  node->add_input(AddInitializer(
+      name + "/shape",
+      Int64OnnxConst(std::vector<int64_t>(begin(shape), end(shape)),
+                     {static_cast<int>(shape.size())})));
+  return out;
+}
+
 std::string OnnxBuilder::Transpose(const std::string& name,
                                    const std::string& input,
                                    std::initializer_list<int> perm) {
@@ -497,6 +509,22 @@ std::string OnnxBuilder::Einsum(const std::string& name,
   node->add_output(name);
   AddStringAttribute(node, "equation", equation);
   return name;
+}
+
+std::string OnnxBuilder::Unsqueeze(const std::string& name,
+                                   const std::string& input,
+                                   std::initializer_list<int> axes) {
+  auto* node = model_.mutable_graph()->add_node();
+  auto out = PopulateStdNodeFields(node, name, input, "Unsqueeze");
+  if (opset_ < 13) {
+    AddIntsAttribute(node, "axes", axes);
+  } else {
+    node->add_input(AddInitializer(
+        name + "/axes",
+        Int64OnnxConst(std::vector<int64_t>(begin(axes), end(axes)),
+                       {static_cast<int>(axes.size())})));
+  }
+  return out;
 }
 
 }  // namespace lczero
