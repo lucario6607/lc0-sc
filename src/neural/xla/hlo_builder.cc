@@ -303,8 +303,8 @@ HloFlow HloBuilder::Dot(HloFlow lhs, HloFlow rhs,
   for (size_t i = 0; i < dn.lhs_batch_dimensions_size(); ++i) {
     auto lhs_dim = lhs_shape.GetDimension(dn.lhs_batch_dimensions(i));
     auto rhs_dim = rhs_shape.GetDimension(dn.rhs_batch_dimensions(i));
-    if (lhs_dim != rhs_dim && lhs_dim != 1 && rhs_dim != 1) {
-      throw Exception("Dot batch dimensions must be the same or 1");
+    if (lhs_dim != rhs_dim) {
+      throw Exception("Dot batch dimensions must have the same size");
     }
     new_shape.AddDimension(lhs_dim);
   }
