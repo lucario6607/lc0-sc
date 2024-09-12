@@ -629,8 +629,20 @@ if get_option('build_backends')
         'src/neural/xla/xla_tensor.cc',
       ]
       deps += cc.find_library('dl', required: false)
+
+  endif
+
+  if get_option('USE_AMD')
+      files += [
+        'src/neural/amd/layers.cpp',
+        'src/neural/amd/network_amd.cpp',
+        'src/neural/amd/common_kernels.cpp',
+      ]
+      add_project_arguments('-D__HIP_PLATFORM_AMD__', language : 'cpp')
+      deps += cc.find_library('hipblas', required: true)
       has_backends = true
   endif
+
 
 endif # if get_option('build_backends')
 
