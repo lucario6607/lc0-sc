@@ -29,6 +29,7 @@
 
 #include <algorithm>
 #include <numeric>
+#include <set>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -1483,8 +1484,12 @@ class Onnx2HloConverter {
     std::string eq_b =
         Trim(equation.substr(pos_comma + 1, pos_arrow - pos_comma - 1));
     std::string eq_out = Trim(equation.substr(pos_arrow + 2));
+    auto has_dups = [](const auto& s) {
+      return std::set<char>(s.begin(), s.end()).size() < s.size();
+    };
     if (eq_a.empty() || eq_b.empty() || eq_out.empty() ||
-        equation.find('.') != std::string::npos) {
+        equation.find('.') != std::string::npos || has_dups(eq_a) ||
+        has_dups(eq_b) || has_dups(eq_out)) {
       throw Exception("Unsupportred equation: " + equation);
     }
 
