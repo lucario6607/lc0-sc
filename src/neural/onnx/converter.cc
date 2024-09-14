@@ -529,8 +529,9 @@ std::string Converter::MakeEncoderLayer(
         }
       }
     }
+    // Use float for the map as onnxruntime can't constant fold fp16 matmul.
     builder->AddInitializer("/const/rpe_map",
-                            *GetWeghtsConverter(rpe_map_, {rows, cols}));
+                            FloatOnnxWeightsAdapter(rpe_map_, {rows, cols}));
   }
   auto mha_shape =
       builder->AddInitializer("/const" + name + "/mha/shape",
@@ -561,8 +562,11 @@ std::string Converter::MakeEncoderLayer(
   if (layer.mha.rpe_q.size() > 0) {
     auto rpe_q = builder->AddInitializer(
         name + "/mha/rpe_q/w0",
-        *GetWeghtsConverter(layer.mha.rpe_q, {depth * heads, 15 * 15}, {1, 0}));
+        FloatOnnxWeightsAdapter(layer.mha.rpe_q, {depth * heads, 15 * 15},
+                                {1, 0}));
     rpe_q = builder->MatMul(name + "/mha/rpe_q/w", rpe_q, "/const/rpe_map");
+    rpe_q =
+        builder->Cast(name + "/mha/rpe_q/w/to_data_type", rpe_q, GetDataType());
     rpe_q = builder->Reshape(name + "/mha/rpe_q/w/reshape", rpe_q,
                              {depth, heads, 64, 64});
     rpe_q = builder->Transpose(name + "/mha/rpe_q/w/transpose", rpe_q,
@@ -583,8 +587,11 @@ std::string Converter::MakeEncoderLayer(
   if (layer.mha.rpe_k.size() > 0) {
     auto rpe_k = builder->AddInitializer(
         name + "/mha/rpe_k/w0",
-        *GetWeghtsConverter(layer.mha.rpe_k, {depth * heads, 15 * 15}, {1, 0}));
+        FloatOnnxWeightsAdapter(layer.mha.rpe_k, {depth * heads, 15 * 15},
+                                {1, 0}));
     rpe_k = builder->MatMul(name + "/mha/rpe_k/w", rpe_k, "/const/rpe_map");
+    rpe_k =
+        builder->Cast(name + "/mha/rpe_k/w/to_data_type", rpe_k, GetDataType());
     rpe_k = builder->Reshape(name + "/mha/rpe_k/w/reshape", rpe_k,
                              {depth, heads, 64, 64});
     rpe_k = builder->Transpose(name + "/mha/rpe_k/w/transpose", rpe_k,
@@ -617,8 +624,11 @@ std::string Converter::MakeEncoderLayer(
   if (layer.mha.rpe_v.size() > 0) {
     auto rpe_v = builder->AddInitializer(
         name + "/mha/rpe_v/w0",
-        *GetWeghtsConverter(layer.mha.rpe_v, {depth * heads, 15 * 15}, {1, 0}));
+        FloatOnnxWeightsAdapter(layer.mha.rpe_v, {depth * heads, 15 * 15},
+                                {1, 0}));
     rpe_v = builder->MatMul(name + "/mha/rpe_v/w", rpe_v, "/const/rpe_map");
+    rpe_v =
+        builder->Cast(name + "/mha/rpe_v/w/to_data_type", rpe_v, GetDataType());
     rpe_v = builder->Reshape(name + "/mha/rpe_v/w/reshape", rpe_v,
                              {depth, heads, 64, 64});
     rpe_v = builder->Transpose(name + "/mha/rpe_v/w/transpose", rpe_v,
