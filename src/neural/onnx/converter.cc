@@ -33,6 +33,8 @@
 #include <initializer_list>
 #include <memory>
 
+#include <Eigen/Dense>
+
 #include "neural/loader.h"
 #include "neural/network.h"
 #include "neural/network_legacy.h"
@@ -135,6 +137,10 @@ class Converter {
                       const std::string& name, ActivationFunction activation,
                       float alpha);
 
+  std::string RPEWeightsInit(OnnxBuilder* builder,
+                             const std::vector<float>& weights, int depth,
+                             int heads, const std::string& name);
+
   std::string MakeEncoderLayer(OnnxBuilder* builder,
                                const MultiHeadWeights::EncoderLayer& layer,
                                int embedding_size, int heads,
@@ -180,6 +186,7 @@ class Converter {
   const float default_eps_;
   bool se_reshape_init_ = false;
   std::vector<float> rpe_map_;
+  std::string onnx_rpe_map_;
 };
 
 pblczero::TensorProto::DataType Converter::GetDataType() const {
@@ -502,18 +509,13 @@ std::string Converter::MakeFFN(OnnxBuilder* builder,
   return flow;
 }
 
-std::string Converter::MakeEncoderLayer(
-    OnnxBuilder* builder, const MultiHeadWeights::EncoderLayer& layer,
-    int embedding_size, int heads, const std::string& encoder_in,
-    const std::string& name, ActivationFunction activation, float alpha) {
-  const int d_model = layer.mha.q_b.size();
-  const int depth = d_model / heads;
-
-  if ((layer.mha.rpe_q.size() > 0 || layer.mha.rpe_k.size() > 0 ||
-       layer.mha.rpe_v.size() > 0) &&
-      rpe_map_.size() == 0) {
-    int rows = 15 * 15;
-    int cols = 64 * 64;
+std::string Converter::RPEWeightsInit(OnnxBuilder* builder,
+                                      const std::vector<float>& weights,
+                                      int depth, int heads,
+                                      const std::string& name) {
+  if (rpe_map_.size() == 0) {
+    constexpr int rows = 15 * 15;
+    constexpr int cols = 64 * 64;
     int row, col;
     rpe_map_.resize(rows * cols, 0.0f);
     // 15 * 15 in units for distance pairs to 64 * 64 pairs of squares.
@@ -529,10 +531,44 @@ std::string Converter::MakeEncoderLayer(
         }
       }
     }
-    // Use float for the map as onnxruntime can't constant fold fp16 matmul.
-    builder->AddInitializer("/const/rpe_map",
-                            FloatOnnxWeightsAdapter(rpe_map_, {rows, cols}));
   }
+  std::string rpe;
+  if (!options_.fold_matmul) {
+    if (onnx_rpe_map_.empty()) {
+      // Use float for the map as onnxruntime can't constant fold fp16 matmul.
+      onnx_rpe_map_ = builder->AddInitializer(
+          "/const/rpe_map",
+          FloatOnnxWeightsAdapter(rpe_map_, {15 * 15, 64 * 64}));
+    }
+    rpe = builder->AddInitializer(
+        name + "0",
+        FloatOnnxWeightsAdapter(weights, {depth * heads, 15 * 15}, {1, 0}));
+    rpe = builder->MatMul(name, rpe, onnx_rpe_map_);
+    rpe = builder->Cast(name + "/to_data_type", rpe, GetDataType());
+  } else {
+    std::vector<float> t(depth * heads * 64 * 64);
+    auto t_map = Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, 64 * 64>>(
+        &t[0], depth * heads, 64 * 64);
+    t_map.noalias() =
+        Eigen::Map<const Eigen::Matrix<float, Eigen::Dynamic, 15 * 15>>(
+            &weights[0], depth * heads, 15 * 15) *
+        Eigen::Map<const Eigen::Matrix<float, 64 * 64, 15 * 15>>(
+            &rpe_map_[0], 64 * 64, 15 * 15)
+            .transpose();
+    rpe = builder->AddInitializer(
+        name, *GetWeghtsConverter(t, {depth * heads, 64 * 64}, {1, 0}));
+  }
+  rpe = builder->Reshape(name + "/reshape", rpe, {depth, heads, 64, 64});
+  return rpe;
+}
+
+std::string Converter::MakeEncoderLayer(
+    OnnxBuilder* builder, const MultiHeadWeights::EncoderLayer& layer,
+    int embedding_size, int heads, const std::string& encoder_in,
+    const std::string& name, ActivationFunction activation, float alpha) {
+  const int d_model = layer.mha.q_b.size();
+  const int depth = d_model / heads;
+
   auto mha_shape =
       builder->AddInitializer("/const" + name + "/mha/shape",
                               Int64OnnxConst({-1, 64, heads, depth}, {4}));
@@ -560,15 +596,8 @@ std::string Converter::MakeEncoderLayer(
   flow = builder->MatMul(name + "/mha/QK/matmul", Q_T, K_T);
 
   if (layer.mha.rpe_q.size() > 0) {
-    auto rpe_q = builder->AddInitializer(
-        name + "/mha/rpe_q/w0",
-        FloatOnnxWeightsAdapter(layer.mha.rpe_q, {depth * heads, 15 * 15},
-                                {1, 0}));
-    rpe_q = builder->MatMul(name + "/mha/rpe_q/w", rpe_q, "/const/rpe_map");
-    rpe_q =
-        builder->Cast(name + "/mha/rpe_q/w/to_data_type", rpe_q, GetDataType());
-    rpe_q = builder->Reshape(name + "/mha/rpe_q/w/reshape", rpe_q,
-                             {depth, heads, 64, 64});
+    auto rpe_q = RPEWeightsInit(builder, layer.mha.rpe_q, depth, heads,
+                                name + "/mha/rpe_q/w");
     rpe_q = builder->Transpose(name + "/mha/rpe_q/w/transpose", rpe_q,
                                {1, 2, 0, 3});
     rpe_q = builder->Reshape(name + "/mha/rpe_q/w/reshape_2", rpe_q,
@@ -581,19 +610,11 @@ std::string Converter::MakeEncoderLayer(
                              {heads, 64, -1, 64});
     rpe_q = builder->Transpose(name + "/mha/rpe_q/einsum/transpose", rpe_q,
                                {2, 0, 1, 3});
-
     flow = builder->Add(name + "/mha/rpe_q", flow, rpe_q);
   }
   if (layer.mha.rpe_k.size() > 0) {
-    auto rpe_k = builder->AddInitializer(
-        name + "/mha/rpe_k/w0",
-        FloatOnnxWeightsAdapter(layer.mha.rpe_k, {depth * heads, 15 * 15},
-                                {1, 0}));
-    rpe_k = builder->MatMul(name + "/mha/rpe_k/w", rpe_k, "/const/rpe_map");
-    rpe_k =
-        builder->Cast(name + "/mha/rpe_k/w/to_data_type", rpe_k, GetDataType());
-    rpe_k = builder->Reshape(name + "/mha/rpe_k/w/reshape", rpe_k,
-                             {depth, heads, 64, 64});
+    auto rpe_k = RPEWeightsInit(builder, layer.mha.rpe_k, depth, heads,
+                                name + "/mha/rpe_k/w");
     rpe_k = builder->Transpose(name + "/mha/rpe_k/w/transpose", rpe_k,
                                {1, 3, 0, 2});
     rpe_k = builder->Reshape(name + "/mha/rpe_k/w/reshape_2", rpe_k,
@@ -622,15 +643,8 @@ std::string Converter::MakeEncoderLayer(
   flow = builder->MatMul(name + "/mha/QKV/matmul", QK, V);
 
   if (layer.mha.rpe_v.size() > 0) {
-    auto rpe_v = builder->AddInitializer(
-        name + "/mha/rpe_v/w0",
-        FloatOnnxWeightsAdapter(layer.mha.rpe_v, {depth * heads, 15 * 15},
-                                {1, 0}));
-    rpe_v = builder->MatMul(name + "/mha/rpe_v/w", rpe_v, "/const/rpe_map");
-    rpe_v =
-        builder->Cast(name + "/mha/rpe_v/w/to_data_type", rpe_v, GetDataType());
-    rpe_v = builder->Reshape(name + "/mha/rpe_v/w/reshape", rpe_v,
-                             {depth, heads, 64, 64});
+    auto rpe_v = RPEWeightsInit(builder, layer.mha.rpe_v, depth, heads,
+                                name + "/mha/rpe_v/w");
     rpe_v = builder->Transpose(name + "/mha/rpe_v/w/transpose", rpe_v,
                                {1, 2, 3, 0});
     rpe_v = builder->Reshape(name + "/mha/rpe_v/w/reshape_2", rpe_v,
