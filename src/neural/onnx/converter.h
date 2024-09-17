@@ -50,6 +50,7 @@ struct WeightsToOnnxConverterOptions {
   bool relax_op_types = true;  // Use data_type even if unsuported by operator.
   bool no_shape = false;       // Avoid use of "Shape" operator.
   bool fold_matmul = false;    // Do matmul constant folding (increases size).
+  bool use_einsum = false;     // Allow use of Einsum operator.
   std::string policy_head = "vanilla";
   std::string value_head = "winner";
 

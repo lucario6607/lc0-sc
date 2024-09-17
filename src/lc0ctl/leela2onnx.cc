@@ -56,6 +56,8 @@ const OptionId kOnnxOpsetId{"onnx-opset", "",
                             "Opset to use in the ONNX model."};
 const OptionId kOnnxFoldMatmulId{
     "onnx-fold-matmul", "", "Do matmul constant folding (increases size)."};
+const OptionId kOnnxEinsumId{"onnx-use-einsum", "",
+                             "Use the Einsum operator in the ONNX model."};
 const OptionId kHloAllowPartialResultId = {
     "hlo-allow-partial-result", "",
     "Allow partial result in case of HLO conversion failure (DEBUG ONLY!)."};
@@ -95,6 +97,7 @@ bool ProcessParameters(OptionsParser* options) {
   options->Add<IntOption>(kOnnxBatchSizeId, -1, 2048) = -1;
   options->Add<IntOption>(kOnnxOpsetId, 7, 18) = 17;
   options->Add<BoolOption>(kOnnxFoldMatmulId) = false;
+  options->Add<BoolOption>(kOnnxEinsumId) = false;
   options->Add<IntOption>(kHloBatchSizeId, 1, 2048) = 333;
   options->Add<ChoiceOption>(
       kOnnxDataTypeId, std::vector<std::string>{"f32", "f16", "bf16"}) = "f32";
@@ -149,6 +152,7 @@ void ConvertLeelaToOnnx() {
     onnx_options.output_value = dict.Get<std::string>(kOutputValue);
     onnx_options.opset = dict.Get<int>(kOnnxOpsetId);
     onnx_options.fold_matmul = dict.Get<bool>(kOnnxFoldMatmulId);
+    onnx_options.use_einsum = dict.Get<bool>(kOnnxEinsumId);
     onnx_options.batch_size = dict.Get<int>(kOnnxBatchSizeId);
     onnx_options.data_type = WeightsToOnnxConverterOptions::StringToDataType(
         dict.Get<std::string>(kOnnxDataTypeId));
