@@ -467,8 +467,10 @@ std::string Converter::MakeLayerNorm(OnnxBuilder* builder,
   if (!options_.alt_layernorm) {
     return builder->LayerNormalization(name, input, gammas, betas, 1, eps);
   }
-  auto in =
-      builder->Cast(name + "/to_float", input, pblczero::TensorProto::FLOAT);
+  auto in = input;
+  if (GetDataType() != pblczero::TensorProto::FLOAT) {
+    in = builder->Cast(name + "/to_float", in, pblczero::TensorProto::FLOAT);
+  }
   auto flow = builder->ReduceMean(name + "/mean", in, {1});
   in = builder->Sub(name + "/centered", in, flow);
   flow = builder->Mul(name + "/squared", in, in);
@@ -479,7 +481,9 @@ std::string Converter::MakeLayerNorm(OnnxBuilder* builder,
   flow = builder->Sqrt(name + "/std", flow);
   flow = builder->Reciprocal(name + "/inv_std", flow);
   flow = builder->Mul(name + "/normalized", in, flow);
-  flow = builder->Cast(name + "/to_data_type", flow, GetDataType());
+  if (GetDataType() != pblczero::TensorProto::FLOAT) {
+    flow = builder->Cast(name + "/to_data_type", flow, GetDataType());
+  }
   flow = builder->Mul(name + "/gammas", flow, gammas);
   flow = builder->Add(name + "/betas", flow, betas);
   return flow;
@@ -544,7 +548,9 @@ std::string Converter::RPEWeightsInit(OnnxBuilder* builder,
         name + "0",
         FloatOnnxWeightsAdapter(weights, {depth * heads, 15 * 15}, {1, 0}));
     rpe = builder->MatMul(name, rpe, onnx_rpe_map_);
-    rpe = builder->Cast(name + "/to_data_type", rpe, GetDataType());
+    if (GetDataType() != pblczero::TensorProto::FLOAT) {
+      rpe = builder->Cast(name + "/to_data_type", rpe, GetDataType());
+    }
   } else {
     std::vector<float> t(depth * heads * 64 * 64);
     auto t_map = Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, 64 * 64>>(
