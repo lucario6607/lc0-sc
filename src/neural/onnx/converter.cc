@@ -606,36 +606,45 @@ std::string Converter::MakeEncoderLayer(
   if (layer.mha.rpe_q.size() > 0) {
     auto rpe_q = RPEWeightsInit(builder, layer.mha.rpe_q, depth, heads,
                                 name + "/mha/rpe_q/w");
-    rpe_q = builder->Transpose(name + "/mha/rpe_q/w/transpose", rpe_q,
-                               {1, 2, 0, 3});
-    rpe_q = builder->Reshape(name + "/mha/rpe_q/w/reshape_2", rpe_q,
-                             {heads * 64, depth, 64});
-    Q = builder->Transpose(name + "/mha/rpe_q/Q/transpose", Q, {2, 1, 0, 3});
-    Q = builder->Reshape(name + "/mha/rpe_q/Q/reshape", Q,
-                         {heads * 64, -1, depth});
-    rpe_q = builder->MatMul(name + "/mha/rpe_q/einsum", Q, rpe_q);
-    rpe_q = builder->Reshape(name + "/mha/rpe_q/einsum/reshape", rpe_q,
-                             {heads, 64, -1, 64});
-    rpe_q = builder->Transpose(name + "/mha/rpe_q/einsum/transpose", rpe_q,
-                               {2, 0, 1, 3});
+    if (options_.use_einsum) {
+      rpe_q = builder->Einsum(name + "/mha/rpe_q/einsum", {Q, rpe_q},
+                              "bqhd, dhqk->bhqk");
+    } else {
+      rpe_q = builder->Transpose(name + "/mha/rpe_q/w/transpose", rpe_q,
+                                 {1, 2, 0, 3});
+      rpe_q = builder->Reshape(name + "/mha/rpe_q/w/reshape_2", rpe_q,
+                               {heads * 64, depth, 64});
+      Q = builder->Transpose(name + "/mha/rpe_q/Q/transpose", Q, {2, 1, 0, 3});
+      Q = builder->Reshape(name + "/mha/rpe_q/Q/reshape", Q,
+                           {heads * 64, -1, depth});
+      rpe_q = builder->MatMul(name + "/mha/rpe_q/einsum", Q, rpe_q);
+      rpe_q = builder->Reshape(name + "/mha/rpe_q/einsum/reshape", rpe_q,
+                               {heads, 64, -1, 64});
+      rpe_q = builder->Transpose(name + "/mha/rpe_q/einsum/transpose", rpe_q,
+                                 {2, 0, 1, 3});
+    }
     flow = builder->Add(name + "/mha/rpe_q", flow, rpe_q);
   }
   if (layer.mha.rpe_k.size() > 0) {
     auto rpe_k = RPEWeightsInit(builder, layer.mha.rpe_k, depth, heads,
                                 name + "/mha/rpe_k/w");
-    rpe_k = builder->Transpose(name + "/mha/rpe_k/w/transpose", rpe_k,
-                               {1, 3, 0, 2});
-    rpe_k = builder->Reshape(name + "/mha/rpe_k/w/reshape_2", rpe_k,
-                             {heads * 64, depth, 64});
-    K = builder->Transpose(name + "/mha/rpe_k/K/transpose", K, {2, 1, 0, 3});
-    K = builder->Reshape(name + "/mha/rpe_k/K/reshape", K,
-                         {heads * 64, -1, depth});
-    rpe_k = builder->MatMul(name + "/mha/rpe_k/einsum", K, rpe_k);
-    rpe_k = builder->Reshape(name + "/mha/rpe_k/einsum/reshape", rpe_k,
-                             {heads, 64, -1, 64});
-    rpe_k = builder->Transpose(name + "/mha/rpe_k/einsum/transpose", rpe_k,
-                               {2, 0, 3, 1});
-
+    if (options_.use_einsum) {
+      rpe_k = builder->Einsum(name + "/mha/rpe_k/einsum", {K, rpe_k},
+                              "bkhd, dhqk->bhqk");
+    } else {
+      rpe_k = builder->Transpose(name + "/mha/rpe_k/w/transpose", rpe_k,
+                                 {1, 3, 0, 2});
+      rpe_k = builder->Reshape(name + "/mha/rpe_k/w/reshape_2", rpe_k,
+                               {heads * 64, depth, 64});
+      K = builder->Transpose(name + "/mha/rpe_k/K/transpose", K, {2, 1, 0, 3});
+      K = builder->Reshape(name + "/mha/rpe_k/K/reshape", K,
+                           {heads * 64, -1, depth});
+      rpe_k = builder->MatMul(name + "/mha/rpe_k/einsum", K, rpe_k);
+      rpe_k = builder->Reshape(name + "/mha/rpe_k/einsum/reshape", rpe_k,
+                               {heads, 64, -1, 64});
+      rpe_k = builder->Transpose(name + "/mha/rpe_k/einsum/transpose", rpe_k,
+                                 {2, 0, 3, 1});
+    }
     flow = builder->Add(name + "/mha/rpe_k", flow, rpe_k);
   }
 
@@ -653,19 +662,24 @@ std::string Converter::MakeEncoderLayer(
   if (layer.mha.rpe_v.size() > 0) {
     auto rpe_v = RPEWeightsInit(builder, layer.mha.rpe_v, depth, heads,
                                 name + "/mha/rpe_v/w");
-    rpe_v = builder->Transpose(name + "/mha/rpe_v/w/transpose", rpe_v,
-                               {1, 2, 3, 0});
-    rpe_v = builder->Reshape(name + "/mha/rpe_v/w/reshape_2", rpe_v,
-                             {heads * 64, 64, depth});
-    QK = builder->Transpose(name + "/mha/rpe_v/QK/transpose", QK, {1, 2, 0, 3});
-    QK = builder->Reshape(name + "/mha/rpe_v/QK/reshape", QK,
-                          {heads * 64, -1, 64});
-    rpe_v = builder->MatMul(name + "/mha/rpe_v/einsum", QK, rpe_v);
-    rpe_v = builder->Reshape(name + "/mha/rpe_v/einsum/reshape", rpe_v,
-                             {heads, 64, -1, depth});
-    rpe_v = builder->Transpose(name + "/mha/rpe_v/einsum/transpose", rpe_v,
-                               {2, 0, 1, 3});
-
+    if (options_.use_einsum) {
+      rpe_v = builder->Einsum(name + "/mha/rpe_v/einsum", {QK, rpe_v},
+                              "bhqk, dhqk->bhqd");
+    } else {
+      rpe_v = builder->Transpose(name + "/mha/rpe_v/w/transpose", rpe_v,
+                                 {1, 2, 3, 0});
+      rpe_v = builder->Reshape(name + "/mha/rpe_v/w/reshape_2", rpe_v,
+                               {heads * 64, 64, depth});
+      QK = builder->Transpose(name + "/mha/rpe_v/QK/transpose", QK,
+                              {1, 2, 0, 3});
+      QK = builder->Reshape(name + "/mha/rpe_v/QK/reshape", QK,
+                            {heads * 64, -1, 64});
+      rpe_v = builder->MatMul(name + "/mha/rpe_v/einsum", QK, rpe_v);
+      rpe_v = builder->Reshape(name + "/mha/rpe_v/einsum/reshape", rpe_v,
+                               {heads, 64, -1, depth});
+      rpe_v = builder->Transpose(name + "/mha/rpe_v/einsum/transpose", rpe_v,
+                                 {2, 0, 1, 3});
+    }
     flow = builder->Add(name + "/mha/rpe_v", flow, rpe_v);
   }
 
