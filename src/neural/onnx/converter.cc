@@ -125,10 +125,11 @@ class Converter {
                           const std::string& encoder_in,
                           const std::string& name);
 
-  std::string MakeLayerNorm(OnnxBuilder* builder, const std::string& input,
-                            const std::string& name,
-                            const lczero::OnnxConst& gammas,
-                            const lczero::OnnxConst& betas, float eps = 1e-6);
+  std::string MakeNormalization(OnnxBuilder* builder, const std::string& input,
+                                const std::string& name,
+                                const std::vector<float>& gammas,
+                                const std::vector<float>& betas,
+                                float eps = 1e-6);
 
   std::string MakeFFN(OnnxBuilder* builder, const MultiHeadWeights::FFN& ffn,
                       int embedding_size, const std::string& ffn_in,
@@ -425,11 +426,9 @@ std::string Converter::MakeSmolgen(OnnxBuilder* builder,
       name + "/smolgen/dense1/b", flow,
       *GetWeghtsConverter(layer.mha.smolgen.dense1_b, {smolgen_hidden_sz}));
   flow = MakeActivation(builder, flow, name + "/smolgen/dense1", activation);
-  flow = MakeLayerNorm(
-      builder, flow, name + "/smolgen/ln1",
-      *GetWeghtsConverter(layer.mha.smolgen.ln1_gammas, {smolgen_hidden_sz}),
-      *GetWeghtsConverter(layer.mha.smolgen.ln1_betas, {smolgen_hidden_sz}),
-      1e-3);
+  flow = MakeNormalization(builder, flow, name + "/smolgen/ln1",
+                           layer.mha.smolgen.ln1_gammas,
+                           layer.mha.smolgen.ln1_betas, 1e-3);
   flow = builder->MatMul(
       name + "/smolgen/dense2/w", flow,
       *GetWeghtsConverter(layer.mha.smolgen.dense2_w,
@@ -438,12 +437,9 @@ std::string Converter::MakeSmolgen(OnnxBuilder* builder,
                       *GetWeghtsConverter(layer.mha.smolgen.dense2_b,
                                           {smolgen_gen_sz * heads}));
   flow = MakeActivation(builder, flow, name + "/smolgen/dense2", activation);
-  flow = MakeLayerNorm(builder, flow, name + "/smolgen/ln2",
-                       *GetWeghtsConverter(layer.mha.smolgen.ln2_gammas,
-                                           {smolgen_gen_sz * heads}),
-                       *GetWeghtsConverter(layer.mha.smolgen.ln2_betas,
-                                           {smolgen_gen_sz * heads}),
-                       1e-3);
+  flow = MakeNormalization(builder, flow, name + "/smolgen/ln2",
+                           layer.mha.smolgen.ln2_gammas,
+                           layer.mha.smolgen.ln2_betas, 1e-3);
   flow =
       builder->Reshape(name + "/smolgen/gen_from/reshape", flow,
                        builder->AddInitializer(
@@ -458,14 +454,32 @@ std::string Converter::MakeSmolgen(OnnxBuilder* builder,
   return flow;
 }
 
-std::string Converter::MakeLayerNorm(OnnxBuilder* builder,
-                                     const std::string& input,
-                                     const std::string& name,
-                                     const lczero::OnnxConst& gammas,
-                                     const lczero::OnnxConst& betas,
-                                     float eps) {
-  if (!options_.alt_layernorm) {
-    return builder->LayerNormalization(name, input, gammas, betas, 1, eps);
+std::string Converter::MakeNormalization(OnnxBuilder* builder,
+                                         const std::string& input,
+                                         const std::string& name,
+                                         const std::vector<float>& gammas,
+                                         const std::vector<float>& betas,
+                                         float eps) {
+  int size = gammas.size();
+  if (betas.size() == 0) {
+    auto in =
+        builder->Cast(name + "/to_float", input, pblczero::TensorProto::FLOAT);
+    auto flow = builder->Mul(name + "/squared", in, in);
+    flow = builder->ReduceMean(name + "/var", flow, {1});
+    flow = builder->Add(
+        name + "/var_eps", flow,
+        static_cast<const OnnxConst&>(FloatOnnxConst({1e-5}, {1})));
+    flow = builder->Sqrt(name + "/std", flow);
+    flow = builder->Reciprocal(name + "/inv_std", flow);
+    flow = builder->Mul(name + "/normalized", in, flow);
+    flow = builder->Cast(name + "/to_data_type", flow, GetDataType());
+    flow = builder->Mul(name + "/gammas", flow,
+                        *GetWeghtsConverter(gammas, {size}));
+    return flow;
+  } else if (!options_.alt_layernorm) {
+    return builder->LayerNormalization(
+        name, input, *GetWeghtsConverter(gammas, {size}),
+        *GetWeghtsConverter(betas, {size}), 1, eps);
   }
   auto in =
       builder->Cast(name + "/to_float", input, pblczero::TensorProto::FLOAT);
@@ -480,8 +494,10 @@ std::string Converter::MakeLayerNorm(OnnxBuilder* builder,
   flow = builder->Reciprocal(name + "/inv_std", flow);
   flow = builder->Mul(name + "/normalized", in, flow);
   flow = builder->Cast(name + "/to_data_type", flow, GetDataType());
-  flow = builder->Mul(name + "/gammas", flow, gammas);
-  flow = builder->Add(name + "/betas", flow, betas);
+  flow =
+      builder->Mul(name + "/gammas", flow, *GetWeghtsConverter(gammas, {size}));
+  flow =
+      builder->Add(name + "/betas", flow, *GetWeghtsConverter(betas, {size}));
   return flow;
 }
 
@@ -513,7 +529,7 @@ std::string Converter::MakeEncoderLayer(
     OnnxBuilder* builder, const MultiHeadWeights::EncoderLayer& layer,
     int embedding_size, int heads, const std::string& encoder_in,
     const std::string& name, ActivationFunction activation, float alpha) {
-  const int d_model = layer.mha.q_b.size();
+  const int d_model = layer.mha.q_w.size() / embedding_size;
   const int depth = d_model / heads;
 
   auto mha_shape =
@@ -568,20 +584,16 @@ std::string Converter::MakeEncoderLayer(
         builder->Mul(name + "/alpha*input", flow, *GetScalarConverter(alpha));
   }
   flow = builder->Add(name + "/mha/out/skip", flow, encoder_in);
-  flow = MakeLayerNorm(builder, flow, name + "/ln1",
-                       *GetWeghtsConverter(layer.ln1_gammas, {embedding_size}),
-                       *GetWeghtsConverter(layer.ln1_betas, {embedding_size}),
-                       default_eps_);
+  flow = MakeNormalization(builder, flow, name + "/ln1", layer.ln1_gammas,
+                           layer.ln1_betas, default_eps_);
   const auto ffn_activation = static_cast<ActivationFunction>(
       src_.format().network_format().ffn_activation());
   flow = MakeFFN(
       builder, layer.ffn, embedding_size, flow, name,
       ffn_activation == ACTIVATION_DEFAULT ? activation : ffn_activation,
       alpha);
-  flow = MakeLayerNorm(builder, flow, name + "/ln2",
-                       *GetWeghtsConverter(layer.ln2_gammas, {embedding_size}),
-                       *GetWeghtsConverter(layer.ln2_betas, {embedding_size}),
-                       default_eps_);
+  flow = MakeNormalization(builder, flow, name + "/ln2", layer.ln2_gammas,
+                           layer.ln2_betas, default_eps_);
   return flow;
 }
 
@@ -672,10 +684,11 @@ std::string Converter::AttentionBodyDenseEmbedding(
       "/attn_body/embedding/preprocess/matmul", pos_info,
       *GetWeghtsConverter(weights.ip_emb_preproc_w,
                           {64 * 12, 64 * embedding_dense_size}, {1, 0}));
-  pos_info = builder->Add("/attn_body/embedding/preprocess/add", pos_info,
-                          *GetWeghtsConverter(weights.ip_emb_preproc_b,
-                                              {64 * embedding_dense_size}));
-
+  if (weights.ip_emb_preproc_b.size() > 0) {
+    pos_info = builder->Add("/attn_body/embedding/preprocess/add", pos_info,
+                            *GetWeghtsConverter(weights.ip_emb_preproc_b,
+                                                {64 * embedding_dense_size}));
+  }
   pos_info = builder->Reshape(
       "/attn_body/embedding/preprocess/reshape", pos_info,
       builder->AddInitializer(
@@ -715,12 +728,18 @@ std::string Converter::MakeAttentionBody(OnnxBuilder* builder,
                                 Int64OnnxConst({-1, NumFilters()}, {2})));
     fist_stage_out_C = NumFilters();
   } else if (input_embedding == network_format::INPUT_EMBEDDING_PE_MAP) {
-    flow = AttentionBodyMapEmbedding(builder, flow);
-    fist_stage_out_C = 176;
+    if (weights.ip_emb_w.size() == 176 * weights.ip_emb_b.size()) {
+      flow = AttentionBodyMapEmbedding(builder, flow);
+      fist_stage_out_C = 176;
+    } else {
+      fist_stage_out_C = 112;
+    }
   } else if (input_embedding == network_format::INPUT_EMBEDDING_PE_DENSE) {
-    int embedding_dense_size = weights.ip_emb_preproc_b.size() / 64;
-    flow = AttentionBodyDenseEmbedding(builder, flow, weights,
-                                       embedding_dense_size);
+    int embedding_dense_size = weights.ip_emb_preproc_w.size() / 64 / 64 / 12;
+    if (embedding_dense_size > 0) {
+      flow = AttentionBodyDenseEmbedding(builder, flow, weights,
+                                         embedding_dense_size);
+    }
     fist_stage_out_C = 112 + embedding_dense_size;
   } else {
     throw Exception("Attention body missing input embedding.");
@@ -735,11 +754,11 @@ std::string Converter::MakeAttentionBody(OnnxBuilder* builder,
                       *GetWeghtsConverter(weights.ip_emb_b, {embedding_size}));
   flow = MakeActivation(builder, flow, "/attn_body", default_activation_);
 
-  if (input_embedding == network_format::INPUT_EMBEDDING_PE_DENSE) {
-    flow = MakeLayerNorm(
-        builder, flow, "/attn_body/ln",
-        *GetWeghtsConverter(weights.ip_emb_ln_gammas, {embedding_size}),
-        *GetWeghtsConverter(weights.ip_emb_ln_betas, {embedding_size}), 1e-3);
+  if (input_embedding == network_format::INPUT_EMBEDDING_PE_DENSE &&
+      weights.ip_emb_ln_gammas.size() > 0) {
+    flow = MakeNormalization(builder, flow, "/attn_body/ln",
+                             weights.ip_emb_ln_gammas, weights.ip_emb_ln_betas,
+                             1e-3);
   }
 
   if (weights.ip_mult_gate.size() > 0 || weights.ip_add_gate.size() > 0) {
@@ -766,13 +785,15 @@ std::string Converter::MakeAttentionBody(OnnxBuilder* builder,
   float alpha = std::pow(2.0f * NumEncBlocks(), -0.25f);
 
   if (input_embedding == network_format::INPUT_EMBEDDING_PE_DENSE) {
-    flow = MakeFFN(builder, weights.ip_emb_ffn, embedding_size, flow,
-                   "/attn_body", default_activation_, alpha);
-    flow = MakeLayerNorm(
-        builder, flow, "/attn_body/ln2",
-        *GetWeghtsConverter(weights.ip_emb_ffn_ln_gammas, {embedding_size}),
-        *GetWeghtsConverter(weights.ip_emb_ffn_ln_betas, {embedding_size}),
-        1e-3);
+    if (weights.ip_emb_ffn.dense1_w.size() > 0) {
+      flow = MakeFFN(builder, weights.ip_emb_ffn, embedding_size, flow,
+                     "/attn_body", default_activation_, alpha);
+    }
+    if (weights.ip_emb_ffn_ln_gammas.size() > 0) {
+      flow = MakeNormalization(builder, flow, "/attn_body/ln2",
+                               weights.ip_emb_ffn_ln_gammas,
+                               weights.ip_emb_ffn_ln_betas, 1e-3);
+    }
   }
 
   for (size_t i = 0; i < NumEncBlocks(); i++) {
