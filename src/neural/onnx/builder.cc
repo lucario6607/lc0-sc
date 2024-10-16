@@ -156,7 +156,6 @@ std::string OnnxBuilder::Add(const std::string& name, const std::string& input1,
 
 std::string OnnxBuilder::Add(const std::string& name, const std::string& input1,
                              const OnnxConst& input2) {
-  if (input2.GetRawData().size() == 0) return input1;
   auto* node = model_.mutable_graph()->add_node();
   auto out = PopulateStdNodeFields(node, name, input1, "Add");
   node->add_input(AddInitializer(name + "/w", input2));

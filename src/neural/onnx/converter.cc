@@ -538,22 +538,28 @@ std::string Converter::MakeEncoderLayer(
   auto flow = builder->MatMul(
       name + "/mha/Q/w", encoder_in,
       *GetWeghtsConverter(layer.mha.q_w, {embedding_size, d_model}, {1, 0}));
-  flow = builder->Add(name + "/mha/Q/b", flow,
-                      *GetWeghtsConverter(layer.mha.q_b, {d_model}));
+  if (layer.mha.q_b.size() > 0) {
+    flow = builder->Add(name + "/mha/Q/b", flow,
+                        *GetWeghtsConverter(layer.mha.q_b, {d_model}));
+  }
   flow = builder->Reshape(name + "/mha/Q/reshape", flow, mha_shape);
   auto Q = builder->Transpose(name + "/mha/Q/transpose", flow, {0, 2, 1, 3});
   flow = builder->MatMul(
       name + "/mha/K/w", encoder_in,
       *GetWeghtsConverter(layer.mha.k_w, {embedding_size, d_model}, {1, 0}));
-  flow = builder->Add(name + "/mha/K/b", flow,
-                      *GetWeghtsConverter(layer.mha.k_b, {d_model}));
+  if (layer.mha.k_b.size() > 0) {
+    flow = builder->Add(name + "/mha/K/b", flow,
+                        *GetWeghtsConverter(layer.mha.k_b, {d_model}));
+  }
   flow = builder->Reshape(name + "/mha/K/reshape", flow, mha_shape);
   auto K = builder->Transpose(name + "/mha/K/transpose", flow, {0, 2, 3, 1});
   flow = builder->MatMul(
       name + "/mha/V/w", encoder_in,
       *GetWeghtsConverter(layer.mha.v_w, {embedding_size, d_model}, {1, 0}));
-  flow = builder->Add(name + "/mha/V/b", flow,
-                      *GetWeghtsConverter(layer.mha.v_b, {d_model}));
+  if (layer.mha.v_b.size() > 0) {
+    flow = builder->Add(name + "/mha/V/b", flow,
+                        *GetWeghtsConverter(layer.mha.v_b, {d_model}));
+  }
   flow = builder->Reshape(name + "/mha/V/reshape", flow, mha_shape);
   auto V = builder->Transpose(name + "/mha/V/transpose", flow, {0, 2, 1, 3});
   flow = builder->MatMul(name + "/mha/QK/matmul", Q, K);
@@ -684,11 +690,9 @@ std::string Converter::AttentionBodyDenseEmbedding(
       "/attn_body/embedding/preprocess/matmul", pos_info,
       *GetWeghtsConverter(weights.ip_emb_preproc_w,
                           {64 * 12, 64 * embedding_dense_size}, {1, 0}));
-  if (weights.ip_emb_preproc_b.size() > 0) {
-    pos_info = builder->Add("/attn_body/embedding/preprocess/add", pos_info,
-                            *GetWeghtsConverter(weights.ip_emb_preproc_b,
-                                                {64 * embedding_dense_size}));
-  }
+  pos_info = builder->Add("/attn_body/embedding/preprocess/add", pos_info,
+                          *GetWeghtsConverter(weights.ip_emb_preproc_b,
+                                              {64 * embedding_dense_size}));
   pos_info = builder->Reshape(
       "/attn_body/embedding/preprocess/reshape", pos_info,
       builder->AddInitializer(
@@ -728,18 +732,12 @@ std::string Converter::MakeAttentionBody(OnnxBuilder* builder,
                                 Int64OnnxConst({-1, NumFilters()}, {2})));
     fist_stage_out_C = NumFilters();
   } else if (input_embedding == network_format::INPUT_EMBEDDING_PE_MAP) {
-    if (weights.ip_emb_w.size() == 176 * weights.ip_emb_b.size()) {
-      flow = AttentionBodyMapEmbedding(builder, flow);
-      fist_stage_out_C = 176;
-    } else {
-      fist_stage_out_C = 112;
-    }
+    flow = AttentionBodyMapEmbedding(builder, flow);
+    fist_stage_out_C = 176;
   } else if (input_embedding == network_format::INPUT_EMBEDDING_PE_DENSE) {
-    int embedding_dense_size = weights.ip_emb_preproc_w.size() / 64 / 64 / 12;
-    if (embedding_dense_size > 0) {
-      flow = AttentionBodyDenseEmbedding(builder, flow, weights,
-                                         embedding_dense_size);
-    }
+    int embedding_dense_size = weights.ip_emb_preproc_b.size() / 64;
+    flow = AttentionBodyDenseEmbedding(builder, flow, weights,
+                                       embedding_dense_size);
     fist_stage_out_C = 112 + embedding_dense_size;
   } else {
     throw Exception("Attention body missing input embedding.");
@@ -754,8 +752,7 @@ std::string Converter::MakeAttentionBody(OnnxBuilder* builder,
                       *GetWeghtsConverter(weights.ip_emb_b, {embedding_size}));
   flow = MakeActivation(builder, flow, "/attn_body", default_activation_);
 
-  if (input_embedding == network_format::INPUT_EMBEDDING_PE_DENSE &&
-      weights.ip_emb_ln_gammas.size() > 0) {
+  if (input_embedding == network_format::INPUT_EMBEDDING_PE_DENSE) {
     flow = MakeNormalization(builder, flow, "/attn_body/ln",
                              weights.ip_emb_ln_gammas, weights.ip_emb_ln_betas,
                              1e-3);
@@ -785,15 +782,11 @@ std::string Converter::MakeAttentionBody(OnnxBuilder* builder,
   float alpha = std::pow(2.0f * NumEncBlocks(), -0.25f);
 
   if (input_embedding == network_format::INPUT_EMBEDDING_PE_DENSE) {
-    if (weights.ip_emb_ffn.dense1_w.size() > 0) {
-      flow = MakeFFN(builder, weights.ip_emb_ffn, embedding_size, flow,
-                     "/attn_body", default_activation_, alpha);
-    }
-    if (weights.ip_emb_ffn_ln_gammas.size() > 0) {
-      flow = MakeNormalization(builder, flow, "/attn_body/ln2",
-                               weights.ip_emb_ffn_ln_gammas,
-                               weights.ip_emb_ffn_ln_betas, 1e-3);
-    }
+    flow = MakeFFN(builder, weights.ip_emb_ffn, embedding_size, flow,
+                   "/attn_body", default_activation_, alpha);
+    flow = MakeNormalization(builder, flow, "/attn_body/ln2",
+                             weights.ip_emb_ffn_ln_gammas,
+                             weights.ip_emb_ffn_ln_betas, 1e-3);
   }
 
   for (size_t i = 0; i < NumEncBlocks(); i++) {
