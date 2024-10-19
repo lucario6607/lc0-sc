@@ -302,7 +302,7 @@ std::unique_ptr<Network> MakeXlaNetwork(const std::optional<WeightsFile>& w,
     onnx_converter_options.data_type =
         WeightsToOnnxConverterOptions::StringToDataType(
             opts.GetOrDefault<std::string>("datatype", "f32"));
-    onnx_converter_options.opset = opts.GetOrDefault<int>("opset", 18);
+    onnx_converter_options.opset = opts.GetOrDefault<int>("opset", 22);
     onnx_converter_options.alt_mish =
         opts.GetOrDefault<bool>("alt_mish", false);
     onnx_converter_options.alt_layernorm =
