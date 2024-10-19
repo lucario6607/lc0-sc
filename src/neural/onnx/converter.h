@@ -48,6 +48,7 @@ struct WeightsToOnnxConverterOptions {
   bool alt_mish = false;       // Use "Mish" approximation (fp32 only).
   bool alt_layernorm = false;  // Discrete "LayerNormalization" implementation.
   bool no_shape = false;       // Avoid use of "Shape" operator.
+  bool fuse_qkv = false;       // Fuse the QKV matmuls.
   std::string policy_head = "vanilla";
   std::string value_head = "winner";
 

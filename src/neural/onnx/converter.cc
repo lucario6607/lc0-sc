@@ -526,52 +526,73 @@ std::string Converter::MakeEncoderLayer(
   const int d_model = layer.mha.q_b.size();
   const int depth = d_model / heads;
 
+  std::string flow;
+  std::string Q;
+  std::string K;
+  std::string V;
+  if (!options_.fuse_qkv) {
+    auto mha_shape =
+        builder->AddInitializer("/const" + name + "/mha/shape",
+                                Int64OnnxConst({-1, 64, heads, depth}, {4}));
+    flow = builder->MatMul(
+        name + "/mha/Q/w", encoder_in,
+        *GetWeghtsConverter(layer.mha.q_w, {embedding_size, d_model}, {1, 0}));
+    flow = builder->Add(name + "/mha/Q/b", flow,
+                        *GetWeghtsConverter(layer.mha.q_b, {d_model}));
+    flow = builder->Reshape(name + "/mha/Q/reshape", flow, mha_shape);
+    Q = builder->Transpose(name + "/mha/Q/transpose", flow, {0, 2, 1, 3});
+    flow = builder->MatMul(
+        name + "/mha/K/w", encoder_in,
+        *GetWeghtsConverter(layer.mha.k_w, {embedding_size, d_model}, {1, 0}));
+    flow = builder->Add(name + "/mha/K/b", flow,
+                        *GetWeghtsConverter(layer.mha.k_b, {d_model}));
+    flow = builder->Reshape(name + "/mha/K/reshape", flow, mha_shape);
+    K = builder->Transpose(name + "/mha/K/transpose", flow, {0, 2, 3, 1});
+    flow = builder->MatMul(
+        name + "/mha/V/w", encoder_in,
+        *GetWeghtsConverter(layer.mha.v_w, {embedding_size, d_model}, {1, 0}));
+    flow = builder->Add(name + "/mha/V/b", flow,
+                        *GetWeghtsConverter(layer.mha.v_b, {d_model}));
+    flow = builder->Reshape(name + "/mha/V/reshape", flow, mha_shape);
+    V = builder->Transpose(name + "/mha/V/transpose", flow, {0, 2, 1, 3});
+  } else {
+    auto merge_w = layer.mha.q_w;
+    merge_w.insert(merge_w.end(), layer.mha.k_w.begin(), layer.mha.k_w.end());
+    merge_w.insert(merge_w.end(), layer.mha.v_w.begin(), layer.mha.v_w.end());
+    auto merge_b = layer.mha.q_b;
+    merge_b.insert(merge_b.end(), layer.mha.k_b.begin(), layer.mha.k_b.end());
+    merge_b.insert(merge_b.end(), layer.mha.v_b.begin(), layer.mha.v_b.end());
+    flow = builder->MatMul(
+        name + "/mha/mul", encoder_in,
+        *GetWeghtsConverter(merge_w, {embedding_size, 3 * d_model}, {1, 0}));
+    flow = builder->Add(name + "/mha/add", flow,
+                        *GetWeghtsConverter(merge_b, {3 * d_model}));
+#if 0
   auto mha_shape =
       builder->AddInitializer("/const" + name + "/mha/shape",
                               Int64OnnxConst({-1, 64, heads, depth}, {4}));
-#if 0
-  auto flow = builder->MatMul(
-      name + "/mha/Q/w", encoder_in,
-      *GetWeghtsConverter(layer.mha.q_w, {embedding_size, d_model}, {1, 0}));
-  flow = builder->Add(name + "/mha/Q/b", flow,
-                      *GetWeghtsConverter(layer.mha.q_b, {d_model}));
-  flow = builder->Reshape(name + "/mha/Q/reshape", flow, mha_shape);
-  auto Q = builder->Transpose(name + "/mha/Q/transpose", flow, {0, 2, 1, 3});
-  flow = builder->MatMul(
-      name + "/mha/K/w", encoder_in,
-      *GetWeghtsConverter(layer.mha.k_w, {embedding_size, d_model}, {1, 0}));
-  flow = builder->Add(name + "/mha/K/b", flow,
-                      *GetWeghtsConverter(layer.mha.k_b, {d_model}));
-  flow = builder->Reshape(name + "/mha/K/reshape", flow, mha_shape);
-  auto K = builder->Transpose(name + "/mha/K/transpose", flow, {0, 2, 3, 1});
-  flow = builder->MatMul(
-      name + "/mha/V/w", encoder_in,
-      *GetWeghtsConverter(layer.mha.v_w, {embedding_size, d_model}, {1, 0}));
-  flow = builder->Add(name + "/mha/V/b", flow,
-                      *GetWeghtsConverter(layer.mha.v_b, {d_model}));
-  flow = builder->Reshape(name + "/mha/V/reshape", flow, mha_shape);
-  auto V = builder->Transpose(name + "/mha/V/transpose", flow, {0, 2, 1, 3});
+    auto QKV = builder->Split(name + "/mha/split", flow, 1,
+                              {d_model, d_model, d_model});
+    Q = builder->Reshape(name + "/mha/Q/reshape", QKV[0], mha_shape);
+    Q = builder->Transpose(name + "/mha/Q/transpose", Q, {0, 2, 1, 3});
+    K = builder->Reshape(name + "/mha/K/reshape", QKV[1], mha_shape);
+    K = builder->Transpose(name + "/mha/K/transpose", K, {0, 2, 3, 1});
+    V = builder->Reshape(name + "/mha/V/reshape", QKV[2], mha_shape);
+    V = builder->Transpose(name + "/mha/V/transpose", V, {0, 2, 1, 3});
 #else
-  auto merge_w = layer.mha.q_w;
-  merge_w.insert(merge_w.end(), layer.mha.k_w.begin(), layer.mha.k_w.end());
-  merge_w.insert(merge_w.end(), layer.mha.v_w.begin(), layer.mha.v_w.end());
-  auto merge_b = layer.mha.q_b;
-  merge_b.insert(merge_b.end(), layer.mha.k_b.begin(), layer.mha.k_b.end());
-  merge_b.insert(merge_b.end(), layer.mha.v_b.begin(), layer.mha.v_b.end());
-  auto flow = builder->MatMul(
-      name + "/mha/mul", encoder_in,
-      *GetWeghtsConverter(merge_w, {embedding_size, 3 * d_model}, {1, 0}));
-  flow = builder->Add(name + "/mha/add", flow,
-                      *GetWeghtsConverter(merge_b, {3 * d_model}));
-  auto QKV =
-      builder->Split(name + "/mha/split", flow, 1, {d_model, d_model, d_model});
-  auto Q = builder->Reshape(name + "/mha/Q/reshape", QKV[0], mha_shape);
-  Q = builder->Transpose(name + "/mha/Q/transpose", Q, {0, 2, 1, 3});
-  auto K = builder->Reshape(name + "/mha/K/reshape", QKV[1], mha_shape);
-  K = builder->Transpose(name + "/mha/K/transpose", K, {0, 2, 3, 1});
-  auto V = builder->Reshape(name + "/mha/V/reshape", QKV[2], mha_shape);
-  V = builder->Transpose(name + "/mha/V/transpose", V, {0, 2, 1, 3});
+    auto mha_shape =
+        builder->AddInitializer("/const" + name + "/mha/shape",
+                                Int64OnnxConst({-1, 64, 3, heads, depth}, {5}));
+    flow = builder->Reshape(name + "/mha/QKV/reshape", flow, mha_shape);
+    flow =
+        builder->Transpose(name + "/mha/QKV/transpose", flow, {2, 0, 3, 1, 4});
+    auto QKV = builder->Split(name + "/mha/split", flow, 0, {1, 1, 1});
+    Q = builder->Squeeze(name + "/mha/Q/squeeze", QKV[0], {0});
+    K = builder->Squeeze(name + "/mha/K/squeeze", QKV[1], {0});
+    K = builder->Transpose(name + "/mha/K/transpose", K, {0, 1, 3, 2});
+    V = builder->Squeeze(name + "/mha/V/squeeze", QKV[2], {0});
 #endif
+  }
   flow = builder->MatMul(name + "/mha/QK/matmul", Q, K);
   flow = builder->Mul(name + "/mha/QK/scale", flow,
                       *GetScalarConverter(1.0f / sqrtf(depth)));

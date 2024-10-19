@@ -307,6 +307,8 @@ std::unique_ptr<Network> MakeXlaNetwork(const std::optional<WeightsFile>& w,
         opts.GetOrDefault<bool>("alt_mish", false);
     onnx_converter_options.alt_layernorm =
         opts.GetOrDefault<bool>("alt_layernorm", false);
+    onnx_converter_options.fuse_qkv =
+        opts.GetOrDefault<bool>("fuse_qkv", false);
     auto converted = ConvertWeightsToOnnx(*w, onnx_converter_options);
     options = FillXlaRunnerFromOnnx(converted.onnx_model(), runner.get(),
                                     max_batch_size, steps, io_type);
