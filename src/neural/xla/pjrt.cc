@@ -229,13 +229,14 @@ std::unique_ptr<PjrtExecutable> PjrtClient::CompileHlo(
 }
 
 std::vector<std::unique_ptr<PjrtDevice>> PjrtClient::GetDevices() {
-  auto args = MakeStruct<PJRT_Client_Devices_Args>();
+  auto args = MakeStruct<PJRT_Client_AddressableDevices_Args>();
   args.client = client_;
-  CheckError(api_->PJRT_Client_Devices(&args));
+  CheckError(api_->PJRT_Client_AddressableDevices(&args));
   std::vector<std::unique_ptr<PjrtDevice>> result;
-  result.reserve(args.num_devices);
-  for (size_t i = 0; i < args.num_devices; ++i) {
-    result.push_back(std::make_unique<PjrtDevice>(api_, args.devices[i]));
+  result.reserve(args.num_addressable_devices);
+  for (size_t i = 0; i < args.num_addressable_devices; ++i) {
+    result.push_back(
+        std::make_unique<PjrtDevice>(api_, args.addressable_devices[i]));
   }
   return result;
 }
