@@ -195,7 +195,8 @@ std::vector<std::unique_ptr<XlaMutableTensor>> XlaRunner::ExecuteBlocking(
   auto input_buffers = buffers_;
   input_buffers[param_idxs_[0]] = input_buffer.get();
   // Execute!
-  auto outputs = iter->second->ExecuteBlocking(input_buffers);
+  auto outputs =
+      iter->second->ExecuteBlocking(input_buffers, devices_[device_].get());
 
   // Now we need to transfer the outputs back to the host.
   std::vector<std::unique_ptr<XlaMutableTensor>> result;
