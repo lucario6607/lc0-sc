@@ -196,7 +196,7 @@ class PjrtExecutable : protected PjrtCommon {
   // Executes the executable with the given inputs. The inputs are not owned or
   // modified. The function allocates the output buffers and returns them.
   std::vector<std::unique_ptr<PjrtDeviceBuffer>> ExecuteBlocking(
-      const std::vector<PjrtDeviceBuffer*>& inputs, PjrtDevice* execute_device);
+      const std::vector<PjrtDeviceBuffer*>& inputs);
   size_t GetNumOutputs() const;
 
  private:

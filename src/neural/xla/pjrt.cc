@@ -148,7 +148,7 @@ PjrtExecutable::~PjrtExecutable() {
 size_t PjrtExecutable::GetNumOutputs() const { return num_outputs_; }
 
 std::vector<std::unique_ptr<PjrtDeviceBuffer>> PjrtExecutable::ExecuteBlocking(
-    const std::vector<PjrtDeviceBuffer*>& inputs, PjrtDevice* execute_device) {
+    const std::vector<PjrtDeviceBuffer*>& inputs) {
   auto options = MakeStruct<PJRT_ExecuteOptions>();
   options.num_non_donatable_input_indices = inputs.size();
   std::vector<int64_t> non_donatable_indices(inputs.size());
@@ -160,7 +160,6 @@ std::vector<std::unique_ptr<PjrtDeviceBuffer>> PjrtExecutable::ExecuteBlocking(
   args.executable = executable_;
   args.options = &options;
   args.num_devices = 1;
-  args.execute_device = execute_device->device_;
   std::vector<PJRT_Buffer*> buffers(inputs.size());
   for (size_t i = 0; i < inputs.size(); ++i) buffers[i] = inputs[i]->buffer_;
   PJRT_Buffer* const* buffers_ptr = buffers.data();
