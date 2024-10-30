@@ -5,14 +5,14 @@ image:
 - Visual Studio 2017
 environment:
   matrix:
-  - NAME: gpu-nvidia-cudnn
-  - NAME: gpu-nvidia-cuda
+#  - NAME: gpu-nvidia-cudnn
+#  - NAME: gpu-nvidia-cuda
 #  - NAME: gpu-dx12
 #  - NAME: gpu-opencl
-  - NAME: cpu-dnnl
-  - NAME: cpu-openblas
+#  - NAME: cpu-dnnl
+#  - NAME: cpu-openblas
 #  - NAME: onednn
-  - NAME: onnx-dml
+#  - NAME: onnx-dml
   - NAME: android
 for:
 -
@@ -23,6 +23,8 @@ for:
   skip_non_tags: true
 clone_folder: c:\projects\lc0
 install:
+- cmd: set APPVEYOR_REPO_TAG=true
+- cmd: set APPVEYOR_REPO_TAG_NAME=pro
 - cmd: set CUDA=false
 - cmd: set CUDNN=false
 - cmd: set DX=false

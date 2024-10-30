@@ -140,9 +140,7 @@ bool OptionsParser::ProcessAllFlags() {
 
 bool OptionsParser::ProcessFlags(const std::vector<std::string>& args) {
   auto show_help = false;
-  if (CommandLine::BinaryName().find("pro") != std::string::npos) {
-    ShowHidden();
-  }
+  ShowHidden();
   for (auto iter = args.begin(), end = args.end(); iter != end; ++iter) {
     std::string param = *iter;
     if (param == "--show-hidden") {
