@@ -1,5 +1,5 @@
 
-# Tested with Android NDK r23c, default toolchain
+# Tested with Android NDK r27c, default toolchain
 # Targeting API level 21
 
 # When targeting API levels < 24 the build fails unless _FILE_OFFSET_BITS is unset.
@@ -28,4 +28,4 @@ ar = 'llvm-ar'
 strip = 'llvm-strip'
 ld = 'ld'
 ranlib = 'llvm-ranlib'
-as = 'arm-linux-androideabi-as'
+as = 'armv7a-linux-androideabi21-clang'

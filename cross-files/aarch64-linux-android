@@ -1,5 +1,5 @@
 
-# Tested with Android NDK r23c, default toolchain
+# Tested with Android NDK r27c, default toolchain
 # Targeting API level 21
 
 # Set the toolchain path on your environment
@@ -21,4 +21,4 @@ ar = 'llvm-ar'
 strip = 'llvm-strip'
 ld = 'ld'
 ranlib = 'llvm-ranlib'
-as = 'aarch64-linux-android-as'
+as = 'aarch64-linux-android21-clang'
