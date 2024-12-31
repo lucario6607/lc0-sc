@@ -125,10 +125,11 @@ class Converter {
                           const std::string& encoder_in,
                           const std::string& name);
 
-  std::string MakeLayerNorm(OnnxBuilder* builder, const std::string& input,
-                            const std::string& name,
-                            const lczero::OnnxConst& gammas,
-                            const lczero::OnnxConst& betas, float eps = 1e-6);
+  std::string MakeNormalization(OnnxBuilder* builder, const std::string& input,
+                                const std::string& name,
+                                const std::vector<float>& gammas,
+                                const std::vector<float>& betas,
+                                float eps = 1e-6);
 
   std::string MakeFFN(OnnxBuilder* builder, const MultiHeadWeights::FFN& ffn,
                       int embedding_size, const std::string& ffn_in,
@@ -435,11 +436,9 @@ std::string Converter::MakeSmolgen(OnnxBuilder* builder,
       name + "/smolgen/dense1/b", flow,
       *GetWeghtsConverter(layer.mha.smolgen.dense1_b, {smolgen_hidden_sz}));
   flow = MakeActivation(builder, flow, name + "/smolgen/dense1", activation);
-  flow = MakeLayerNorm(
-      builder, flow, name + "/smolgen/ln1",
-      *GetWeghtsConverter(layer.mha.smolgen.ln1_gammas, {smolgen_hidden_sz}),
-      *GetWeghtsConverter(layer.mha.smolgen.ln1_betas, {smolgen_hidden_sz}),
-      1e-3);
+  flow = MakeNormalization(builder, flow, name + "/smolgen/ln1",
+                           layer.mha.smolgen.ln1_gammas,
+                           layer.mha.smolgen.ln1_betas, 1e-3);
   flow = builder->MatMul(
       name + "/smolgen/dense2/w", flow,
       *GetWeghtsConverter(layer.mha.smolgen.dense2_w,
@@ -448,12 +447,9 @@ std::string Converter::MakeSmolgen(OnnxBuilder* builder,
                       *GetWeghtsConverter(layer.mha.smolgen.dense2_b,
                                           {smolgen_gen_sz * heads}));
   flow = MakeActivation(builder, flow, name + "/smolgen/dense2", activation);
-  flow = MakeLayerNorm(builder, flow, name + "/smolgen/ln2",
-                       *GetWeghtsConverter(layer.mha.smolgen.ln2_gammas,
-                                           {smolgen_gen_sz * heads}),
-                       *GetWeghtsConverter(layer.mha.smolgen.ln2_betas,
-                                           {smolgen_gen_sz * heads}),
-                       1e-3);
+  flow = MakeNormalization(builder, flow, name + "/smolgen/ln2",
+                           layer.mha.smolgen.ln2_gammas,
+                           layer.mha.smolgen.ln2_betas, 1e-3);
   flow =
       builder->Reshape(name + "/smolgen/gen_from/reshape", flow,
                        builder->AddInitializer(
@@ -468,19 +464,35 @@ std::string Converter::MakeSmolgen(OnnxBuilder* builder,
   return flow;
 }
 
-std::string Converter::MakeLayerNorm(OnnxBuilder* builder,
-                                     const std::string& input,
-                                     const std::string& name,
-                                     const lczero::OnnxConst& gammas,
-                                     const lczero::OnnxConst& betas,
-                                     float eps) {
-  if (!options_.alt_layernorm) {
-    return builder->LayerNormalization(name, input, gammas, betas, 1, eps);
+std::string Converter::MakeNormalization(OnnxBuilder* builder,
+                                         const std::string& input,
+                                         const std::string& name,
+                                         const std::vector<float>& gammas,
+                                         const std::vector<float>& betas,
+                                         float eps) {
+  int size = gammas.size();
+  if (betas.size() == 0) {
+    auto in =
+        builder->Cast(name + "/to_float", input, pblczero::TensorProto::FLOAT);
+    auto flow = builder->Mul(name + "/squared", in, in);
+    flow = builder->ReduceMean(name + "/var", flow, {1});
+    flow = builder->Add(
+        name + "/var_eps", flow,
+        static_cast<const OnnxConst&>(FloatOnnxConst({1e-5}, {1})));
+    flow = builder->Sqrt(name + "/std", flow);
+    flow = builder->Reciprocal(name + "/inv_std", flow);
+    flow = builder->Mul(name + "/normalized", in, flow);
+    flow = builder->Cast(name + "/to_data_type", flow, GetDataType());
+    flow = builder->Mul(name + "/gammas", flow,
+                        *GetWeghtsConverter(gammas, {size}));
+    return flow;
+  } else if (!options_.alt_layernorm) {
+    return builder->LayerNormalization(
+        name, input, *GetWeghtsConverter(gammas, {size}),
+        *GetWeghtsConverter(betas, {size}), 1, eps);
   }
-  auto in = input;
-  if (GetDataType() != pblczero::TensorProto::FLOAT) {
-    in = builder->Cast(name + "/to_float", in, pblczero::TensorProto::FLOAT);
-  }
+  auto in =
+      builder->Cast(name + "/to_float", input, pblczero::TensorProto::FLOAT);
   auto flow = builder->ReduceMean(name + "/mean", in, {1});
   in = builder->Sub(name + "/centered", in, flow);
   flow = builder->Mul(name + "/squared", in, in);
@@ -491,11 +503,11 @@ std::string Converter::MakeLayerNorm(OnnxBuilder* builder,
   flow = builder->Sqrt(name + "/std", flow);
   flow = builder->Reciprocal(name + "/inv_std", flow);
   flow = builder->Mul(name + "/normalized", in, flow);
-  if (GetDataType() != pblczero::TensorProto::FLOAT) {
-    flow = builder->Cast(name + "/to_data_type", flow, GetDataType());
-  }
-  flow = builder->Mul(name + "/gammas", flow, gammas);
-  flow = builder->Add(name + "/betas", flow, betas);
+  flow = builder->Cast(name + "/to_data_type", flow, GetDataType());
+  flow =
+      builder->Mul(name + "/gammas", flow, *GetWeghtsConverter(gammas, {size}));
+  flow =
+      builder->Add(name + "/betas", flow, *GetWeghtsConverter(betas, {size}));
   return flow;
 }
 
@@ -505,9 +517,10 @@ std::string Converter::MakeFFN(OnnxBuilder* builder,
                                const std::string& name,
                                ActivationFunction activation, float alpha) {
   const int dff_size = ffn.dense1_b.size();
+  const int input_size = ffn.dense1_w.size() / dff_size;
   auto flow = builder->MatMul(
       name + "/ffn/dense1/w", ffn_in,
-      *GetWeghtsConverter(ffn.dense1_w, {embedding_size, dff_size}, {1, 0}));
+      *GetWeghtsConverter(ffn.dense1_w, {input_size, dff_size}, {1, 0}));
   flow = builder->Add(name + "/ffn/dense1/b", flow,
                       *GetWeghtsConverter(ffn.dense1_b, {dff_size}));
   flow = MakeActivation(builder, flow, name + "/ffn/dense1", activation);
@@ -530,26 +543,39 @@ std::string Converter::MakeEncoderLayer(
   const int d_model = layer.mha.q_b.size();
   const int depth = d_model / heads;
 
+  auto input = encoder_in;
+  int input_size = embedding_size;
+
+  if (layer.mha.nla_w.size() > 0) {
+    input =
+        builder->MatMul(name + "/nla/w", input,
+                        *GetWeghtsConverter(layer.mha.nla_w,
+                                            {embedding_size, d_model}, {1, 0}));
+    input = builder->Add(name + "/nla/b", input,
+                         *GetWeghtsConverter(layer.mha.nla_b, {d_model}));
+    input_size = d_model;
+  }
+
   auto mha_shape =
       builder->AddInitializer("/const" + name + "/mha/shape",
                               Int64OnnxConst({-1, 64, heads, depth}, {4}));
   auto flow = builder->MatMul(
-      name + "/mha/Q/w", encoder_in,
-      *GetWeghtsConverter(layer.mha.q_w, {embedding_size, d_model}, {1, 0}));
+      name + "/mha/Q/w", input,
+      *GetWeghtsConverter(layer.mha.q_w, {input_size, d_model}, {1, 0}));
   flow = builder->Add(name + "/mha/Q/b", flow,
                       *GetWeghtsConverter(layer.mha.q_b, {d_model}));
   flow = builder->Reshape(name + "/mha/Q/reshape", flow, mha_shape);
   auto Q = builder->Transpose(name + "/mha/Q/transpose", flow, {0, 2, 1, 3});
   flow = builder->MatMul(
-      name + "/mha/K/w", encoder_in,
-      *GetWeghtsConverter(layer.mha.k_w, {embedding_size, d_model}, {1, 0}));
+      name + "/mha/K/w", input,
+      *GetWeghtsConverter(layer.mha.k_w, {input_size, d_model}, {1, 0}));
   flow = builder->Add(name + "/mha/K/b", flow,
                       *GetWeghtsConverter(layer.mha.k_b, {d_model}));
   flow = builder->Reshape(name + "/mha/K/reshape", flow, mha_shape);
   auto K = builder->Transpose(name + "/mha/K/transpose", flow, {0, 2, 3, 1});
   flow = builder->MatMul(
-      name + "/mha/V/w", encoder_in,
-      *GetWeghtsConverter(layer.mha.v_w, {embedding_size, d_model}, {1, 0}));
+      name + "/mha/V/w", input,
+      *GetWeghtsConverter(layer.mha.v_w, {input_size, d_model}, {1, 0}));
   flow = builder->Add(name + "/mha/V/b", flow,
                       *GetWeghtsConverter(layer.mha.v_b, {d_model}));
   flow = builder->Reshape(name + "/mha/V/reshape", flow, mha_shape);
@@ -559,7 +585,7 @@ std::string Converter::MakeEncoderLayer(
                       *GetScalarConverter(1.0f / sqrtf(depth)));
   if (layer.mha.has_smolgen) {
     auto smolgen_weights =
-        MakeSmolgen(builder, layer, embedding_size, heads, encoder_in, name);
+        MakeSmolgen(builder, layer, embedding_size, heads, input, name);
     flow = builder->Add(name + "/smolgen_weights", flow, smolgen_weights);
   }
   flow = builder->Softmax(name + "/mha/QK/softmax", flow, 3);
@@ -577,25 +603,35 @@ std::string Converter::MakeEncoderLayer(
                                           {d_model, embedding_size}, {1, 0}));
   flow = builder->Add(name + "/mha/out/dense/b", flow,
                       *GetWeghtsConverter(layer.mha.dense_b, {embedding_size}));
+  const auto ffn_activation = static_cast<ActivationFunction>(
+      src_.format().network_format().ffn_activation());
+  // Either do FFN in parallel ...
+  if (src_.format().network_format().network() ==
+      pblczero::NetworkFormat::NETWORK_ATTENTIONBODY_NLA_WITH_MULTIHEADFORMAT) {
+    auto ffn = MakeFFN(
+        builder, layer.ffn, embedding_size, input, name,
+        ffn_activation == ACTIVATION_DEFAULT ? activation : ffn_activation,
+        alpha);
+    flow = builder->Add(name + "/mha/parallel_ffn", flow, ffn);
+  }
+
   if (alpha != 1.0) {
     flow =
         builder->Mul(name + "/alpha*input", flow, *GetScalarConverter(alpha));
   }
-  flow = builder->Add(name + "/mha/out/skip", flow, encoder_in);
-  flow = MakeLayerNorm(builder, flow, name + "/ln1",
-                       *GetWeghtsConverter(layer.ln1_gammas, {embedding_size}),
-                       *GetWeghtsConverter(layer.ln1_betas, {embedding_size}),
-                       default_eps_);
-  const auto ffn_activation = static_cast<ActivationFunction>(
-      src_.format().network_format().ffn_activation());
-  flow = MakeFFN(
-      builder, layer.ffn, embedding_size, flow, name,
-      ffn_activation == ACTIVATION_DEFAULT ? activation : ffn_activation,
-      alpha);
-  flow = MakeLayerNorm(builder, flow, name + "/ln2",
-                       *GetWeghtsConverter(layer.ln2_gammas, {embedding_size}),
-                       *GetWeghtsConverter(layer.ln2_betas, {embedding_size}),
-                       default_eps_);
+  flow = builder->Add(name + "/mha/out/skip", flow, input);
+  // .. or do FFN in series.
+  if (src_.format().network_format().network() !=
+      pblczero::NetworkFormat::NETWORK_ATTENTIONBODY_NLA_WITH_MULTIHEADFORMAT) {
+    flow = MakeNormalization(builder, flow, name + "/ln1", layer.ln1_gammas,
+                             layer.ln1_betas, default_eps_);
+    flow = MakeFFN(
+        builder, layer.ffn, embedding_size, flow, name,
+        ffn_activation == ACTIVATION_DEFAULT ? activation : ffn_activation,
+        alpha);
+  }
+  flow = MakeNormalization(builder, flow, name + "/ln2", layer.ln2_gammas,
+                           layer.ln2_betas, default_eps_);
   return flow;
 }
 
@@ -750,10 +786,9 @@ std::string Converter::MakeAttentionBody(OnnxBuilder* builder,
   flow = MakeActivation(builder, flow, "/attn_body", default_activation_);
 
   if (input_embedding == network_format::INPUT_EMBEDDING_PE_DENSE) {
-    flow = MakeLayerNorm(
-        builder, flow, "/attn_body/ln",
-        *GetWeghtsConverter(weights.ip_emb_ln_gammas, {embedding_size}),
-        *GetWeghtsConverter(weights.ip_emb_ln_betas, {embedding_size}), 1e-3);
+    flow = MakeNormalization(builder, flow, "/attn_body/ln",
+                             weights.ip_emb_ln_gammas, weights.ip_emb_ln_betas,
+                             1e-3);
   }
 
   if (weights.ip_mult_gate.size() > 0 || weights.ip_add_gate.size() > 0) {
@@ -782,11 +817,9 @@ std::string Converter::MakeAttentionBody(OnnxBuilder* builder,
   if (input_embedding == network_format::INPUT_EMBEDDING_PE_DENSE) {
     flow = MakeFFN(builder, weights.ip_emb_ffn, embedding_size, flow,
                    "/attn_body", default_activation_, alpha);
-    flow = MakeLayerNorm(
-        builder, flow, "/attn_body/ln2",
-        *GetWeghtsConverter(weights.ip_emb_ffn_ln_gammas, {embedding_size}),
-        *GetWeghtsConverter(weights.ip_emb_ffn_ln_betas, {embedding_size}),
-        1e-3);
+    flow = MakeNormalization(builder, flow, "/attn_body/ln2",
+                             weights.ip_emb_ffn_ln_gammas,
+                             weights.ip_emb_ffn_ln_betas, 1e-3);
   }
 
   for (size_t i = 0; i < NumEncBlocks(); i++) {
@@ -1160,55 +1193,57 @@ void Converter::CopyGenericFields(pblczero::Net* dst) {
 }
 
 void CheckSrcFormat(const pblczero::NetworkFormat& nf) {
+  using network_format = pblczero::NetworkFormat;
   switch (nf.network()) {
-    case pblczero::NetworkFormat::NETWORK_CLASSICAL_WITH_HEADFORMAT:
-    case pblczero::NetworkFormat::NETWORK_SE_WITH_HEADFORMAT:
-    case pblczero::NetworkFormat::NETWORK_ATTENTIONBODY_WITH_HEADFORMAT:
-    case pblczero::NetworkFormat::NETWORK_ATTENTIONBODY_WITH_MULTIHEADFORMAT:
+    case network_format::NETWORK_CLASSICAL_WITH_HEADFORMAT:
+    case network_format::NETWORK_SE_WITH_HEADFORMAT:
+    case network_format::NETWORK_ATTENTIONBODY_WITH_HEADFORMAT:
+    case network_format::NETWORK_ATTENTIONBODY_WITH_MULTIHEADFORMAT:
+    case network_format::NETWORK_ATTENTIONBODY_NLA_WITH_MULTIHEADFORMAT:
       break;
     default:
       throw Exception(
           "Network format " +
-          pblczero::NetworkFormat::NetworkStructure_Name(nf.network()) +
+          network_format::NetworkStructure_Name(nf.network()) +
           " is not supported by the ONNX converter.");
   }
   switch (nf.policy()) {
-    case pblczero::NetworkFormat::POLICY_CLASSICAL:
-    case pblczero::NetworkFormat::POLICY_CONVOLUTION:
-    case pblczero::NetworkFormat::POLICY_ATTENTION:
+    case network_format::POLICY_CLASSICAL:
+    case network_format::POLICY_CONVOLUTION:
+    case network_format::POLICY_ATTENTION:
       break;
     default:
       throw Exception("Policy format " +
-                      pblczero::NetworkFormat::PolicyFormat_Name(nf.policy()) +
+                      network_format::PolicyFormat_Name(nf.policy()) +
                       " is not supported by the ONNX converter.");
   }
   switch (nf.value()) {
-    case pblczero::NetworkFormat::VALUE_CLASSICAL:
-    case pblczero::NetworkFormat::VALUE_WDL:
+    case network_format::VALUE_CLASSICAL:
+    case network_format::VALUE_WDL:
       break;
     default:
       throw Exception("Value format " +
-                      pblczero::NetworkFormat::ValueFormat_Name(nf.value()) +
+                      network_format::ValueFormat_Name(nf.value()) +
                       " is not supported by the ONNX converter.");
   }
   switch (nf.default_activation()) {
-    case pblczero::NetworkFormat::DEFAULT_ACTIVATION_RELU:
-    case pblczero::NetworkFormat::DEFAULT_ACTIVATION_MISH:
+    case network_format::DEFAULT_ACTIVATION_RELU:
+    case network_format::DEFAULT_ACTIVATION_MISH:
       break;
     default:
       throw Exception("Default activation " +
-                      pblczero::NetworkFormat::DefaultActivation_Name(
+                      network_format::DefaultActivation_Name(
                           nf.default_activation()) +
                       " is not supported by the ONNX converter.");
   }
   switch (nf.input_embedding()) {
-    case pblczero::NetworkFormat::INPUT_EMBEDDING_NONE:
-    case pblczero::NetworkFormat::INPUT_EMBEDDING_PE_MAP:
-    case pblczero::NetworkFormat::INPUT_EMBEDDING_PE_DENSE:
+    case network_format::INPUT_EMBEDDING_NONE:
+    case network_format::INPUT_EMBEDDING_PE_MAP:
+    case network_format::INPUT_EMBEDDING_PE_DENSE:
       break;
     default:
       throw Exception("Input embedding " +
-                      pblczero::NetworkFormat::InputEmbeddingFormat_Name(
+                      network_format::InputEmbeddingFormat_Name(
                           nf.input_embedding()) +
                       " is not supported by the ONNX converter.");
   }

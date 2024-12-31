@@ -79,6 +79,8 @@ struct BaseWeights {
     Vec v_b;
     Vec dense_w;
     Vec dense_b;
+    Vec nla_w;
+    Vec nla_b;
     Smolgen smolgen;
     bool has_smolgen;
   };

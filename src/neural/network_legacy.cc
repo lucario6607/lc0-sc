@@ -141,6 +141,8 @@ BaseWeights::MHA::MHA(const pblczero::Weights::MHA& mha)
       v_b(LayerAdapter(mha.v_b()).as_vector()),
       dense_w(LayerAdapter(mha.dense_w()).as_vector()),
       dense_b(LayerAdapter(mha.dense_b()).as_vector()),
+      nla_w(LayerAdapter(mha.nla_w()).as_vector()),
+      nla_b(LayerAdapter(mha.nla_b()).as_vector()),
       smolgen(Smolgen(mha.smolgen())),
       has_smolgen(mha.has_smolgen()) {}
 
