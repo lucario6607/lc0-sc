@@ -553,6 +553,7 @@ std::string Converter::MakeEncoderLayer(
                                             {embedding_size, d_model}, {1, 0}));
     input = builder->Add(name + "/nla/b", input,
                          *GetWeghtsConverter(layer.mha.nla_b, {d_model}));
+    input = MakeActivation(builder, input, name + "/nla", default_activation_);
     input_size = d_model;
   }
 
