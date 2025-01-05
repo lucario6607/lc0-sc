@@ -33,10 +33,22 @@
 
 namespace lczero {
 
+enum class ContemptMode { PLAY, WHITE, BLACK, NONE };
+
 class SearchParams {
  public:
   SearchParams(const OptionsDict& options);
   SearchParams(const SearchParams&) = delete;
+
+  // Use struct for WDLRescaleParams calculation to make them const.
+  struct WDLRescaleParams {
+    WDLRescaleParams(float r, float d) {
+      ratio = r;
+      diff = d;
+    }
+    float ratio;
+    float diff;
+  };
 
   // Populates UciOptions with search parameters.
   static void Populate(OptionsParser* options);
@@ -104,11 +116,22 @@ class SearchParams {
   }
   bool GetDisplayCacheUsage() const { return kDisplayCacheUsage; }
   int GetMaxConcurrentSearchers() const { return kMaxConcurrentSearchers; }
-  float GetSidetomoveDrawScore() const { return kDrawScoreSidetomove; }
-  float GetOpponentDrawScore() const { return kDrawScoreOpponent; }
-  float GetWhiteDrawDelta() const { return kDrawScoreWhite; }
-  float GetBlackDrawDelta() const { return kDrawScoreBlack; }
-  int GetMaxOutOfOrderEvals() const { return kMaxOutOfOrderEvals; }
+  float GetDrawScore() const { return kDrawScore; }
+  ContemptMode GetContemptMode() const {
+    std::string mode = options_.Get<std::string>(kContemptModeId);
+    if (mode == "play") return ContemptMode::PLAY;
+    if (mode == "white_side_analysis") return ContemptMode::WHITE;
+    if (mode == "black_side_analysis") return ContemptMode::BLACK;
+    assert(mode == "disable");
+    return ContemptMode::NONE;
+  }
+  float GetWDLRescaleRatio() const { return kWDLRescaleParams.ratio; }
+  float GetWDLRescaleDiff() const { return kWDLRescaleParams.diff; }
+  float GetWDLMaxS() const { return kWDLMaxS; }
+  float GetWDLEvalObjectivity() const { return kWDLEvalObjectivity; }
+  float GetMaxOutOfOrderEvalsFactor() const {
+    return kMaxOutOfOrderEvalsFactor;
+  }
   float GetNpsLimit() const { return kNpsLimit; }
   int GetSolidTreeThreshold() const { return kSolidTreeThreshold; }
 
@@ -188,6 +211,7 @@ class SearchParams {
   float GetAuxEngineMaxDepth() const {
     return options_.Get<int>(kAuxEngineMaxDepthId);
   }
+  bool GetSearchSpinBackoff() const { return kSearchSpinBackoff; }
 
   // Search parameter IDs.
   static const OptionId kMiniBatchSizeId;
@@ -234,11 +258,18 @@ class SearchParams {
   static const OptionId kMovesLeftSlopeId;
   static const OptionId kDisplayCacheUsageId;
   static const OptionId kMaxConcurrentSearchersId;
-  static const OptionId kDrawScoreSidetomoveId;
-  static const OptionId kDrawScoreOpponentId;
-  static const OptionId kDrawScoreWhiteId;
-  static const OptionId kDrawScoreBlackId;
-  static const OptionId kMaxOutOfOrderEvalsId;
+  static const OptionId kDrawScoreId;
+  static const OptionId kContemptModeId;
+  static const OptionId kContemptId;
+  static const OptionId kContemptMaxValueId;
+  static const OptionId kWDLCalibrationEloId;
+  static const OptionId kWDLContemptAttenuationId;
+  static const OptionId kWDLMaxSId;
+  static const OptionId kWDLEvalObjectivityId;
+  static const OptionId kWDLDrawRateTargetId;
+  static const OptionId kWDLDrawRateReferenceId;
+  static const OptionId kWDLBookExitBiasId;
+  static const OptionId kMaxOutOfOrderEvalsFactorId;
   static const OptionId kNpsLimitId;
   static const OptionId kSolidTreeThresholdId;
   static const OptionId kTaskWorkersPerSearchWorkerId;
@@ -251,6 +282,9 @@ class SearchParams {
   static const OptionId kMaxCollisionVisitsScalingStartId;
   static const OptionId kMaxCollisionVisitsScalingEndId;
   static const OptionId kMaxCollisionVisitsScalingPowerId;
+  static const OptionId kUCIOpponentId;
+  static const OptionId kUCIRatingAdvId;
+  static const OptionId kSearchSpinBackoffId;
   static const OptionId kAuxEngineFileId;
   static const OptionId kAuxEngineOptionsId;
   static const OptionId kAuxEngineOptionsOnRootId;
@@ -308,11 +342,12 @@ private:
   const float kMovesLeftQuadraticFactor;
   const bool kDisplayCacheUsage;
   const int kMaxConcurrentSearchers;
-  const float kDrawScoreSidetomove;
-  const float kDrawScoreOpponent;
-  const float kDrawScoreWhite;
-  const float kDrawScoreBlack;
-  const int kMaxOutOfOrderEvals;
+  const float kDrawScore;
+  const float kContempt;
+  const WDLRescaleParams kWDLRescaleParams;
+  const float kWDLMaxS;
+  const float kWDLEvalObjectivity;
+  const float kMaxOutOfOrderEvalsFactor;
   const float kNpsLimit;
   const int kSolidTreeThreshold;
   const int kTaskWorkersPerSearchWorker;
@@ -330,7 +365,7 @@ private:
   const int kMaxCollisionVisitsScalingStart;
   const int kMaxCollisionVisitsScalingEnd;
   const float kMaxCollisionVisitsScalingPower;
-
+  const bool kSearchSpinBackoff;
 };
 
 }  // namespace lczero

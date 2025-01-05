@@ -38,8 +38,8 @@
 namespace lczero {
 
 OnnxBuilder::OnnxBuilder(int opset) : opset_(opset) {
-  if (opset < 7 || opset > 17) {
-    throw Exception("Only ONNX opsets between 7 and 17 are supported.");
+  if (opset < 7 || opset > 22) {
+    throw Exception("Only ONNX opsets between 7 and 22 are supported.");
   }
   model_.set_ir_version(4);
   model_.set_domain("org.lczero.models.*");
@@ -137,10 +137,12 @@ std::string OnnxBuilder::Conv(const std::string& name,
                               const OnnxConst& kernel_weights,
                               const OnnxConst& bias_weights, int pads) {
   auto* node = model_.mutable_graph()->add_node();
+  auto shape = kernel_weights.GetDimensions().back();
   auto out = PopulateStdNodeFields(node, name, input_name, "Conv");
   node->add_input(AddInitializer(name + "/w/kernel", kernel_weights));
   node->add_input(AddInitializer(name + "/w/bias", bias_weights));
   AddIntsAttribute(node, "pads", {pads, pads, pads, pads});
+  AddIntsAttribute(node, "kernel_shape", {shape, shape});
   return out;
 }
 
@@ -167,14 +169,17 @@ std::string OnnxBuilder::GlobalAveragePool(const std::string& name,
 }
 
 std::string OnnxBuilder::Squeeze(const std::string& name,
-                                 const std::string& input) {
+                                 const std::string& input,
+                                 std::initializer_list<int> axes) {
   auto* node = model_.mutable_graph()->add_node();
   auto out = PopulateStdNodeFields(node, name, input, "Squeeze");
   if (opset_ < 13) {
-    AddIntsAttribute(node, "axes", {2, 3});
+    AddIntsAttribute(node, "axes", axes);
   } else {
-    node->add_input(
-        AddInitializer(name + "/axes", Int64OnnxConst({2, 3}, {2})));
+    node->add_input(AddInitializer(
+        name + "/axes",
+        Int64OnnxConst(std::vector<int64_t>(begin(axes), end(axes)),
+                       {static_cast<int>(axes.size())})));
   }
   return out;
 }
@@ -311,6 +316,7 @@ std::vector<std::string> OnnxBuilder::Split(const std::string& name,
     }
     return out;
   }
+  if (opset_ >= 18) AddIntAttribute(node, "num_outputs", 2);
   node->add_output(name + "/out1");
   node->add_output(name + "/out2");
   return {name + "/out1", name + "/out2"};
@@ -368,6 +374,107 @@ std::string OnnxBuilder::LayerNormalization(const std::string& name,
   node->add_input(AddInitializer(name + "/w/bias", bias));
   AddIntAttribute(node, "axis", axis);
   AddFloatAttribute(node, "epsilon", epsilon);
+  return out;
+}
+
+std::string OnnxBuilder::Expand(const std::string& name,
+                                const std::string& input,
+                                const std::string& shape) {
+  auto* node = model_.mutable_graph()->add_node();
+  auto out = PopulateStdNodeFields(node, name, input, "Expand");
+  node->add_input(shape);
+  return out;
+}
+
+std::string OnnxBuilder::Shape(const std::string& name,
+                               const std::string& input) {
+  auto* node = model_.mutable_graph()->add_node();
+  return PopulateStdNodeFields(node, name, input, "Shape");
+}
+
+std::string OnnxBuilder::Exp(const std::string& name,
+                             const std::string& input) {
+  auto* node = model_.mutable_graph()->add_node();
+  return PopulateStdNodeFields(node, name, input, "Exp");
+}
+
+std::string OnnxBuilder::Div(const std::string& name, const std::string& input1,
+                             const std::string& input2) {
+  auto* node = model_.mutable_graph()->add_node();
+  auto out = PopulateStdNodeFields(node, name, input1, "Div");
+  node->add_input(input2);
+  return out;
+}
+
+std::string OnnxBuilder::Sub(const std::string& name, const std::string& input1,
+                             const std::string& input2) {
+  auto* node = model_.mutable_graph()->add_node();
+  auto out = PopulateStdNodeFields(node, name, input1, "Sub");
+  node->add_input(input2);
+  return out;
+}
+
+std::string OnnxBuilder::Greater(const std::string& name,
+                                 const std::string& input1,
+                                 const OnnxConst& input2) {
+  auto* node = model_.mutable_graph()->add_node();
+  auto out = PopulateStdNodeFields(node, name, input1, "Greater");
+  node->add_input(AddInitializer(name + "/threshold", input2));
+  return out;
+}
+
+std::string OnnxBuilder::Where(const std::string& name,
+                               const std::string& input1,
+                               const std::string& input2,
+                               const std::string& input3) {
+  auto* node = model_.mutable_graph()->add_node();
+  auto out = PopulateStdNodeFields(node, name, input1, "Where");
+  node->add_input(input2);
+  node->add_input(input3);
+  return out;
+}
+
+std::string OnnxBuilder::Mish(const std::string& name,
+                              const std::string& input) {
+  auto* node = model_.mutable_graph()->add_node();
+  return PopulateStdNodeFields(node, name, input, "Mish");
+}
+
+std::string OnnxBuilder::Sqrt(const std::string& name,
+                              const std::string& input) {
+  auto* node = model_.mutable_graph()->add_node();
+  return PopulateStdNodeFields(node, name, input, "Sqrt");
+}
+
+std::string OnnxBuilder::Reciprocal(const std::string& name,
+                                    const std::string& input) {
+  auto* node = model_.mutable_graph()->add_node();
+  return PopulateStdNodeFields(node, name, input, "Reciprocal");
+}
+
+std::string OnnxBuilder::Cast(const std::string& name, const std::string& input,
+                              pblczero::TensorProto::DataType type) {
+  auto* node = model_.mutable_graph()->add_node();
+  auto out = PopulateStdNodeFields(node, name, input, "Cast");
+  AddIntAttribute(node, "to", type);
+  return out;
+}
+
+std::string OnnxBuilder::ReduceMean(const std::string& name,
+                                    const std::string& input,
+                                    std::initializer_list<int> axes,
+                                    bool keepdims) {
+  auto* node = model_.mutable_graph()->add_node();
+  auto out = PopulateStdNodeFields(node, name, input, "ReduceMean");
+  if (opset_ < 18) {
+    AddIntsAttribute(node, "axes", axes);
+  } else {
+    node->add_input(AddInitializer(
+        name + "/axes",
+        Int64OnnxConst(std::vector<int64_t>(begin(axes), end(axes)),
+                       {static_cast<int>(axes.size())})));
+  }
+  AddIntAttribute(node, "keepdims", keepdims);
   return out;
 }
 

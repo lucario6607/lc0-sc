@@ -55,6 +55,7 @@ struct IterationStats {
   int Leelas_preferred_child_node_visits; 
   float helper_eval_of_root;
   float helper_eval_of_leelas_preferred_child;
+  int mate_depth = std::numeric_limits<int>::max();
   std::vector<uint32_t> edge_n;
   std::vector<float> q;
 

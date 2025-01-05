@@ -237,8 +237,8 @@ InputPlanes EncodePositionForNN(
        ++i, --history_idx) {
     const Position& position =
         history.GetPositionAt(history_idx < 0 ? 0 : history_idx);
-    const ChessBoard& board =
-        flip ? position.GetThemBoard() : position.GetBoard();
+    ChessBoard board = position.GetBoard();
+    if (flip) board.Mirror();
     // Castling changes can't be repeated, so we can stop early.
     if (stop_early && board.castlings().as_int() != castlings.as_int()) break;
     // Enpassants can't be repeated, but we do need to always send the current
@@ -247,7 +247,12 @@ InputPlanes EncodePositionForNN(
         !board.en_passant().empty()) {
       break;
     }
-    if (history_idx < 0 && fill_empty_history == FillEmptyHistory::NO) break;
+    // If en-passant is possible we know the previous move.
+    if (fill_empty_history == FillEmptyHistory::NO &&
+        (history_idx < -1 ||
+         (history_idx == -1 && board.en_passant().empty()))) {
+      break;
+    }
     // Board may be flipped so compare with position.GetBoard().
     if (history_idx < 0 && fill_empty_history == FillEmptyHistory::FEN_ONLY &&
         position.GetBoard() == ChessBoard::kStartposBoard) {

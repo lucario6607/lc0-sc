@@ -65,10 +65,11 @@ class OnnxBuilder {
   std::string Add(const std::string& name, const std::string& input1,
                   const std::string& input2);
   std::string Add(const std::string& name, const std::string& input1,
-                  const OnnxConst&);
+                  const OnnxConst& input2);
   std::string GlobalAveragePool(const std::string& name,
                                 const std::string& input);
-  std::string Squeeze(const std::string& name, const std::string& input);
+  std::string Squeeze(const std::string& name, const std::string& input,
+                      std::initializer_list<int> axes);
   std::string MatMul(const std::string& name, const std::string& input1,
                      const OnnxConst& input2);
   std::string MatMul(const std::string& name, const std::string& input1,
@@ -106,6 +107,25 @@ class OnnxBuilder {
                                  const std::string& input,
                                  const OnnxConst& scale, const OnnxConst& bias,
                                  int axis, float epsilon = 1e-6);
+  std::string Expand(const std::string& name, const std::string& input,
+                     const std::string& shape);
+  std::string Shape(const std::string& name, const std::string& input);
+  std::string Exp(const std::string& name, const std::string& input);
+  std::string Div(const std::string& name, const std::string& input1,
+                  const std::string& input2);
+  std::string Sub(const std::string& name, const std::string& input1,
+                  const std::string& input2);
+  std::string Greater(const std::string& name, const std::string& input1,
+                      const OnnxConst&);
+  std::string Where(const std::string& name, const std::string& input1,
+                    const std::string& input2, const std::string& input3);
+  std::string Mish(const std::string& name, const std::string& input);
+  std::string Sqrt(const std::string& name, const std::string& input);
+  std::string Reciprocal(const std::string& name, const std::string& input);
+  std::string Cast(const std::string& name, const std::string& input,
+                   pblczero::TensorProto::DataType type);
+  std::string ReduceMean(const std::string& name, const std::string& input,
+                         std::initializer_list<int> axes, bool keepdims = true);
   // Returns ONNX model as protobuf.
   const pblczero::ModelProto& as_proto() const { return model_; }
   // Returns serialized model.
