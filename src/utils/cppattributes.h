@@ -1,6 +1,6 @@
 /*
   This file is part of Leela Chess Zero.
-  Copyright (C) 2018 The LCZero Authors
+  Copyright (C) 2018-2024 The LCZero Authors
 
   Leela Chess is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -27,6 +27,8 @@
 
 #pragma once
 
+#include <absl/base/thread_annotations.h>
+
 // Enable thread safety attributes only with clang.
 // The attributes can be safely erased when compiling with other compilers.
 #if defined(__clang__) && (!defined(SWIG))
@@ -37,10 +39,6 @@
 
 #define CAPABILITY(x) ATTRIBUTE__(capability(x))
 #define SCOPED_CAPABILITY ATTRIBUTE__(scoped_lockable)
-#define GUARDED_BY(x) ATTRIBUTE__(guarded_by(x))
-#define PT_GUARDED_BY(x) ATTRIBUTE__(pt_guarded_by(x))
-#define ACQUIRED_BEFORE(...) ATTRIBUTE__(acquired_before(__VA_ARGS__))
-#define ACQUIRED_AFTER(...) ATTRIBUTE__(acquired_after(__VA_ARGS__))
 #define REQUIRES(...) ATTRIBUTE__(requires_capability(__VA_ARGS__))
 #define REQUIRES_SHARED(...) \
   ATTRIBUTE__(requires_shared_capability(__VA_ARGS__))
@@ -48,13 +46,4 @@
 #define ACQUIRE_SHARED(...) ATTRIBUTE__(acquire_shared_capability(__VA_ARGS__))
 #define RELEASE(...) ATTRIBUTE__(release_capability(__VA_ARGS__))
 #define RELEASE_SHARED(...) ATTRIBUTE__(release_shared_capability(__VA_ARGS__))
-#define TRY_ACQUIRE(...) ATTRIBUTE__(try_acquire_capability(__VA_ARGS__))
-#define TRY_ACQUIRE_SHARED(...) \
-  ATTRIBUTE__(try_acquire_shared_capability(__VA_ARGS__))
-#define EXCLUDES(...) ATTRIBUTE__(locks_excluded(__VA_ARGS__))
-#define ASSERT_CAPABILITY(x) ATTRIBUTE__(assert_capability(x))
-#define ASSERT_SHARED_CAPABILITY(x) ATTRIBUTE__(assert_shared_capability(x))
-#define RETURN_CAPABILITY(x) ATTRIBUTE__(lock_returned(x))
 #define PACKED_STRUCT ATTRIBUTE__(packed)
-
-#define NO_THREAD_SAFETY_ANALYSIS ATTRIBUTE__(no_thread_safety_analysis)
