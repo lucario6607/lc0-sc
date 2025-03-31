@@ -47,7 +47,6 @@ struct WeightsToOnnxConverterOptions {
   int opset = 17;
   bool alt_mish = false;       // Use "Mish" approximation (fp32 only).
   bool alt_layernorm = false;  // Discrete "LayerNormalization" implementation.
-  bool relax_op_types = true;  // Use data_type even if unsuported by operator.
   bool no_shape = false;       // Avoid use of "Shape" operator.
   bool fold_matmul = false;    // Do matmul constant folding (increases size).
   bool use_einsum = false;     // Allow use of Einsum operator.
