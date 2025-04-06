@@ -31,8 +31,9 @@
 #include <cmath>
 #include <functional>
 
-#include "mcts/search.h"
-#include "mcts/stoppers/factory.h"
+#include "neural/shared_params.h"
+#include "search/classic/search.h"
+#include "search/classic/stoppers/factory.h"
 #include "utils/commandline.h"
 #include "utils/configfile.h"
 #include "utils/logging.h"
@@ -60,11 +61,6 @@ const OptionId kStrictUciTiming{"strict-uci-timing", "StrictTiming",
                                 "The UCI host compensates for lag, waits for "
                                 "the 'readyok' reply before sending 'go' and "
                                 "only then starts timing."};
-const OptionId kValueOnly{
-    "value-only", "ValueOnly",
-    "In value only mode all search parameters are ignored and the position is "
-    "evaluated by getting the valuation of every child position and choosing "
-    "the worst for the opponent."};
 const OptionId kClearTree{"", "ClearTree",
                           "Clear the tree before the next search."};
 
@@ -86,28 +82,26 @@ MoveList StringsToMovelist(const std::vector<std::string>& moves,
 
 }  // namespace
 
-EngineClassic::EngineClassic(std::unique_ptr<UciResponder> uci_responder,
+EngineClassic::EngineClassic(UciResponder& uci_responder,
                              const OptionsDict& options)
     : options_(options),
-      uci_responder_(std::move(uci_responder)),
+      uci_responder_(&uci_responder),
       current_position_{ChessBoard::kStartposFen, {}} {}
 
 void EngineClassic::PopulateOptions(OptionsParser* options) {
   using namespace std::placeholders;
   const bool is_simple =
       CommandLine::BinaryName().find("simple") != std::string::npos;
-  NetworkFactory::PopulateOptions(options);
   options->Add<IntOption>(kThreadsOptionId, 0, 128) = 0;
-  options->Add<IntOption>(kNNCacheSizeId, 0, 999999999) = 2000;
-  SearchParams::Populate(options);
+  classic::SearchParams::Populate(options);
 
   ConfigFile::PopulateOptions(options);
   if (is_simple) {
     options->HideAllOptions();
     options->UnhideOption(kThreadsOptionId);
-    options->UnhideOption(NetworkFactory::kWeightsId);
-    options->UnhideOption(SearchParams::kContemptId);
-    options->UnhideOption(SearchParams::kMultiPvId);
+    options->UnhideOption(SharedBackendParams::kWeightsId);
+    options->UnhideOption(classic::SearchParams::kContemptId);
+    options->UnhideOption(classic::SearchParams::kMultiPvId);
   }
   options->Add<StringOption>(kSyzygyTablebaseId);
   // Add "Ponder" option to signal to GUIs that we support pondering.
@@ -117,13 +111,13 @@ void EngineClassic::PopulateOptions(OptionsParser* options) {
   options->Add<BoolOption>(kShowWDL) = false;
   options->Add<BoolOption>(kShowMovesleft) = false;
 
-  PopulateTimeManagementOptions(is_simple ? RunType::kSimpleUci : RunType::kUci,
-                                options);
+  PopulateTimeManagementOptions(
+      is_simple ? classic::RunType::kSimpleUci : classic::RunType::kUci,
+      options);
 
   options->Add<BoolOption>(kStrictUciTiming) = false;
   options->HideOption(kStrictUciTiming);
 
-  options->Add<BoolOption>(kValueOnly) = false;
   options->Add<ButtonOption>(kClearTree);
   options->HideOption(kClearTree);
 }
@@ -160,7 +154,7 @@ void EngineClassic::UpdateFromUciOptions() {
   }
 
   // Cache size.
-  cache_.SetCapacity(options_.Get<int>(kNNCacheSizeId));
+  cache_.SetCapacity(options_.Get<int>(SharedBackendParams::kNNCacheSizeId));
 
   // Check whether we can update the move timer in "Go".
   strict_uci_timing_ = options_.Get<bool>(kStrictUciTiming);
@@ -219,7 +213,7 @@ void EngineClassic::SetupPosition(const std::string& fen,
 
   UpdateFromUciOptions();
 
-  if (!tree_) tree_ = std::make_unique<NodeTree>();
+  if (!tree_) tree_ = std::make_unique<classic::NodeTree>();
 
   std::vector<Move> moves;
   for (const auto& move : moves_str) moves.emplace_back(move);
@@ -228,7 +222,7 @@ void EngineClassic::SetupPosition(const std::string& fen,
 }
 
 void EngineClassic::CreateFreshTimeManager() {
-  time_manager_ = MakeTimeManager(options_);
+  time_manager_ = classic::MakeTimeManager(options_);
 }
 
 namespace {
@@ -266,73 +260,6 @@ class PonderResponseTransformer : public TransformingUciResponder {
   std::string ponder_move_;
 };
 
-void ValueOnlyGo(NodeTree* tree, Network* network, const OptionsDict& options,
-                 std::unique_ptr<UciResponder> responder) {
-  auto input_format = network->GetCapabilities().input_format;
-
-  const auto& board = tree->GetPositionHistory().Last().GetBoard();
-  auto legal_moves = board.GenerateLegalMoves();
-  PositionHistory history = tree->GetPositionHistory();
-  std::vector<InputPlanes> planes;
-  for (auto move : legal_moves) {
-    history.Append(move);
-    if (history.ComputeGameResult() == GameResult::UNDECIDED) {
-      planes.emplace_back(EncodePositionForNN(
-          input_format, history, 8, FillEmptyHistory::FEN_ONLY, nullptr));
-    }
-    history.Pop();
-  }
-
-  std::vector<float> comp_q;
-  int batch_size = options.Get<int>(SearchParams::kMiniBatchSizeId);
-  if (batch_size == 0) batch_size = network->GetMiniBatchSize();
-
-  for (size_t i = 0; i < planes.size(); i += batch_size) {
-    auto comp = network->NewComputation();
-    for (int j = 0; j < batch_size; j++) {
-      comp->AddInput(std::move(planes[i + j]));
-      if (i + j + 1 == planes.size()) break;
-    }
-    comp->ComputeBlocking();
-
-    for (int j = 0; j < batch_size; j++) comp_q.push_back(comp->GetQVal(j));
-  }
-
-  Move best;
-  int comp_idx = 0;
-  float max_q = std::numeric_limits<float>::lowest();
-  for (auto move : legal_moves) {
-    history.Append(move);
-    auto result = history.ComputeGameResult();
-    float q = -1;
-    if (result == GameResult::UNDECIDED) {
-      // NN eval is for side to move perspective - so if its good, its bad for
-      // us.
-      q = -comp_q[comp_idx];
-      comp_idx++;
-    } else if (result == GameResult::DRAW) {
-      q = 0;
-    } else {
-      // A legal move to a non-drawn terminal without tablebases must be a
-      // win.
-      q = 1;
-    }
-    if (q >= max_q) {
-      max_q = q;
-      if (tree->GetPositionHistory().IsBlackToMove()) move.Mirror();
-      best = move;
-    }
-    history.Pop();
-  }
-  std::vector<ThinkingInfo> infos;
-  ThinkingInfo thinking;
-  thinking.depth = 1;
-  infos.push_back(thinking);
-  responder->OutputThinkingInfo(&infos);
-  BestMoveInfo info(best);
-  responder->OutputBestMove(&info);
-}
-
 }  // namespace
 
 void EngineClassic::Go(const GoParams& params) {
@@ -344,7 +271,7 @@ void EngineClassic::Go(const GoParams& params) {
   go_params_ = params;
 
   std::unique_ptr<UciResponder> responder =
-      std::make_unique<NonOwningUciRespondForwarder>(uci_responder_.get());
+      std::make_unique<NonOwningUciRespondForwarder>(uci_responder_);
 
   // Setting up current position, now that it's known whether it's ponder or
   // not.
@@ -374,17 +301,13 @@ void EngineClassic::Go(const GoParams& params) {
     // Strip movesleft information from the response.
     responder = std::make_unique<MovesLeftResponseFilter>(std::move(responder));
   }
-  if (options_.Get<bool>(kValueOnly)) {
-    ValueOnlyGo(tree_.get(), network_.get(), options_, std::move(responder));
-    return;
-  }
 
   if (options_.Get<Button>(kClearTree).TestAndReset()) {
     tree_->TrimTreeAtHead();
   }
 
   auto stopper = time_manager_->GetStopper(params, *tree_.get());
-  search_ = std::make_unique<Search>(
+  search_ = std::make_unique<classic::Search>(
       *tree_, network_.get(), std::move(responder),
       StringsToMovelist(params.searchmoves, tree_->HeadPosition().GetBoard()),
       *move_start_time_, std::move(stopper), params.infinite, params.ponder,

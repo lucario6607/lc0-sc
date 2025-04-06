@@ -26,7 +26,7 @@
 */
 #pragma once
 
-#include "mcts/node.h"
+#include "search/classic/node.h"
 #include "neural/encoder.h"
 #include "neural/network.h"
 #include "utils/cache.h"
@@ -34,7 +34,7 @@
 namespace lczero {
 
 struct CachedNNRequest {
-  std::shared_ptr<NNEval> eval;
+  std::shared_ptr<classic::NNEval> eval;
 };
 
 typedef HashKeyedCache<CachedNNRequest> NNCache;
@@ -69,7 +69,7 @@ class CachingComputation {
   // Do the computation.
   void ComputeBlocking(float softmax_temp);
   // Returns NN eval of @sample.
-  std::shared_ptr<NNEval> GetNNEval(int sample) const;
+  std::shared_ptr<classic::NNEval> GetNNEval(int sample) const;
 
   // Returns compressed P value @move_ct of @sample.
   uint16_t GetPVal(int sample, int move_ct) const;
@@ -86,7 +86,7 @@ class CachingComputation {
     uint64_t hash;
     NNCacheLock lock;
     int idx_in_parent = -1;
-    std::shared_ptr<NNEval> eval;
+    std::shared_ptr<classic::NNEval> eval;
     int transform;
   };
 

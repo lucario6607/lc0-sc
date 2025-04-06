@@ -30,10 +30,10 @@
 #include <optional>
 
 #include "engine_loop.h"
-#include "mcts/search.h"
 #include "neural/cache.h"
 #include "neural/factory.h"
 #include "neural/network.h"
+#include "search/classic/search.h"
 #include "syzygy/syzygy.h"
 #include "utils/mutex.h"
 
@@ -46,8 +46,7 @@ struct CurrentPosition {
 
 class EngineClassic : public EngineControllerBase {
  public:
-  EngineClassic(std::unique_ptr<UciResponder> uci_responder,
-                const OptionsDict& options);
+  EngineClassic(UciResponder& uci_responder, const OptionsDict& options);
 
   ~EngineClassic() {
     // Make sure search is destructed first, and it still may be running in
@@ -85,19 +84,19 @@ class EngineClassic : public EngineControllerBase {
 
   const OptionsDict& options_;
 
-  std::unique_ptr<UciResponder> uci_responder_;
+  UciResponder* uci_responder_;
 
   // Locked means that there is some work to wait before responding readyok.
   RpSharedMutex busy_mutex_;
   using SharedLock = std::shared_lock<RpSharedMutex>;
 
-  std::unique_ptr<TimeManager> time_manager_;
-  std::unique_ptr<Search> search_;
-  std::unique_ptr<NodeTree> tree_;
+  std::unique_ptr<classic::TimeManager> time_manager_;
+  std::unique_ptr<classic::Search> search_;
+  std::unique_ptr<classic::NodeTree> tree_;
   std::unique_ptr<SyzygyTablebase> syzygy_tb_;
   std::unique_ptr<Network> network_;
   NNCache cache_;
-  TranspositionTable tt_;
+  classic::TranspositionTable tt_;
 
   // Store current TB and network settings to track when they change so that
   // they are reloaded.

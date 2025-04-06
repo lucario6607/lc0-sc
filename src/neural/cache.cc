@@ -82,8 +82,8 @@ void CachingComputation::AddInput(uint64_t hash,
   batch_.back().idx_in_parent = parent_->GetBatchSize();
   // Cache legal moves.
   std::vector<Move> moves = history.Last().GetBoard().GenerateLegalMoves();
-  batch_.back().eval = std::make_shared<NNEval>();
-  batch_.back().eval->edges = Edge::FromMovelist(moves);
+  batch_.back().eval = std::make_shared<classic::NNEval>();
+  batch_.back().eval->edges = classic::Edge::FromMovelist(moves);
   batch_.back().eval->num_edges = moves.size();
   batch_.back().transform = transform;
   parent_->AddInput(std::move(input));
@@ -136,7 +136,7 @@ void CachingComputation::ComputeBlocking(float softmax_temp) {
       edges[ct].SetP(intermediate[ct] * scale);
     }
 
-    Edge::SortEdges(item.eval->edges.get(), item.eval->num_edges);
+    classic::Edge::SortEdges(item.eval->edges.get(), item.eval->num_edges);
 
     auto req = std::make_unique<CachedNNRequest>();
     req->eval = item.eval;
@@ -144,7 +144,7 @@ void CachingComputation::ComputeBlocking(float softmax_temp) {
   }
 }
 
-std::shared_ptr<NNEval> CachingComputation::GetNNEval(int sample) const {
+std::shared_ptr<classic::NNEval> CachingComputation::GetNNEval(int sample) const {
   const auto& item = batch_[sample];
   if (item.idx_in_parent >= 0) return item.eval;
   return item.lock->eval;
