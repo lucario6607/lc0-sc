@@ -272,11 +272,10 @@ void ValueOnlyGo(NodeTree* tree, Network* network, const OptionsDict& options,
 
   const auto& board = tree->GetPositionHistory().Last().GetBoard();
   auto legal_moves = board.GenerateLegalMoves();
-  tree->GetCurrentHead()->CreateEdges(legal_moves);
   PositionHistory history = tree->GetPositionHistory();
   std::vector<InputPlanes> planes;
-  for (auto edge : tree->GetCurrentHead()->Edges()) {
-    history.Append(edge.GetMove());
+  for (auto move : legal_moves) {
+    history.Append(move);
     if (history.ComputeGameResult() == GameResult::UNDECIDED) {
       planes.emplace_back(EncodePositionForNN(
           input_format, history, 8, FillEmptyHistory::FEN_ONLY, nullptr));
@@ -302,8 +301,8 @@ void ValueOnlyGo(NodeTree* tree, Network* network, const OptionsDict& options,
   Move best;
   int comp_idx = 0;
   float max_q = std::numeric_limits<float>::lowest();
-  for (auto edge : tree->GetCurrentHead()->Edges()) {
-    history.Append(edge.GetMove());
+  for (auto move : legal_moves) {
+    history.Append(move);
     auto result = history.ComputeGameResult();
     float q = -1;
     if (result == GameResult::UNDECIDED) {
@@ -320,7 +319,8 @@ void ValueOnlyGo(NodeTree* tree, Network* network, const OptionsDict& options,
     }
     if (q >= max_q) {
       max_q = q;
-      best = edge.GetMove(tree->GetPositionHistory().IsBlackToMove());
+      if (tree->GetPositionHistory().IsBlackToMove()) move.Mirror();
+      best = move;
     }
     history.Pop();
   }

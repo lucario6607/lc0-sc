@@ -2088,7 +2088,7 @@ void SearchWorker::FetchSingleNodeResult(NodeToProcess* node_to_process,
                    search_->contempt_mode_ == ContemptMode::NONE
                        ? 0
                        : params_.GetWDLRescaleDiff(),
-                   sign, false);
+                   sign, false, params_.GetWDLMaxS());
         nn_eval->q = v;
         nn_eval->d = d;
       }
@@ -2112,7 +2112,7 @@ void SearchWorker::FetchSingleNodeResult(NodeToProcess* node_to_process,
                      search_->contempt_mode_ == ContemptMode::NONE
                          ? 0
                          : params_.GetWDLRescaleDiff(),
-                     sign, false);
+                     sign, false, params_.GetWDLMaxS());
           nn_eval->q = v;
           nn_eval->d = d;
         }

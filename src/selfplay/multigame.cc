@@ -37,7 +37,7 @@ class PolicyEvaluator : public Evaluator {
     transforms.clear();
     comp_idx = 0;
   }
-  void Gather(NodeTree* tree) override {
+  void Gather(NodeTree* tree, const MoveList& /*moves*/) override {
     int transform;
     auto planes =
         EncodePositionForNN(input_format, tree->GetPositionHistory(), 8,
@@ -46,15 +46,16 @@ class PolicyEvaluator : public Evaluator {
     comp->AddInput(std::move(planes));
   }
   void Run() override { comp->ComputeBlocking(); }
-  void MakeBestMove(NodeTree* tree) override {
+  void MakeBestMove(NodeTree* tree, const MoveList& moves) override {
     Move best;
     float max_p = std::numeric_limits<float>::lowest();
-    for (auto edge : tree->GetCurrentHead()->Edges()) {
+    for (auto move : moves) {
       float p = comp->GetPVal(comp_idx,
-                              edge.GetMove().as_nn_index(transforms[comp_idx]));
+                              move.as_nn_index(transforms[comp_idx]));
       if (p >= max_p) {
         max_p = p;
-        best = edge.GetMove(tree->GetPositionHistory().IsBlackToMove());
+        if (tree->GetPositionHistory().IsBlackToMove()) move.Mirror();
+        best = move;
       }
     }
     tree->MakeMove(best);
@@ -74,10 +75,10 @@ class ValueEvaluator : public Evaluator {
     input_format = player.network->GetCapabilities().input_format;
     comp_idx = 0;
   }
-  void Gather(NodeTree* tree) override {
+  void Gather(NodeTree* tree, const MoveList& moves) override {
     PositionHistory history = tree->GetPositionHistory();
-    for (auto edge : tree->GetCurrentHead()->Edges()) {
-      history.Append(edge.GetMove());
+    for (auto move : moves) {
+      history.Append(move);
       if (history.ComputeGameResult() == GameResult::UNDECIDED) {
         int transform;
         auto planes = EncodePositionForNN(
@@ -88,12 +89,12 @@ class ValueEvaluator : public Evaluator {
     }
   }
   void Run() override { comp->ComputeBlocking(); }
-  void MakeBestMove(NodeTree* tree) override {
+  void MakeBestMove(NodeTree* tree, const MoveList& moves) override {
     Move best;
     float max_q = std::numeric_limits<float>::lowest();
     PositionHistory history = tree->GetPositionHistory();
-    for (auto edge : tree->GetCurrentHead()->Edges()) {
-      history.Append(edge.GetMove());
+    for (auto move : moves) {
+      history.Append(move);
       auto result = history.ComputeGameResult();
       float q = -1;
       if (result == GameResult::UNDECIDED) {
@@ -110,7 +111,8 @@ class ValueEvaluator : public Evaluator {
       }
       if (q >= max_q) {
         max_q = q;
-        best = edge.GetMove(tree->GetPositionHistory().IsBlackToMove());
+        if (tree->GetPositionHistory().IsBlackToMove()) move.Mirror();
+        best = move;
       }
       history.Pop();
     }
@@ -200,6 +202,7 @@ void MultiSelfPlayGames::Play() {
     if (all_done) break;
     const int idx = blacks_move ? 1 : 0;
     eval_->Reset(options_[idx]);
+    std::vector<MoveList> legal_moves(trees_.size());
     for (size_t i = 0; i < trees_.size(); i++) {
       const auto& tree = trees_[i];
       if (results_[i] != GameResult::UNDECIDED) {
@@ -207,9 +210,8 @@ void MultiSelfPlayGames::Play() {
       }
       if (((tree->GetPlyCount() % 2) == 1) != blacks_move) continue;
       const auto& board = tree->GetPositionHistory().Last().GetBoard();
-      auto legal_moves = board.GenerateLegalMoves();
-      tree->GetCurrentHead()->CreateEdges(legal_moves);
-      eval_->Gather(tree.get());
+      legal_moves[i] = board.GenerateLegalMoves();
+      eval_->Gather(tree.get(), legal_moves[i]);
     }
     eval_->Run();
     for (size_t i = 0; i < trees_.size(); i++) {
@@ -218,7 +220,7 @@ void MultiSelfPlayGames::Play() {
         continue;
       }
       if (((tree->GetPlyCount() % 2) == 1) != blacks_move) continue;
-      eval_->MakeBestMove(tree.get());
+      eval_->MakeBestMove(tree.get(), legal_moves[i]);
     }
   }
 }

@@ -37,11 +37,11 @@ class Evaluator {
   // Run before each batch before any Gather.
   virtual void Reset(const PlayerOptions& player) = 0;
   // Run for each tree.
-  virtual void Gather(NodeTree* tree) = 0;
+  virtual void Gather(NodeTree* tree, const MoveList& moves) = 0;
   // Run once between Gather and Move.
   virtual void Run() = 0;
   // Run for each tree in the same order as Gather.
-  virtual void MakeBestMove(NodeTree* tree) = 0;
+  virtual void MakeBestMove(NodeTree* tree, const MoveList& moves) = 0;
 };
 
 // Plays a bunch of games vs itself.
@@ -62,13 +62,13 @@ class MultiSelfPlayGames {
 
   std::vector<Move> GetMoves(int index) const {
     std::vector<Move> moves;
-    bool flip = !trees_[index]->IsBlackToMove();
-    for (Node* node = trees_[index]->GetCurrentHead();
-         node != trees_[index]->GetGameBeginNode(); node = node->GetParent()) {
-      moves.push_back(node->GetParent()->GetEdgeToNode(node)->GetMove(flip));
-      flip = !flip;
+    Position pos = trees_[index]->GetPositionHistory().Starting();
+    for (auto move : trees_[index]->GetMoves()) {
+      pos = Position(pos, move);
+      // Position already flipped, therefore flip the move if white to move.
+      if (!pos.IsBlackToMove()) move.Mirror();
+      moves.push_back(move);
     }
-    std::reverse(moves.begin(), moves.end());
     return moves;
   }
 
