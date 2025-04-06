@@ -165,9 +165,6 @@ common_files += [
   'src/neural/decoder.cc',
   'src/neural/encoder.cc',
   'src/syzygy/syzygy.cc',
-  'src/trainingdata/reader.cc',
-  'src/trainingdata/trainingdata.cc',
-  'src/trainingdata/writer.cc',
   'src/utils/commandline.cc',
   'src/utils/configfile.cc',
   'src/utils/esc_codes.cc',
@@ -211,15 +208,6 @@ files += [
   'src/neural/xla/onnx2hlo.cc',
   'src/neural/xla/print_hlo.cc',
   'src/neural/xla/xla_tensor.cc',
-  'src/selfplay/game.cc',
-  'src/selfplay/loop.cc',
-  'src/selfplay/multigame.cc',
-  'src/selfplay/tournament.cc',
-  'src/tools/backendbench.cc',
-  'src/tools/benchmark.cc',
-  'src/tools/describenet.cc',
-  'src/tools/leela2onnx.cc',
-  'src/tools/onnx2leela.cc',
   'src/utils/histogram.cc',
   'src/utils/numa.cc',
   'src/utils/weights_adapter.cc',
@@ -704,17 +692,6 @@ if get_option('lc0')
   files += common_files
   executable('lc0', 'src/main.cc',
        files, include_directories: includes, dependencies: deps, install: true)
-endif
-
-#############################################################################
-## Rescorer Executable
-#############################################################################
-
-if get_option('rescorer')
-  deps += subproject('gaviotatb').get_variable('gaviotatb_dep')
-  executable('rescorer', 'src/rescorer_main.cc',
-       [common_files, 'src/trainingdata/rescoreloop.cc'],
-       include_directories: includes, dependencies: deps, install: true)
 endif
 
 #############################################################################
