@@ -1,6 +1,6 @@
 /*
   This file is part of Leela Chess Zero.
-  Copyright (C) 2018-2019 The LCZero Authors
+  Copyright (C) 2018-2023 The LCZero Authors
 
   Leela Chess is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -38,8 +38,9 @@
 #include "params_override.h"
 #endif
 
-#ifndef DEFAULT_MINIBATCH_SIZE
-#define DEFAULT_MINIBATCH_SIZE 256
+#ifndef DEFAULT_MAX_PREFETCH
+#define DEFAULT_MAX_PREFETCH 32
+
 #endif
 #ifndef DEFAULT_TASK_WORKERS
 // TODO: Set back to 4 once DAG can do parallel picking.
@@ -94,10 +95,17 @@ float GetContempt(std::string name, std::string contempt_str,
 SearchParams::WDLRescaleParams AccurateWDLRescaleParams(
     float contempt, float draw_rate_target, float draw_rate_reference,
     float book_exit_bias, float contempt_max, float contempt_attenuation) {
-  float scale_target =
-      1.0f / std::log((1.0f + draw_rate_target) / (1.0f - draw_rate_target));
+  // Catch accidental low positive values of draw_rate_target to guarantee
+  // somewhat reasonable behavior without numerical issues.
+  if (draw_rate_target > 0.0f && draw_rate_target < 0.001f) {
+    draw_rate_target = 0.001f;
+  }
   float scale_reference = 1.0f / std::log((1.0f + draw_rate_reference) /
                                           (1.0f - draw_rate_reference));
+  float scale_target =
+      (draw_rate_target == 0 ? scale_reference
+                             : 1.0f / std::log((1.0f + draw_rate_target) /
+                                               (1.0f - draw_rate_target)));
   float ratio = scale_target / scale_reference;
   float diff =
       scale_target / (scale_reference * scale_reference) /
@@ -108,6 +116,21 @@ SearchParams::WDLRescaleParams AccurateWDLRescaleParams(
       std::log(10) / 200 * std::clamp(contempt, -contempt_max, contempt_max) *
       contempt_attenuation;
   return SearchParams::WDLRescaleParams(ratio, diff);
+}
+
+// Converts regular Elo into ideal UHO game pair Elo based on the same Elo
+// dependent draw rate model used below. Necessary because regular Elo doesn't
+// behave well at higher level, while the ideal UHO game pair Elo calculated
+// from the decisive game pair ratio underestimates Elo differences by a
+// factor of 2 at lower levels.
+
+float ConvertRegularToGamePairElo(float elo_regular) {
+  const float transition_sharpness = 250.0f;
+  const float transition_midpoint = 2737.0f;
+  return elo_regular +
+         0.5f * transition_sharpness *
+             std::log(1.0f + std::exp((transition_midpoint - elo_regular) /
+                                      transition_sharpness));
 }
 
 // Calculate ratio and diff for WDL conversion from the contempt settings.
@@ -130,6 +153,10 @@ SearchParams::WDLRescaleParams SimplifiedWDLRescaleParams(
                                           (1.0f - draw_rate_reference));
   float elo_opp =
       elo_active - std::clamp(contempt, -contempt_max, contempt_max);
+  // Convert regular Elo input into internally used game pair Elo.
+  elo_active = ConvertRegularToGamePairElo(elo_active);
+  elo_opp = ConvertRegularToGamePairElo(elo_opp);
+  // Estimate draw rate from given Elo.
   float scale_active =
       1.0f / (1.0f / scale_zero + std::exp(elo_active / elo_slope - offset));
   float scale_opp =
@@ -145,7 +172,8 @@ SearchParams::WDLRescaleParams SimplifiedWDLRescaleParams(
   float mu_opp =
       -std::log(10) / 200 * scale_zero * elo_slope *
       std::log(1.0f + std::exp(-elo_opp / elo_slope + offset) / scale_zero);
-  float diff = (mu_active - mu_opp) * contempt_attenuation;
+  float diff = 1.0f / (scale_reference * scale_reference) *
+               (mu_active - mu_opp) * contempt_attenuation;
   return SearchParams::WDLRescaleParams(ratio, diff);
 }
 }  // namespace
@@ -154,7 +182,7 @@ const OptionId SearchParams::kMiniBatchSizeId{
     "minibatch-size", "MinibatchSize",
     "How many positions the engine tries to batch together for parallel NN "
     "computation. Larger batches may reduce strength a bit, especially with a "
-    "small number of playouts."};
+    "small number of playouts. Set to 0 to use a backend suggested value."};
 const OptionId SearchParams::kCpuctId{
     "cpuct", "CPuct",
     "cpuct_init constant from \"UCT search\" algorithm. Higher values promote "
@@ -280,7 +308,7 @@ const OptionId SearchParams::kOutOfOrderEvalId{
     "in the cache or is terminal, evaluate it right away without sending the "
     "batch to the NN. When off, this may only happen with the very first node "
     "of a batch; when on, this can happen with any node."};
-const OptionId SearchParams::kMaxOutOfOrderEvalsId{
+const OptionId SearchParams::kMaxOutOfOrderEvalsFactorId{
     "max-out-of-order-evals-factor", "MaxOutOfOrderEvalsFactor",
     "Maximum number of out of order evals during gathering of a batch is "
     "calculated by multiplying the maximum batch size by this number."};
@@ -366,11 +394,18 @@ const OptionId SearchParams::kContemptMaxValueId{
     "The maximum value of contempt used. Higher values will be capped."};
 const OptionId SearchParams::kWDLCalibrationEloId{
     "wdl-calibration-elo", "WDLCalibrationElo",
-    "Elo of the active side, adjusted for time control relative to rapid."};
+    "Elo of the active side, adjusted for time control relative to rapid."
+    "To retain raw WDL without sharpening/softening, use default value 0."};
 const OptionId SearchParams::kWDLContemptAttenuationId{
     "wdl-contempt-attenuation", "WDLContemptAttenuation",
     "Scales how Elo advantage is applied for contempt. Use 1.0 for realistic "
     "analysis, and 0.5-0.6 for optimal match performance."};
+const OptionId SearchParams::kWDLMaxSId{
+    "wdl-max-s", "WDLMaxS",
+    "Limits the WDL derived sharpness s to a reasonable value to avoid "
+    "erratic behavior at high contempt values. Default recommended for "
+    "regular chess, increase value for more volatile positions like DFRC "
+    "or piece odds."};
 const OptionId SearchParams::kWDLEvalObjectivityId{
     "wdl-eval-objectivity", "WDLEvalObjectivity",
     "When calculating the centipawn eval output, decides how objective/"
@@ -379,7 +414,8 @@ const OptionId SearchParams::kWDLEvalObjectivityId{
 const OptionId SearchParams::kWDLDrawRateTargetId{
     "wdl-draw-rate-target", "WDLDrawRateTarget",
     "To define the accuracy of play, the target draw rate in equal "
-    "positions is used as a proxy. Ignored if WDLCalibrationElo is set."};
+    "positions is used as a proxy. Ignored if WDLCalibrationElo is set. "
+    "To retain raw WDL without sharpening/softening, use default value 0."};
 const OptionId SearchParams::kWDLDrawRateReferenceId{
     "wdl-draw-rate-reference", "WDLDrawRateReference",
     "Set this to the draw rate predicted by the used neural network at "
@@ -397,7 +433,8 @@ const OptionId SearchParams::kNpsLimitId{
     "and on the length of the search. Zero to disable."};
 const OptionId SearchParams::kTaskWorkersPerSearchWorkerId{
     "task-workers", "TaskWorkers",
-    "The number of task workers to use to help the search worker."};
+    "The number of task workers to use to help the search worker. Setting to "
+    "-1 will use a heuristic value."};
 const OptionId SearchParams::kMinimumWorkSizeForProcessingId{
     "minimum-processing-work", "MinimumProcessingWork",
     "This many visits need to be gathered before tasks will be used to "
@@ -448,7 +485,7 @@ const OptionId SearchParams::kSearchSpinBackoffId{
 void SearchParams::Populate(OptionsParser* options) {
   // Here the uci optimized defaults" are set.
   // Many of them are overridden with training specific values in tournament.cc.
-  options->Add<IntOption>(kMiniBatchSizeId, 1, 1024) = DEFAULT_MINIBATCH_SIZE;
+  options->Add<IntOption>(kMiniBatchSizeId, 0, 1024) = 0;
   options->Add<FloatOption>(kCpuctId, 0.0f, 100.0f) = 1.745f;
   options->Add<FloatOption>(kCpuctAtRootId, 0.0f, 100.0f) = 1.745f;
   options->Add<FloatOption>(kCpuctBaseId, 1.0f, 1000000000.0f) = 38739.0f;
@@ -485,7 +522,7 @@ void SearchParams::Populate(OptionsParser* options) {
   options->Add<FloatOption>(kMaxCollisionVisitsScalingPowerId, 0.01, 100) =
       1.25;
   options->Add<BoolOption>(kOutOfOrderEvalId) = true;
-  options->Add<FloatOption>(kMaxOutOfOrderEvalsId, 0.0f, 100.0f) = 2.4f;
+  options->Add<FloatOption>(kMaxOutOfOrderEvalsFactorId, 0.0f, 100.0f) = 2.4f;
   options->Add<BoolOption>(kStickyEndgamesId) = true;
   options->Add<BoolOption>(kSyzygyFastPlayId) = false;
   options->Add<IntOption>(kMultiPvId, 1, 500) = 1;
@@ -521,13 +558,13 @@ void SearchParams::Populate(OptionsParser* options) {
   options->Add<FloatOption>(kContemptMaxValueId, 0, 10000.0f) = 420.0f;
   options->Add<FloatOption>(kWDLCalibrationEloId, 0, 10000.0f) = 0.0f;
   options->Add<FloatOption>(kWDLContemptAttenuationId, -10.0f, 10.0f) = 1.0f;
+  options->Add<FloatOption>(kWDLMaxSId, 0.0f, 10.0f) = 1.4f;
   options->Add<FloatOption>(kWDLEvalObjectivityId, 0.0f, 1.0f) = 1.0f;
-  options->Add<FloatOption>(kWDLDrawRateTargetId, 0.001f, 0.999f) = 0.5f;
+  options->Add<FloatOption>(kWDLDrawRateTargetId, 0.0f, 0.999f) = 0.0f;
   options->Add<FloatOption>(kWDLDrawRateReferenceId, 0.001f, 0.999f) = 0.5f;
   options->Add<FloatOption>(kWDLBookExitBiasId, -2.0f, 2.0f) = 0.65f;
   options->Add<FloatOption>(kNpsLimitId, 0.0f, 1e6f) = 0.0f;
-  options->Add<IntOption>(kTaskWorkersPerSearchWorkerId, 0, 128) =
-      DEFAULT_TASK_WORKERS;
+  options->Add<IntOption>(kTaskWorkersPerSearchWorkerId, -1, 128) = -1;
   options->Add<IntOption>(kMinimumWorkSizeForProcessingId, 2, 100000) = 20;
   options->Add<IntOption>(kMinimumWorkSizeForPickingId, 1, 100000) = 1;
   options->Add<IntOption>(kMinimumRemainingWorkSizeForPickingId, 0, 100000) =
@@ -558,6 +595,7 @@ void SearchParams::Populate(OptionsParser* options) {
   options->HideOption(kTemperatureVisitOffsetId);
   options->HideOption(kContemptMaxValueId);
   options->HideOption(kWDLContemptAttenuationId);
+  options->HideOption(kWDLMaxSId);
   options->HideOption(kWDLDrawRateTargetId);
   options->HideOption(kWDLBookExitBiasId);
 }
@@ -623,10 +661,10 @@ SearchParams::SearchParams(const OptionsDict& options)
                     options.Get<float>(kWDLCalibrationEloId),
                     options.Get<float>(kContemptMaxValueId),
                     options.Get<float>(kWDLContemptAttenuationId))),
+      kWDLMaxS(options.Get<float>(kWDLMaxSId)),
       kWDLEvalObjectivity(options.Get<float>(kWDLEvalObjectivityId)),
-      kMaxOutOfOrderEvals(std::max(
-          1, static_cast<int>(options.Get<float>(kMaxOutOfOrderEvalsId) *
-                              options.Get<int>(kMiniBatchSizeId)))),
+      kMaxOutOfOrderEvalsFactor(
+          options.Get<float>(kMaxOutOfOrderEvalsFactorId)),
       kNpsLimit(options.Get<float>(kNpsLimitId)),
       kTaskWorkersPerSearchWorker(
           options.Get<int>(kTaskWorkersPerSearchWorkerId)),
