@@ -222,9 +222,6 @@ files += [
   'src/utils/weights_adapter.cc',
 ]
 
-files += [
-  'src/search/instamove/instamove.cc',
-]
 includes += include_directories('src')
 
 deps += dependency('threads')
