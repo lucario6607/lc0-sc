@@ -32,27 +32,49 @@
 #include "chess/gamestate.h"
 #include "chess/position.h"
 #include "neural/backend.h"
+#include "neural/memcache.h"
 #include "neural/register.h"
+#include "neural/shared_params.h"
+#include "syzygy/syzygy.h"
 
 namespace lczero {
+namespace {
+const OptionId kSyzygyTablebaseId{
+    "syzygy-paths", "SyzygyPath",
+    "List of Syzygy tablebase directories, list entries separated by system "
+    "separator (\";\" for Windows, \":\" for Linux).",
+    's'};
+const OptionId kPreload{"preload", "",
+                        "Initialize backend and load net on engine startup."};
+}  // namespace
 
-Engine::Engine(std::unique_ptr<SearchBase> search, const OptionsDict& opts)
-    : options_(opts), search_(std::move(search)) {}
+void Engine::PopulateOptions(OptionsParser* options) {
+  options->Add<StringOption>(kSyzygyTablebaseId);
+  options->Add<BoolOption>(kPreload) = false;
+}
 
-Engine::~Engine() {}
+Engine::Engine(const SearchFactory& factory, const OptionsDict& opts)
+    : options_(opts),
+      search_(factory.CreateSearch(&uci_forwarder_, &options_)) {
+  if (options_.Get<bool>(kPreload)) {
+    UpdateBackendConfig();
+    // EnsureSyzygyTablebasesLoaded();
+  }
+}
 
 namespace {
 GameState MakeGameState(const std::string& fen,
                         const std::vector<std::string>& moves) {
   GameState state;
   state.startpos = Position::FromFen(fen);
+  ChessBoard cur_board = state.startpos.GetBoard();
   state.moves.reserve(moves.size());
-  bool is_black = state.startpos.IsBlackToMove();
-  std::transform(moves.begin(), moves.end(), std::back_inserter(state.moves),
-                 [&](const std::string& move) {
-                   return Move(move, is_black);
-                   is_black = !is_black;
-                 });
+  for (const auto& move : moves) {
+    Move m = cur_board.ParseMove(move);
+    state.moves.push_back(m);
+    cur_board.ApplyMove(m);
+    cur_board.Mirror();
+  }
   return state;
 }
 }  // namespace
@@ -62,16 +84,46 @@ void Engine::EnsureSearchStopped() {
   search_->WaitSearch();
 }
 
-void Engine::EnsureBackendCreated() {
-  if (backend_) return;
-  backend_ = BackendManager::Get()->CreateFromParams(options_);
-  search_->SetBackend(backend_.get());
+void Engine::UpdateBackendConfig() {
+  const std::string backend_name =
+      options_.Get<std::string>(SharedBackendParams::kBackendId);
+  const size_t cache_size =
+      options_.Get<int>(SharedBackendParams::kNNCacheSizeId);
+  if (!backend_ || backend_name != backend_name_ ||
+      backend_->UpdateConfiguration(options_) == Backend::NEED_RESTART) {
+    backend_name_ = backend_name;
+    backend_ = CreateMemCache(BackendManager::Get()->CreateFromParams(options_),
+                              cache_size);
+    search_->SetBackend(backend_.get());
+  } else {
+    backend_->SetCacheSize(cache_size);
+  }
+}
+
+void Engine::EnsureSyzygyTablebasesLoaded() {
+  const std::string tb_paths = options_.Get<std::string>(kSyzygyTablebaseId);
+  if (tb_paths == previous_tb_paths_) return;
+  previous_tb_paths_ = tb_paths;
+
+  if (tb_paths.empty()) {
+    syzygy_tb_.reset();
+  } else {
+    syzygy_tb_ = std::make_unique<SyzygyTablebase>();
+    CERR << "Loading Syzygy tablebases from " << tb_paths;
+    if (!syzygy_tb_->init(tb_paths)) {
+      CERR << "Failed to load Syzygy tablebases!";
+      syzygy_tb_.reset();
+    }
+  }
+
+  search_->SetSyzygyTablebase(syzygy_tb_.get());
 }
 
 void Engine::SetPosition(const std::string& fen,
                          const std::vector<std::string>& moves) {
-  EnsureBackendCreated();
+  UpdateBackendConfig();
   EnsureSearchStopped();
+  EnsureSyzygyTablebasesLoaded();
   search_->SetPosition(MakeGameState(fen, moves));
   search_initialized_ = true;
 }
@@ -83,8 +135,14 @@ void Engine::Go(const GoParams& params) {
   search_->StartSearch(params);
 }
 
-void Engine::Stop() {
-  if (search_) search_->StopSearch();
+void Engine::Stop() { search_->StopSearch(); }
+
+void Engine::RegisterUciResponder(UciResponder* responder) {
+  uci_forwarder_.Register(responder);
+}
+
+void Engine::UnregisterUciResponder(UciResponder* responder) {
+  uci_forwarder_.Unregister(responder);
 }
 
 }  // namespace lczero

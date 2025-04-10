@@ -25,30 +25,41 @@
   Program grant you additional permission to convey the resulting work.
 */
 
-#include "chess/gamestate.h"
+#pragma once
 
-#include <algorithm>
-#include <numeric>
+#include "gmock/gmock.h"
+
+#include "neural/backend.h"
 
 namespace lczero {
 
-Position GameState::CurrentPosition() const {
-  return std::accumulate(
-      moves.begin(), moves.end(), startpos,
-      [](const Position& pos, Move m) { return Position(pos, m); });
-}
+class MockBackendComputation : public BackendComputation {
+ public:
+  MOCK_METHOD(size_t, UsedBatchSize, (), (const, override));
+  MOCK_METHOD(AddInputResult, AddInput,
+              (const EvalPosition& pos, EvalResultPtr result), (override));
+  MOCK_METHOD(void, ComputeBlocking, (), (override));
+};
 
-std::vector<Position> GameState::GetPositions() const {
-  std::vector<Position> positions;
-  positions.reserve(moves.size() + 1);
-  positions.push_back(startpos);
-  std::transform(moves.begin(), moves.end(), std::back_inserter(positions),
-                 [&](Move m) {
-                   const Position& prev_pos = positions.back();
-                   if (prev_pos.IsBlackToMove()) m.Flip();
-                   return Position(positions.back(), m);
-                 });
-  return positions;
-}
+class MockBackend : public Backend {
+ public:
+  MOCK_METHOD(BackendAttributes, GetAttributes, (), (const, override));
+  MOCK_METHOD(std::unique_ptr<BackendComputation>, CreateComputation, (),
+              (override));
+  MOCK_METHOD(std::vector<EvalResult>, EvaluateBatch,
+              (std::span<const EvalPosition> positions), (override));
+  MOCK_METHOD(std::optional<EvalResult>, GetCachedEvaluation,
+              (const EvalPosition&), (override));
+  MOCK_METHOD(UpdateConfigurationResult, UpdateConfiguration,
+              (const OptionsDict&), (override));
+};
+
+class MockBackendFactory : public BackendFactory {
+ public:
+  MOCK_METHOD(int, GetPriority, (), (const, override));
+  MOCK_METHOD(std::string_view, GetName, (), (const, override));
+  MOCK_METHOD(std::unique_ptr<Backend>, Create, (const OptionsDict&),
+              (override));
+};
 
 }  // namespace lczero

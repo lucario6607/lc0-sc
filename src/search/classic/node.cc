@@ -50,7 +50,7 @@ namespace classic {
 Move Edge::GetMove(bool as_opponent) const {
   if (!as_opponent) return move_;
   Move m = move_;
-  m.Mirror();
+  m.Flip();
   return m;
 }
 
@@ -103,7 +103,8 @@ float Edge::GetP() const {
 
 std::string Edge::DebugString() const {
   std::ostringstream oss;
-  oss << "Move: " << move_.as_string() << " p_: " << p_ << " GetP: " << GetP();
+  oss << "Move: " << move_.ToString(true) << " p_: " << p_
+      << " GetP: " << GetP();
   return oss.str();
 }
 
@@ -169,7 +170,7 @@ const Edge& LowNode::GetEdgeAt(uint16_t index) const { return edges_[index]; }
 std::string Node::DebugString() const {
   std::ostringstream oss;
   oss << " <Node> This:" << this << " LowNode:" << low_node_.get()
-      << " Index:" << index_ << " Move:" << GetMove().as_string()
+      << " Index:" << index_ << " Move:" << GetMove().ToString(true)
       << " Sibling:" << sibling_.get() << " P:" << GetP() << " WL:" << wl_
       << " D:" << d_ << " M:" << m_ << " N:" << n_ << " N_:" << n_in_flight_
       << " Term:" << static_cast<int>(terminal_type_)
@@ -473,7 +474,7 @@ std::string Node::DotEdgeString(bool as_opponent, const LowNode* parent) const {
       << (low_node_ ? PtrToNodeName(low_node_.get()) : PtrToNodeName(this))
       << " [";
   oss << "label=\""
-      << (parent == nullptr ? "N/A" : GetMove(as_opponent).as_string())
+      << (parent == nullptr ? "N/A" : GetMove(as_opponent).ToString(true))
       << "\\lN=" << n_ << "\\lN_=" << n_in_flight_;
   oss << "\\l\"";
   // Set precision for tooltip.
@@ -637,12 +638,9 @@ std::string EdgeAndNode::DebugString() const {
 /////////////////////////////////////////////////////////////////////////
 
 void NodeTree::MakeMove(Move move) {
-  if (HeadPosition().IsBlackToMove()) move.Mirror();
-  const auto& board = HeadPosition().GetBoard();
-
   Node* new_head = nullptr;
   for (auto& n : current_head_->Edges()) {
-    if (board.IsSameMove(n.GetMove(), move)) {
+    if (n.GetMove() == move) {
       new_head = n.GetOrSpawnNode(current_head_);
       // Ensure head is not terminal, so search can extend or visit children of
       // "terminal" positions, e.g., WDL hits, converted terminals, 3-fold draw.
@@ -650,7 +648,6 @@ void NodeTree::MakeMove(Move move) {
       break;
     }
   }
-  move = board.GetModernMove(move);
   // Free old released nodes before adding new.
   released_nodes_.clear();
   // Release nodes from last move if any.
@@ -667,7 +664,7 @@ void NodeTree::TrimTreeAtHead() {
 }
 
 bool NodeTree::ResetToPosition(const std::string& starting_fen,
-                               const std::vector<Move>& moves) {
+                               const std::vector<std::string>& moves) {
   ChessBoard starting_board;
   int no_capture_ply;
   int full_moves;
@@ -691,7 +688,8 @@ bool NodeTree::ResetToPosition(const std::string& starting_fen,
   current_head_ = gamebegin_node_.get();
   bool seen_old_head = (gamebegin_node_.get() == old_head);
   for (const auto& move : moves) {
-    MakeMove(move);
+    Move m = HeadPosition().GetBoard().ParseMove(move);
+    MakeMove(m);
     if (old_head == current_head_) seen_old_head = true;
   }
 

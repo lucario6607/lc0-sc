@@ -118,7 +118,7 @@ void CachingComputation::ComputeBlocking(float softmax_temp) {
     for (int ct = 0; ct < num_edges; ct++) {
       auto move = edges[ct].GetMove();
       float p =
-          parent_->GetPVal(item.idx_in_parent, move.as_nn_index(transform));
+          parent_->GetPVal(item.idx_in_parent, MoveToNNIndex(move,transform));
       intermediate[ct] = p;
       max_p = std::max(max_p, p);
     }

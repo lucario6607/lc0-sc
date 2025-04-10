@@ -30,16 +30,18 @@
 #include <vector>
 
 #include "engine_loop.h"
+#include "neural/memcache.h"
 #include "search/search.h"
+#include "syzygy/syzygy.h"
 
 namespace lczero {
 
 class Engine : public EngineControllerBase {
  public:
-  Engine(std::unique_ptr<SearchBase>, const OptionsDict&);
-  ~Engine() override;
+  Engine(const SearchFactory&, const OptionsDict&);
 
- private:
+  static void PopulateOptions(OptionsParser*);
+
   void EnsureReady() override {};
   void NewGame() override;
   void SetPosition(const std::string& fen,
@@ -48,13 +50,24 @@ class Engine : public EngineControllerBase {
   void PonderHit() override {}
   void Stop() override;
 
- private:
-  void EnsureBackendCreated();
-  void EnsureSearchStopped();
+  void RegisterUciResponder(UciResponder*) override;
+  void UnregisterUciResponder(UciResponder*) override;
 
+ private:
+  void UpdateBackendConfig();
+  void EnsureSearchStopped();
+  void EnsureSyzygyTablebasesLoaded();
+
+  UciResponderForwarder uci_forwarder_;
   const OptionsDict& options_;
-  std::unique_ptr<SearchBase> search_;
-  std::unique_ptr<Backend> backend_;
+  std::unique_ptr<SearchBase> search_;  // absl_notnull
+  std::string backend_name_;
+  std::unique_ptr<CachingBackend> backend_;  // absl_nullable
+
+  // Remember previous tablebase paths to detect when to reload them.
+  std::string previous_tb_paths_;
+  std::unique_ptr<SyzygyTablebase> syzygy_tb_;  // absl_nullable
+
   bool search_initialized_ = false;
 };
 
