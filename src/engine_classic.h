@@ -30,9 +30,8 @@
 #include <optional>
 
 #include "engine_loop.h"
-#include "neural/cache.h"
 #include "neural/factory.h"
-#include "neural/network.h"
+#include "neural/memcache.h"
 #include "search/classic/search.h"
 #include "syzygy/syzygy.h"
 #include "utils/mutex.h"
@@ -95,8 +94,8 @@ class EngineClassic : public EngineControllerBase {
   std::unique_ptr<classic::NodeTree> tree_;
   std::unique_ptr<SyzygyTablebase> syzygy_tb_;
   std::unique_ptr<Network> network_;
-  NNCache cache_;
   classic::TranspositionTable tt_;
+  std::unique_ptr<CachingBackend> backend_;
 
   // Store current TB and network settings to track when they change so that
   // they are reloaded.

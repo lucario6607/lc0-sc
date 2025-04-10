@@ -39,6 +39,7 @@
 #include "chess/board.h"
 #include "chess/callbacks.h"
 #include "chess/position.h"
+#include "neural/backend.h"
 #include "utils/mutex.h"
 
 namespace lczero {
@@ -412,22 +413,19 @@ class LowNode {
     child_ = std::make_unique<Node>(edges_[index], index);
   }
 
-  void SetNNEval(const NNEval* eval) {
-    assert(!edges_);
+  void SetNNEval(const EvalResult* eval) {
     assert(n_ == 0);
     assert(child_ == nullptr);
 
-    edges_ = std::make_unique<Edge[]>(eval->num_edges);
-    std::memcpy(edges_.get(), eval->edges.get(),
-                eval->num_edges * sizeof(Edge));
+    for (size_t idx = 0; idx < num_edges_; idx++) {
+      edges_.get()[idx].SetP(eval->p[idx]);
+    }
 
     wl_ = eval->q;
     d_ = eval->d;
     m_ = eval->m;
 
     assert(WLDMInvariantsHold());
-
-    num_edges_ = eval->num_edges;
   }
 
   // Gets the first child.
@@ -649,6 +647,11 @@ class Edge_Iterator : public EdgeAndNode {
  public:
   using Ptr = std::conditional_t<is_const, const std::unique_ptr<Node>*,
                                  std::unique_ptr<Node>*>;
+  using value_type = Edge_Iterator;
+  using iterator_category = std::forward_iterator_tag;
+  using difference_type = std::ptrdiff_t;
+  using pointer = Edge_Iterator*;
+  using reference = Edge_Iterator&;
 
   // Creates "end()" iterator.
   Edge_Iterator() {}
