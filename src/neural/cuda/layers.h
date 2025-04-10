@@ -336,7 +336,7 @@ class ResidualBlock : public BaseLayer<DataType> {
 template <typename DataType>
 class EncoderBlock {
  public:
-  EncoderBlock(const LegacyWeights::EncoderLayer& cpu_weights, void* scratch,
+  EncoderBlock(const MultiHeadWeights::EncoderLayer& cpu_weights, void* scratch,
                int heads, int size, float alpha,
                DataType* smolgen_global_scratch, int smolgen_global_size,
                int max_batch_size, ActivationFunction smolgen_act,
@@ -408,9 +408,9 @@ class AttentionPolicyHead : public BaseLayer<DataType> {
   using BaseLayer<DataType>::GetW;
 
  public:
-  AttentionPolicyHead(BaseLayer<DataType>* ip, const LegacyWeights& weights,
+  AttentionPolicyHead(BaseLayer<DataType>* ip, const MultiHeadWeights::PolicyHead& weights,
                       void* scratch, bool attention_body,
-                      ActivationFunction act, std::string policy_head, int max_batch_size);
+                      ActivationFunction act, int max_batch_size);
   ~AttentionPolicyHead();
   void Eval(int N, DataType* output, const DataType* input,
             const DataType* input2, void* scratch, size_t scratch_size,
@@ -473,7 +473,7 @@ class AttentionBody : public BaseLayer<DataType> {
   using BaseLayer<DataType>::GetW;
 
  public:
-  AttentionBody(const LegacyWeights& weights, void* scratch,
+  AttentionBody(const MultiHeadWeights& weights, void* scratch,
                 Activations activations, int num_res_blocks, int input_c,
                 int max_batch_size, bool new_encoding, bool fused_mha);
   ~AttentionBody();
@@ -522,7 +522,7 @@ class ValueHead : public BaseLayer<DataType> {
   using BaseLayer<DataType>::GetW;
 
  public:
-  ValueHead(BaseLayer<DataType>* ip, const LegacyWeights::ValueHead& weights,
+  ValueHead(BaseLayer<DataType>* ip, const MultiHeadWeights::ValueHead& weights,
                       void* scratch, bool attention_body, bool wdl, bool wdl_err,
                       ActivationFunction act, int max_batch_size, bool use_gemm_ex);
   ~ValueHead();
