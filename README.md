@@ -1,3 +1,12 @@
+# Lc0 TCEC Submissions
+
+## History
+
+### [TCEC Swiss 8](https://gist.github.com/uwuplant/7b9dd989db10e241a0b8a60bd43ec093)
+
+### [TCEC FRD 3](https://gist.github.com/uwuplant/3dc7c17617a5fde30d8db612f514f357)
+
+---
 [![CircleCI](https://circleci.com/gh/LeelaChessZero/lc0.svg?style=shield)](https://circleci.com/gh/LeelaChessZero/lc0)
 [![AppVeyor](https://ci.appveyor.com/api/projects/status/3245b83otdee7oj7?svg=true)](https://ci.appveyor.com/project/leelachesszero/lc0)
 
