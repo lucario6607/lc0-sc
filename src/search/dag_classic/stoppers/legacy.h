@@ -27,13 +27,16 @@
 
 #pragma once
 
+#include "search/dag_classic/stoppers/timemgr.h"
 #include "utils/optionsdict.h"
 
 namespace lczero {
-namespace classic {
+namespace dag_classic {
 
-std::unique_ptr<TimeManager> MakeSimpleTimeManager(
-    int64_t move_overhead, const OptionsDict& params);
+float ComputeEstimatedMovesToGo(int ply, float midpoint, float steepness);
 
-}  // namespace classic
+std::unique_ptr<TimeManager> MakeLegacyTimeManager(int64_t move_overhead,
+                                                   const OptionsDict& params);
+
+}  // namespace dag_classic
 }  // namespace lczero

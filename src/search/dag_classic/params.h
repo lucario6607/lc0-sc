@@ -32,7 +32,7 @@
 #include "utils/optionsparser.h"
 
 namespace lczero {
-namespace classic {
+namespace dag_classic {
 
 enum class ContemptMode { PLAY, WHITE, BLACK, NONE };
 
@@ -284,5 +284,5 @@ class SearchParams {
   const bool kSearchSpinBackoff;
 };
 
-}  // namespace classic
+}  // namespace dag_classic
 }  // namespace lczero

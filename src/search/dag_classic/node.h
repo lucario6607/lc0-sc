@@ -44,7 +44,7 @@
 #include "utils/mutex.h"
 
 namespace lczero {
-namespace classic {
+namespace dag_classic {
 
 // Terminology:
 // * Edge - a potential edge with a move and policy information.
@@ -857,5 +857,5 @@ class NodeTree {
   std::vector<std::unique_ptr<Node>> released_nodes_;
 };
 
-}  // namespace classic
+}  // namespace dag_classic
 }  // namespace lczero

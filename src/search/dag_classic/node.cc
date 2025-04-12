@@ -25,7 +25,7 @@
   Program grant you additional permission to convey the resulting work.
 */
 
-#include "search/classic/node.h"
+#include "search/dag_classic/node.h"
 
 #include <algorithm>
 #include <cassert>
@@ -41,7 +41,7 @@
 #include "utils/hashcat.h"
 
 namespace lczero {
-namespace classic {
+namespace dag_classic {
 
 /////////////////////////////////////////////////////////////////////////
 // Edge
@@ -608,7 +608,7 @@ static bool WLDMInvariantsHold(float wl, float d, float m) {
 }
 
 bool Node::WLDMInvariantsHold() const {
-  if (classic::WLDMInvariantsHold(GetWL(), GetD(), GetM())) return true;
+  if (dag_classic::WLDMInvariantsHold(GetWL(), GetD(), GetM())) return true;
 
   std::cerr << DebugString() << std::endl;
 
@@ -616,7 +616,7 @@ bool Node::WLDMInvariantsHold() const {
 }
 
 bool LowNode::WLDMInvariantsHold() const {
-  if (classic::WLDMInvariantsHold(GetWL(), GetD(), GetM())) return true;
+  if (dag_classic::WLDMInvariantsHold(GetWL(), GetD(), GetM())) return true;
 
   std::cerr << DebugString() << std::endl;
 
@@ -715,5 +715,5 @@ void NodeTree::DeallocateTree() {
   current_head_ = nullptr;
 }
 
-}  // namespace classic
+}  // namespace dag_classic
 }  // namespace lczero

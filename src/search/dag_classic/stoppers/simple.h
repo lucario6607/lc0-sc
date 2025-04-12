@@ -30,10 +30,10 @@
 #include "utils/optionsdict.h"
 
 namespace lczero {
-namespace classic {
+namespace dag_classic {
 
-std::unique_ptr<TimeManager> MakeAlphazeroTimeManager(
+std::unique_ptr<TimeManager> MakeSimpleTimeManager(
     int64_t move_overhead, const OptionsDict& params);
 
-}  // namespace classic
+}  // namespace dag_classic
 }  // namespace lczero

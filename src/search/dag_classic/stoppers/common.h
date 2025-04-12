@@ -27,16 +27,23 @@
 
 #pragma once
 
-#include "search/classic/stoppers/timemgr.h"
+#include "search/dag_classic/stoppers/stoppers.h"
 #include "utils/optionsdict.h"
+#include "utils/optionsparser.h"
 
 namespace lczero {
-namespace classic {
+namespace dag_classic {
 
-float ComputeEstimatedMovesToGo(int ply, float midpoint, float steepness);
+enum class RunType { kUci, kSimpleUci, kSelfplay };
+void PopulateCommonStopperOptions(RunType for_what, OptionsParser* options);
 
-std::unique_ptr<TimeManager> MakeLegacyTimeManager(int64_t move_overhead,
-                                                   const OptionsDict& params);
+// Populates KLDGain and SmartPruning stoppers.
+void PopulateIntrinsicStoppers(ChainedSearchStopper* stopper,
+                               const OptionsDict& options);
 
-}  // namespace classic
+std::unique_ptr<TimeManager> MakeCommonTimeManager(
+    std::unique_ptr<TimeManager> child_manager, const OptionsDict& options,
+    int64_t move_overhead);
+
+}  // namespace dag_classic
 }  // namespace lczero

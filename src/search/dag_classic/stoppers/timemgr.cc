@@ -25,12 +25,12 @@
   Program grant you additional permission to convey the resulting work.
 */
 
-#include "search/classic/stoppers/timemgr.h"
+#include "search/dag_classic/stoppers/timemgr.h"
 
-#include "search/classic/stoppers/stoppers.h"
+#include "search/dag_classic/stoppers/stoppers.h"
 
 namespace lczero {
-namespace classic {
+namespace dag_classic {
 
 StoppersHints::StoppersHints() { Reset(); }
 
@@ -65,5 +65,5 @@ void StoppersHints::Reset() {
   estimated_nps_.reset();
 }
 
-}  // namespace classic
+}  // namespace dag_classic
 }  // namespace lczero

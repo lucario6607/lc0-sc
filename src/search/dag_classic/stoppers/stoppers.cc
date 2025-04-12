@@ -25,13 +25,12 @@
   Program grant you additional permission to convey the resulting work.
 */
 
-#include "search/classic/stoppers/stoppers.h"
+#include "search/dag_classic/stoppers/stoppers.h"
 
-#include "search/classic/node.h"
-#include "neural/cache.h"
+#include "search/dag_classic/node.h"
 
 namespace lczero {
-namespace classic {
+namespace dag_classic {
 
 ///////////////////////////
 // ChainedSearchStopper
@@ -98,8 +97,8 @@ const size_t kAvgNodeSize =
     sizeof(Node) + sizeof(LowNode) + sizeof(TranspositionTable::slot_type) +
     MemoryWatchingStopper::kAvgMovesPerPosition * sizeof(Edge);
 const size_t kAvgCacheItemSize =
-    NNCache::GetItemStructSize() + sizeof(CachedNNRequest) + sizeof(NNEval) +
-    sizeof(Edge) * MemoryWatchingStopper::kAvgMovesPerPosition;
+    3 * sizeof(float) + sizeof(std::unique_ptr<float[]>) +
+    sizeof(float[MemoryWatchingStopper::kAvgMovesPerPosition]);
 }  // namespace
 
 MemoryWatchingStopper::MemoryWatchingStopper(int cache_size, int ram_limit_mb,
@@ -269,5 +268,5 @@ bool SmartPruningStopper::ShouldStop(const IterationStats& stats,
   return false;
 }
 
-}  // namespace classic
+}  // namespace dag_classic
 }  // namespace lczero

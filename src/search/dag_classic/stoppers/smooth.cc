@@ -25,18 +25,18 @@
   Program grant you additional permission to convey the resulting work.
 */
 
-#include "search/classic/stoppers/smooth.h"
+#include "search/dag_classic/stoppers/smooth.h"
 
 #include <functional>
 #include <iomanip>
 #include <optional>
 
-#include "search/classic/stoppers/legacy.h"
-#include "search/classic/stoppers/stoppers.h"
+#include "search/dag_classic/stoppers/legacy.h"
+#include "search/dag_classic/stoppers/stoppers.h"
 #include "utils/mutex.h"
 
 namespace lczero {
-namespace classic {
+namespace dag_classic {
 namespace {
 
 class Params {
@@ -637,5 +637,5 @@ std::unique_ptr<TimeManager> MakeSmoothTimeManager(int64_t move_overhead,
   return std::make_unique<SmoothTimeManager>(move_overhead, params);
 }
 
-}  // namespace classic
+}  // namespace dag_classic
 }  // namespace lczero

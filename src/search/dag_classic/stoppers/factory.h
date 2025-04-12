@@ -1,6 +1,6 @@
 /*
   This file is part of Leela Chess Zero.
-  Copyright (C) 2020 The LCZero Authors
+  Copyright (C) 2019-2020 The LCZero Authors
 
   Leela Chess is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -27,14 +27,19 @@
 
 #pragma once
 
-#include "search/classic/stoppers/timemgr.h"
+#include "search/dag_classic/stoppers/common.h"
+#include "search/dag_classic/stoppers/timemgr.h"
 #include "utils/optionsdict.h"
+#include "utils/optionsparser.h"
 
 namespace lczero {
-namespace classic {
+namespace dag_classic {
 
-std::unique_ptr<TimeManager> MakeSmoothTimeManager(int64_t move_overhead,
-                                                   const OptionsDict& params);
+// Populates UCI/command line flags with time management options.
+void PopulateTimeManagementOptions(RunType for_what, OptionsParser* options);
 
-}  // namespace classic
+// Creates a new time manager for a new search.
+std::unique_ptr<TimeManager> MakeTimeManager(const OptionsDict& dict);
+
+}  // namespace dag_classic
 }  // namespace lczero

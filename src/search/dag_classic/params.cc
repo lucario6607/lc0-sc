@@ -25,7 +25,7 @@
   Program grant you additional permission to convey the resulting work.
 */
 
-#include "search/classic/params.h"
+#include "search/dag_classic/params.h"
 
 #include <algorithm>
 #include <cctype>
@@ -49,7 +49,7 @@
 #endif
 
 namespace lczero {
-namespace classic {
+namespace dag_classic {
 
 namespace {
 FillEmptyHistory EncodeHistoryFill(std::string history_fill) {
@@ -672,5 +672,5 @@ SearchParams::SearchParams(const OptionsDict& options)
           options.Get<float>(kMaxCollisionVisitsScalingPowerId)),
       kSearchSpinBackoff(options_.Get<bool>(kSearchSpinBackoffId)) {}
 
-}  // namespace classic
+}  // namespace dag_classic
 }  // namespace lczero

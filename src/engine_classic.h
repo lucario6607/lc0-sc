@@ -32,7 +32,7 @@
 #include "engine_loop.h"
 #include "neural/factory.h"
 #include "neural/memcache.h"
-#include "search/classic/search.h"
+#include "search/dag_classic/search.h"
 #include "syzygy/syzygy.h"
 #include "utils/mutex.h"
 
@@ -90,12 +90,12 @@ class EngineClassic : public EngineControllerBase {
   RpSharedMutex busy_mutex_;
   using SharedLock = std::shared_lock<RpSharedMutex>;
 
-  std::unique_ptr<classic::TimeManager> time_manager_;
-  std::unique_ptr<classic::Search> search_;
-  std::unique_ptr<classic::NodeTree> tree_;
+  std::unique_ptr<dag_classic::TimeManager> time_manager_;
+  std::unique_ptr<dag_classic::Search> search_;
+  std::unique_ptr<dag_classic::NodeTree> tree_;
   std::unique_ptr<SyzygyTablebase> syzygy_tb_;
   std::unique_ptr<Network> network_;
-  classic::TranspositionTable tt_;
+  dag_classic::TranspositionTable tt_;
   std::unique_ptr<CachingBackend> backend_;
 
   // Store current TB and network settings to track when they change so that

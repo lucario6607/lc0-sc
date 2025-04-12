@@ -26,13 +26,13 @@
 */
 
 #include "chess/gamestate.h"
-#include "search/classic/search.h"
-#include "search/classic/stoppers/factory.h"
+#include "search/dag_classic/search.h"
+#include "search/dag_classic/stoppers/factory.h"
 #include "search/register.h"
 #include "search/search.h"
 
 namespace lczero {
-namespace classic {
+namespace dag_classic {
 namespace {
 
 const OptionId kThreadsOptionId{
@@ -42,9 +42,9 @@ const OptionId kThreadsOptionId{
 const OptionId kClearTree{"", "ClearTree",
                           "Clear the tree before the next search."};
 
-class ClassicSearch : public SearchBase {
+class DagClassicSearch : public SearchBase {
  public:
-  ClassicSearch(UciResponder* responder, const OptionsDict* options)
+  DagClassicSearch(UciResponder* responder, const OptionsDict* options)
       : SearchBase(responder), options_(options) {}
 
  private:
@@ -65,10 +65,10 @@ class ClassicSearch : public SearchBase {
   }
 
   const OptionsDict* options_;
-  std::unique_ptr<classic::TimeManager> time_manager_;
-  std::unique_ptr<classic::Search> search_;
-  std::unique_ptr<classic::NodeTree> tree_;
-  classic::TranspositionTable tt_;
+  std::unique_ptr<dag_classic::TimeManager> time_manager_;
+  std::unique_ptr<dag_classic::Search> search_;
+  std::unique_ptr<dag_classic::NodeTree> tree_;
+  dag_classic::TranspositionTable tt_;
   std::optional<std::chrono::steady_clock::time_point> move_start_time_;
 };
 
@@ -90,26 +90,26 @@ MoveList StringsToMovelist(const std::vector<std::string>& moves,
   return result;
 }
 
-void ClassicSearch::NewGame() {
+void DagClassicSearch::NewGame() {
   tt_.clear();
   search_.reset();
   tree_.reset();
-  time_manager_ = classic::MakeTimeManager(*options_);
+  time_manager_ = dag_classic::MakeTimeManager(*options_);
 }
 
-void ClassicSearch::SetPosition(const GameState& pos) {
-  if (!tree_) tree_ = std::make_unique<classic::NodeTree>();
+void DagClassicSearch::SetPosition(const GameState& pos) {
+  if (!tree_) tree_ = std::make_unique<dag_classic::NodeTree>();
   const bool is_same_game = tree_->ResetToPosition(pos);
-  if (!is_same_game) time_manager_ = classic::MakeTimeManager(*options_);
+  if (!is_same_game) time_manager_ = dag_classic::MakeTimeManager(*options_);
 }
 
-void ClassicSearch::StartSearch(const GoParams& params) {
+void DagClassicSearch::StartSearch(const GoParams& params) {
   auto forwarder =
       std::make_unique<NonOwningUciRespondForwarder>(uci_responder_);
   if (options_->Get<Button>(kClearTree).TestAndReset()) tree_->TrimTreeAtHead();
 
   auto stopper = time_manager_->GetStopper(params, *tree_.get());
-  search_ = std::make_unique<classic::Search>(
+  search_ = std::make_unique<dag_classic::Search>(
       *tree_, backend_, std::move(forwarder),
       StringsToMovelist(params.searchmoves, tree_->HeadPosition().GetBoard()),
       *move_start_time_, std::move(stopper), params.infinite, params.ponder,
@@ -120,25 +120,25 @@ void ClassicSearch::StartSearch(const GoParams& params) {
   search_->StartThreads(options_->Get<int>(kThreadsOptionId));
 }
 
-class ClassicSearchFactory : public SearchFactory {
-  std::string_view GetName() const override { return "classic"; }
+class DagClassicSearchFactory : public SearchFactory {
+  std::string_view GetName() const override { return "dag-classic"; }
   std::unique_ptr<SearchBase> CreateSearch(
       UciResponder* responder, const OptionsDict* options) const override {
-    return std::make_unique<ClassicSearch>(responder, options);
+    return std::make_unique<DagClassicSearch>(responder, options);
   }
 
   void PopulateParams(OptionsParser* parser) const override {
     parser->Add<IntOption>(kThreadsOptionId, 0, 128) = 0;
-    classic::SearchParams::Populate(parser);
-    PopulateTimeManagementOptions(classic::RunType::kUci, parser);
+    dag_classic::SearchParams::Populate(parser);
+    PopulateTimeManagementOptions(dag_classic::RunType::kUci, parser);
 
     parser->Add<ButtonOption>(kClearTree);
     parser->HideOption(kClearTree);
   }
 };
 
-REGISTER_SEARCH(ClassicSearchFactory);
+REGISTER_SEARCH(DagClassicSearchFactory);
 
 }  // namespace
-}  // namespace classic
+}  // namespace dag_classic
 }  // namespace lczero

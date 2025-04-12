@@ -32,8 +32,8 @@
 #include <functional>
 
 #include "neural/shared_params.h"
-#include "search/classic/search.h"
-#include "search/classic/stoppers/factory.h"
+#include "search/dag_classic/search.h"
+#include "search/dag_classic/stoppers/factory.h"
 #include "utils/commandline.h"
 #include "utils/configfile.h"
 #include "utils/logging.h"
@@ -87,14 +87,14 @@ void EngineClassic::PopulateOptions(OptionsParser* options) {
   const bool is_simple =
       CommandLine::BinaryName().find("simple") != std::string::npos;
   options->Add<IntOption>(kThreadsOptionId, 0, 128) = 0;
-  classic::SearchParams::Populate(options);
+  dag_classic::SearchParams::Populate(options);
 
   if (is_simple) {
     options->HideAllOptions();
     options->UnhideOption(kThreadsOptionId);
     options->UnhideOption(SharedBackendParams::kWeightsId);
-    options->UnhideOption(classic::SearchParams::kContemptId);
-    options->UnhideOption(classic::SearchParams::kMultiPvId);
+    options->UnhideOption(dag_classic::SearchParams::kContemptId);
+    options->UnhideOption(dag_classic::SearchParams::kMultiPvId);
   }
   options->Add<StringOption>(kSyzygyTablebaseId);
   // Add "Ponder" option to signal to GUIs that we support pondering.
@@ -102,7 +102,7 @@ void EngineClassic::PopulateOptions(OptionsParser* options) {
   options->Add<BoolOption>(kPonderId) = true;
 
   PopulateTimeManagementOptions(
-      is_simple ? classic::RunType::kSimpleUci : classic::RunType::kUci,
+      is_simple ? dag_classic::RunType::kSimpleUci : dag_classic::RunType::kUci,
       options);
 
   options->Add<BoolOption>(kStrictUciTiming) = false;
@@ -189,14 +189,14 @@ void EngineClassic::SetupPosition(const std::string& fen,
 
   UpdateFromUciOptions();
 
-  if (!tree_) tree_ = std::make_unique<classic::NodeTree>();
+  if (!tree_) tree_ = std::make_unique<dag_classic::NodeTree>();
 
   const bool is_same_game = tree_->ResetToPosition(fen, moves_str);
   if (!is_same_game) CreateFreshTimeManager();
 }
 
 void EngineClassic::CreateFreshTimeManager() {
-  time_manager_ = classic::MakeTimeManager(options_);
+  time_manager_ = dag_classic::MakeTimeManager(options_);
 }
 
 namespace {
@@ -267,7 +267,7 @@ void EngineClassic::Go(const GoParams& params) {
   }
 
   auto stopper = time_manager_->GetStopper(params, *tree_.get());
-  search_ = std::make_unique<classic::Search>(
+  search_ = std::make_unique<dag_classic::Search>(
       *tree_, backend_.get(), std::move(responder),
       StringsToMovelist(params.searchmoves, tree_->HeadPosition().GetBoard()),
       *move_start_time_, std::move(stopper), params.infinite, params.ponder,

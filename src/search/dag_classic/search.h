@@ -39,15 +39,15 @@
 #include "chess/callbacks.h"
 #include "chess/uciloop.h"
 #include "neural/backend.h"
-#include "search/classic/node.h"
-#include "search/classic/params.h"
-#include "search/classic/stoppers/timemgr.h"
+#include "search/dag_classic/node.h"
+#include "search/dag_classic/params.h"
+#include "search/dag_classic/stoppers/timemgr.h"
 #include "syzygy/syzygy.h"
 #include "utils/logging.h"
 #include "utils/mutex.h"
 
 namespace lczero {
-namespace classic {
+namespace dag_classic {
 
 typedef std::vector<std::tuple<Node*, int, int>> BackupPath;
 
@@ -506,5 +506,5 @@ class SearchWorker {
   bool exiting_ = false;
 };
 
-}  // namespace classic
+}  // namespace dag_classic
 }  // namespace lczero
