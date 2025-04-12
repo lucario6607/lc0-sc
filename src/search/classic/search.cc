@@ -2070,9 +2070,7 @@ void SearchWorker::FetchSingleNodeResult(NodeToProcess* node_to_process)
   if (!node_to_process->is_tt_hit) {
     auto [tt_iter, is_tt_miss] = search_->tt_->insert(
         {node_to_process->hash, node_to_process->tt_low_node});
-
-    if (is_tt_miss) {
-      assert(!tt_iter->second.expired());
+    auto wdl_rescale = [&]() {
       if (params_.GetWDLRescaleRatio() != 1.0f ||
           (params_.GetWDLRescaleDiff() != 0.0f &&
            search_->contempt_mode_ != ContemptMode::NONE)) {
@@ -2088,27 +2086,17 @@ void SearchWorker::FetchSingleNodeResult(NodeToProcess* node_to_process)
                        : params_.GetWDLRescaleDiff(),
                    sign, false, params_.GetWDLMaxS());
       }
+    };
+    if (is_tt_miss) {
+      assert(!tt_iter->second.expired());
+      wdl_rescale();
       node_to_process->tt_low_node->SetNNEval(node_to_process->eval.get());
       node_to_process->tt_low_node->SortEdges();
     } else {
       auto tt_low_node = tt_iter->second.lock();
       if (!tt_low_node) {
         tt_iter->second = node_to_process->tt_low_node;
-        if (params_.GetWDLRescaleRatio() != 1.0f ||
-            (params_.GetWDLRescaleDiff() != 0.0f &&
-             search_->contempt_mode_ != ContemptMode::NONE)) {
-          // Check whether root moves are from the set perspective.
-          bool root_stm = search_->contempt_mode_ == ContemptMode::WHITE;
-          auto sign = (root_stm ^ node_to_process->history.IsBlackToMove())
-                          ? 1.0f
-                          : -1.0f;
-          WDLRescale(node_to_process->eval->q, node_to_process->eval->d,
-                     params_.GetWDLRescaleRatio(),
-                     search_->contempt_mode_ == ContemptMode::NONE
-                         ? 0
-                         : params_.GetWDLRescaleDiff(),
-                     sign, false, params_.GetWDLMaxS());
-        }
+        wdl_rescale();
         node_to_process->tt_low_node->SetNNEval(node_to_process->eval.get());
         node_to_process->tt_low_node->SortEdges();
       } else {
