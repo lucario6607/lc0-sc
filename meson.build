@@ -215,6 +215,7 @@ files += [
   'src/search/classic/stoppers/smooth.cc',
   'src/search/classic/stoppers/stoppers.cc',
   'src/search/classic/stoppers/timemgr.cc',
+  'src/search/classic/wrapper.cc',
   'src/search/register.cc',
   'src/utils/histogram.cc',
   'src/utils/numa.cc',
