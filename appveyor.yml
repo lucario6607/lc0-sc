@@ -6,14 +6,14 @@ image:
 environment:
   matrix:
   - NAME: gpu-nvidia-cudnn
-  - NAME: gpu-nvidia-cuda
-  - NAME: gpu-dx12
-  - NAME: gpu-opencl
-  - NAME: cpu-dnnl
-  - NAME: cpu-openblas
-  - NAME: onednn
-  - NAME: onnx-dml
-  - NAME: android
+#  - NAME: gpu-nvidia-cuda
+#  - NAME: gpu-dx12
+#  - NAME: gpu-opencl
+#  - NAME: cpu-dnnl
+#  - NAME: cpu-openblas
+#  - NAME: onednn
+#  - NAME: onnx-dml
+#  - NAME: android
 for:
 -
   matrix:
@@ -121,7 +121,7 @@ before_build:
 - cmd: SET F16C=true
 - cmd: IF %NAME%==cpu-openblas SET F16C=false
 - cmd: IF %CUDA%==true SET F16C=false
-- cmd: SET EXTRA=
+- cmd: SET EXTRA=-Dcc_cuda=30
 - cmd: IF %ANDROID%==false SET EXTRA=-Db_vscrt=md
 - cmd: IF %ONNX_DML%==true SET EXTRA=-Db_vscrt=md -Donnx_libdir=C:\cache\%ONNX_NAME%\lib -Donnx_include=C:\cache\%ONNX_NAME%\include
 - cmd: IF %ANDROID%==false meson build --backend vs2017 --buildtype release -Dgtest=%GTEST% -Dopencl=%OPENCL% -Dblas=%BUILD_BLAS% -Ddnnl=true -Ddx=%DX% -Dcudnn=%CUDNN% -Donednn=%ONEDNN% -Dispc_native_only=false -Dnative_cuda=false -Dpopcnt=%POPCNT% -Df16c=%F16C% -Dcudnn_include="%CUDA_PATH%\include","%CUDA_PATH%\cuda\include" -Dcudnn_libdirs="%CUDA_PATH%\lib\x64","%CUDA_PATH%\cuda\lib\x64" -Dopenblas_include="%PKG_FOLDER%\OpenBLAS\dist64\include" -Dopenblas_libdirs="%PKG_FOLDER%\OpenBLAS\dist64\lib" -Ddnnl_dir="%PKG_FOLDER%\%DNNL_NAME%" -Dopencl_include="%PKG_FOLDER%\opencl-nug.0.777.77\build\native\include" -Dopencl_libdirs="%PKG_FOLDER%\opencl-nug.0.777.77\build\native\lib\x64" -Ddefault_library=static -Dmalloc=mimalloc -Dmimalloc_libdir="%MIMALLOC_PATH%"\out\msvc-x64\Release %EXTRA%
