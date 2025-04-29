@@ -46,7 +46,10 @@ class DagClassicSearch : public SearchBase {
  public:
   DagClassicSearch(UciResponder* responder, const OptionsDict* options)
       : SearchBase(responder), options_(options) {}
-  ~DagClassicSearch() { search_.reset(); }
+  ~DagClassicSearch() {
+    SharedLock lock(busy_mutex_);
+    search_.reset();
+  }
 
  private:
   void NewGame() override;
@@ -71,6 +74,10 @@ class DagClassicSearch : public SearchBase {
   std::unique_ptr<NodeTree> tree_;
   TranspositionTable tt_;
   std::optional<std::chrono::steady_clock::time_point> move_start_time_;
+
+  RpSharedMutex busy_mutex_;
+  using SharedLock = std::shared_lock<RpSharedMutex>;
+
 };
 
 MoveList StringsToMovelist(const std::vector<std::string>& moves,
@@ -92,6 +99,7 @@ MoveList StringsToMovelist(const std::vector<std::string>& moves,
 }
 
 void DagClassicSearch::NewGame() {
+  SharedLock lock(busy_mutex_);
   tt_.clear();
   search_.reset();
   tree_.reset();
@@ -99,12 +107,14 @@ void DagClassicSearch::NewGame() {
 }
 
 void DagClassicSearch::SetPosition(const GameState& pos) {
+  SharedLock lock(busy_mutex_);
   if (!tree_) tree_ = std::make_unique<NodeTree>();
   const bool is_same_game = tree_->ResetToPosition(pos);
   if (!is_same_game) time_manager_ = MakeTimeManager(*options_);
 }
 
 void DagClassicSearch::StartSearch(const GoParams& params) {
+  SharedLock lock(busy_mutex_);
   auto forwarder =
       std::make_unique<NonOwningUciRespondForwarder>(uci_responder_);
   if (options_->Get<Button>(kClearTree).TestAndReset()) tree_->TrimTreeAtHead();
