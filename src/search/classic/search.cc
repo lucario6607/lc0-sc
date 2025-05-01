@@ -402,7 +402,7 @@ void Search::MaybeOutputInfo() {
            GetTimeSinceStart())) {
     SendUciInfo();
     if (params_.GetLogLiveStats()) {
-      SendMovesStats();
+//      SendMovesStats();
     }
     if (stop_.load(std::memory_order_acquire) && !ok_to_respond_bestmove_) {
       std::vector<ThinkingInfo> info(1);
@@ -654,7 +654,7 @@ void Search::MaybeTriggerStop(const IterationStats& stats,
       !bestmove_is_sent_) {
     SendUciInfo();
     EnsureBestMoveKnown();
-    SendMovesStats();
+//    SendMovesStats();
     BestMoveInfo info(final_bestmove_, final_pondermove_);
     uci_responder_->OutputBestMove(&info);
     stopper_->OnSearchDone(stats);
