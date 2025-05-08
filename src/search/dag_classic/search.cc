@@ -174,7 +174,7 @@ Search::Search(const NodeTree& tree, Backend* backend,
   // Evict expired entries from the transposition table.
   // Garbage collection may lead to expiration at any time so this is not
   // enough to prevent expired entries later during the search.
-  absl::erase_if(*tt_, [](const auto& item) { return item.second.expired(); });
+  std::erase_if(*tt_, [](const auto& item) { return item.second.expired(); });
 
   if (params_.GetMaxConcurrentSearchers() != 0) {
     pending_searchers_.store(params_.GetMaxConcurrentSearchers(),

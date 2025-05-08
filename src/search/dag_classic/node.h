@@ -27,14 +27,13 @@
 
 #pragma once
 
-#include <absl/container/flat_hash_map.h>
-
 #include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <iostream>
 #include <memory>
 #include <mutex>
+#include <unordered_map>
 
 #include "chess/board.h"
 #include "chess/callbacks.h"
@@ -817,7 +816,7 @@ inline VisitedNode_Iterator<false> Node::VisitedNodes() {
 }
 
 // Transposition Table type for holding references to all low nodes in DAG.
-typedef absl::flat_hash_map<uint64_t, std::weak_ptr<LowNode>>
+typedef std::unordered_map<uint64_t, std::weak_ptr<LowNode>>
     TranspositionTable;
 
 class NodeTree {
