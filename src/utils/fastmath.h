@@ -32,64 +32,20 @@
 #include <cstring>
 
 namespace lczero {
-// These stunts are performed by trained professionals, do not try this at home.
 
-// Fast approximate log2(x). Does no range checking.
-// The approximation used here is log2(2^N*(1+f)) ~ N+f*(1+k-k*f) where N is the
-// exponent and f the fraction (mantissa), f>=0. The constant k is used to tune
-// the approximation accuracy. In the final version some constants were slightly
-// modified for better accuracy with 32 bit floating point math.
-inline float FastLog2(const float a) {
-  uint32_t tmp;
-  std::memcpy(&tmp, &a, sizeof(float));
-  uint32_t expb = tmp >> 23;
-  tmp = (tmp & 0x7fffff) | (0x7f << 23);
-  float out;
-  std::memcpy(&out, &tmp, sizeof(float));
-  out -= 1.0f;
-  // Minimize max absolute error.
-  return out * (1.3465552f - 0.34655523f * out) - 127 + expb;
-}
+inline float FastLog2(const float a) { return std::log2(a); }
 
-// Fast approximate 2^x. Does only limited range checking.
-// The approximation used here is 2^(N+f) ~ 2^N*(1+f*(1-k+k*f)) where N is the
-// integer and f the fractional part, f>=0. The constant k is used to tune the
-// approximation accuracy. In the final version some constants were slightly
-// modified for better accuracy with 32 bit floating point math.
-inline float FastExp2(const float a) {
-  int32_t exp;
-  if (a < 0) {
-    if (a < -126) return 0.0;
-    // Not all compilers optimize floor, so we use (a-1) here to round down.
-    // This is obviously off-by-one for integer a, but fortunately the error
-    // correction term gives the exact value for 1 (by design, for continuity).
-    exp = static_cast<int32_t>(a - 1);
-  } else {
-    exp = static_cast<int32_t>(a);
-  }
-  float out = a - exp;
-  // Minimize max relative error.
-  out = 1.0f + out * (0.6602339f + 0.33976606f * out);
-  int32_t tmp;
-  std::memcpy(&tmp, &out, sizeof(float));
-  tmp += static_cast<int32_t>(static_cast<uint32_t>(exp) << 23);
-  std::memcpy(&out, &tmp, sizeof(float));
-  return out;
-}
+inline float FastExp2(const float a) { return std::exp2(a); }
 
-// Fast approximate ln(x). Does no range checking.
-inline float FastLog(const float a) {
-  return 0.6931471805599453f * FastLog2(a);
-}
+inline float FastLog(const float a) { return std::log(a); }
 
-// Fast approximate exp(x). Does only limited range checking.
-inline float FastExp(const float a) { return FastExp2(1.442695040f * a); }
+inline float FastExp(const float a) { return std::exp(a); }
 
-// Safeguarded fast logistic function, based on FastExp().
+// Safeguarded logistic function.
 inline float FastLogistic(const float a) {
   if (a > 20.0f) {return 1.0f;}
   if (a < -20.0f) {return 0.0f;}
-  return 1.0f / (1.0f + FastExp(-a));
+  return 1.0f / (1.0f + std::exp(-a));
 }
 
 inline float FastSign(const float a) {
