@@ -37,7 +37,6 @@
 #include <sstream>
 #include <thread>
 
-#include "neural/cache.h"
 #include "neural/encoder.h"
 #include "search/classic/node.h"
 #include "utils/fastmath.h"
@@ -516,8 +515,10 @@ std::vector<std::string> Search::GetVerboseStats(Node* node) const {
     std::optional<float> v;
     if (n && n->IsTerminal()) {
       v = n->GetQ(sign * draw_score);
-    } else {
-      std::optional<EvalResult> nneval = GetCachedNNEval(n);
+    } else if (n) {
+      auto history = GetPositionHistoryAtNode(n);
+      std::optional<EvalResult> nneval = backend_->GetCachedEvaluation(
+          EvalPosition{history.GetPositions(), {}});
       if (nneval) v = -nneval->q;
     }
     if (v) {
@@ -608,30 +609,6 @@ PositionHistory Search::GetPositionHistoryAtNode(const Node* node) const {
     history.Append(*it);
   }
   return history;
-}
-
-namespace {
-std::vector<Move> GetNodeLegalMoves(const Node* node, const ChessBoard& board) {
-  if (!node) return {};
-  std::vector<Move> moves;
-  if (node && node->HasChildren()) {
-    moves.reserve(node->GetNumEdges());
-    std::transform(node->Edges().begin(), node->Edges().end(),
-                   std::back_inserter(moves),
-                   [](const auto& edge) { return edge.GetMove(); });
-    return moves;
-  }
-  return board.GenerateLegalMoves();
-}
-}  // namespace
-
-std::optional<EvalResult> Search::GetCachedNNEval(const Node* node) const {
-  if (!node) return {};
-  PositionHistory history = GetPositionHistoryAtNode(node);
-  std::vector<Move> legal_moves =
-      GetNodeLegalMoves(node, history.Last().GetBoard());
-  return backend_->GetCachedEvaluation(
-      EvalPosition{history.GetPositions(), legal_moves});
 }
 
 void Search::MaybeTriggerStop(const IterationStats& stats,
@@ -2162,7 +2139,9 @@ int SearchWorker::PrefetchIntoCache(Node* node, int budget, bool is_odd_depth) {
 
 // 4. Run NN computation.
 // ~~~~~~~~~~~~~~~~~~~~~~
-void SearchWorker::RunNNComputation() { computation_->ComputeBlocking(); }
+void SearchWorker::RunNNComputation() {
+  if (computation_->UsedBatchSize() > 0) computation_->ComputeBlocking();
+}
 
 // 5. Retrieve NN computations (and terminal values) into nodes.
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
