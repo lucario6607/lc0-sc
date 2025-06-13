@@ -19,3 +19,8 @@ IF %PGO%==true (
 )
 cd ..
 IF %PGO%==true msbuild "C:\projects\lc0\build\lc0.sln" /m /p:WholeProgramOptimization=PGOptimize /p:DebugInformationFormat=ProgramDatabase /logger:"C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll"
+cd build
+IF %NAME%==onnx-dml perl -p -e "s/onnx-foo/onnx-dml/" lc0.exe >lc0-dml.exe
+IF %NAME%==onnx-dml perl -p -e "s/onnx-foo/onnx-trt/" lc0.exe >lc0-trt.exe
+IF %NAME%==onnx-dml del lc0.exe
+cd ..
