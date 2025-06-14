@@ -19,3 +19,8 @@ IF %PGO%==true (
 )
 cd ..
 IF %PGO%==true msbuild "C:\projects\lc0\build\lc0.sln" /m /p:WholeProgramOptimization=PGOptimize /p:DebugInformationFormat=ProgramDatabase /logger:"C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll"
+IF %NAME%==onnx-dml ren build\lc0.exe lc0-dml.exe
+IF %NAME%==onnx-dml (echo.#define DEFAULT_TRT_PRIORITY 64) > params_override.h
+IF %NAME%==onnx-dml IF %PGO%==true msbuild "C:\projects\lc0\build\lc0.sln" /m /p:WholeProgramOptimization=PGOptimize /p:DebugInformationFormat=ProgramDatabase /logger:"C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll"
+IF %NAME%==onnx-dml IF %PGO%==false msbuild "C:\projects\lc0\build\lc0.sln" /m /p:WholeProgramOptimization=true /logger:"C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll"
+IF %NAME%==onnx-dml ren build\lc0.exe lc0-trt.exe

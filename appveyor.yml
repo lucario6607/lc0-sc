@@ -5,15 +5,15 @@ image:
 - Visual Studio 2019
 environment:
   matrix:
-  - NAME: gpu-nvidia-cudnn
-  - NAME: gpu-nvidia-cuda
-#  - NAME: gpu-dx12
-#  - NAME: gpu-opencl
-  - NAME: cpu-dnnl
-  - NAME: cpu-openblas
-#  - NAME: onednn
+#  - NAME: gpu-nvidia-cudnn
+#  - NAME: gpu-nvidia-cuda
+##  - NAME: gpu-dx12
+##  - NAME: gpu-opencl
+#  - NAME: cpu-dnnl
+#  - NAME: cpu-openblas
+##  - NAME: onednn
   - NAME: onnx-dml
-  - NAME: android
+#  - NAME: android
 for:
 -
   matrix:
@@ -114,6 +114,7 @@ before_build:
 - cmd: git submodule update --init --recursive
 - cmd: IF %BLAS%==true (echo.#define DEFAULT_MAX_PREFETCH 0 & echo.#define DEFAULT_TASK_WORKERS 0) > params_override.h
 - cmd: IF %ANDROID%==true (echo.#define DEFAULT_MAX_PREFETCH 0 & echo.#define DEFAULT_TASK_WORKERS 0) > params_override.h
+- cmd: IF %NAME%==onnx-dml (echo.#define DEFAULT_TRT_PRIORITY 60) > params_override.h
 - cmd: SET BUILD_BLAS=%BLAS%
 - cmd: IF %OPENCL%==true SET BUILD_BLAS=true
 - cmd: IF %DX%==true SET BUILD_BLAS=true
@@ -139,7 +140,7 @@ after_build:
 - cmd: IF %APPVEYOR_REPO_TAG%==true IF %ANDROID%==true call scripts\appveyor_android_package.cmd
 - cmd: cd C:\projects\lc0
 artifacts:
-  - path: build/lc0.exe
+  - path: /build/lc0*.exe/
     name: lc0-$(NAME)
   - path: arm64-v8a/lc0
     name: lc0-android-arm64-v8a

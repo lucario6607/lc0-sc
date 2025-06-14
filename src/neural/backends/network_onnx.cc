@@ -51,6 +51,14 @@
 #include "utils/fp16_utils.h"
 #include "utils/logging.h"
 
+#if __has_include("params_override.h")
+#include "params_override.h"
+#endif
+
+#ifndef DEFAULT_TRT_PRIORITY
+#define DEFAULT_TRT_PRIORITY 60
+#endif
+
 namespace lczero {
 namespace {
 
@@ -505,7 +513,8 @@ REGISTER_NETWORK("onnx-rocm", MakeOnnxNetwork<OnnxProvider::ROCM>, 64)
 #ifdef USE_DML
 REGISTER_NETWORK("onnx-dml", MakeOnnxNetwork<OnnxProvider::DML>, 63)
 #endif
-REGISTER_NETWORK("onnx-trt", MakeOnnxNetwork<OnnxProvider::TRT>, 60)
+REGISTER_NETWORK("onnx-trt", MakeOnnxNetwork<OnnxProvider::TRT>,
+                 DEFAULT_TRT_PRIORITY)
 REGISTER_NETWORK("onnx-cuda", MakeOnnxNetwork<OnnxProvider::CUDA>, 61)
 REGISTER_NETWORK("onnx-cpu", MakeOnnxNetwork<OnnxProvider::CPU>, 62)
 
