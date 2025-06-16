@@ -1,27 +1,14 @@
 version: '{build}'
-configuration: Release
-platform: x64
-image:
-- Visual Studio 2019
+image: Visual Studio 2019
+clone_folder: c:\projects\lc0
 environment:
   matrix:
   - NAME: gpu-nvidia-cudnn
   - NAME: gpu-nvidia-cuda
-#  - NAME: gpu-dx12
-#  - NAME: gpu-opencl
   - NAME: cpu-dnnl
   - NAME: cpu-openblas
-#  - NAME: onednn
   - NAME: onnx-dml
   - NAME: android
-for:
--
-  matrix:
-    only:
-#    - NAME: gpu-opencl
-    - NAME: cpu-dnnl
-  skip_non_tags: true
-clone_folder: c:\projects\lc0
 install:
 - cmd: >-
     set CUDA=false
@@ -186,12 +173,12 @@ install:
 
     cd C:\projects\lc0
 cache:
-  - C:\cache
-  - 'C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v10.1'
-  - 'C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.1'
-  - C:\projects\lc0\subprojects\packagecache
-  - C:\ndk\android-ndk-r27c\toolchains\llvm\prebuilt\windows-x86_64
-before_build:
+- C:\cache
+- C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v10.1
+- C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.1
+- C:\projects\lc0\subprojects\packagecache
+- C:\ndk\android-ndk-r27c\toolchains\llvm\prebuilt\windows-x86_64
+build_script:
 - cmd: >-
     git submodule update --init --recursive
 
@@ -230,48 +217,18 @@ before_build:
     IF %ANDROID%==true meson arm64-v8a --buildtype release -Dgtest=false -Dopenblas_include="%PKG_FOLDER%\OpenBLAS\android-aarch64\include" -Dopenblas_libdirs="%PKG_FOLDER%\OpenBLAS\android-aarch64\lib" -Dembed=%EMBED% -Ddefault_library=static --cross-file crossfile-aarch64
 
     IF %ANDROID%==true meson armeabi-v7a --buildtype release -Dgtest=false -Dopenblas_include="%PKG_FOLDER%\OpenBLAS\android-armv7a\include" -Dopenblas_libdirs="%PKG_FOLDER%\OpenBLAS\android-armv7a\lib" -Dembed=%EMBED% -Ddefault_library=static --cross-file crossfile-armv7a -Dispc=false -Dneon=false
-build_script:
-- cmd: >-
+
     IF %ANDROID%==false call scripts\appveyor_win_build.cmd
 
     IF %ANDROID%==true call scripts\appveyor_android_build.cmd
 
     cd C:\projects\lc0
-after_build:
-- cmd: >-
+
     IF %APPVEYOR_REPO_TAG%==true IF %ANDROID%==false call scripts\appveyor_win_package.cmd
 
     IF %APPVEYOR_REPO_TAG%==true IF %ANDROID%==true call scripts\appveyor_android_package.cmd
 
     cd C:\projects\lc0
-artifacts:
-  - path: build/lc0.exe
-    name: lc0-$(NAME)
-  - path: arm64-v8a/lc0
-    name: lc0-android-arm64-v8a
-  - path: armeabi-v7a/lc0
-    name: lc0-android-armeabi-v7a
-  - path: /lc0*.zip/
-    name: lc0-$(APPVEYOR_REPO_TAG_NAME)-windows-$(NAME)-zip
-  - path: build/lc0.pdb
-    name: lc0-debug-symbols
-  - path: /lc0*.apk/
-    name: lc0-$(APPVEYOR_REPO_TAG_NAME)-android-apk
-  - path: dnnl.dll
-    name: dnnl-dll
-deploy:
-  - provider: GitHub
-    artifact: /.*\.zip/
-    auth_token:
-      secure: USFAdwQKTXqOXQjCYQfzWvzRpUhvqJLBkN4hbOg+j876vDxGZHt9bMYayb5evePp
-    on:
-      appveyor_repo_tag: true
-  - provider: GitHub
-    artifact: /.*\.apk/
-    auth_token:
-      secure: USFAdwQKTXqOXQjCYQfzWvzRpUhvqJLBkN4hbOg+j876vDxGZHt9bMYayb5evePp
-    on:
-      appveyor_repo_tag: true
 test_script:
 - cmd: >-
     IF %GTEST%==true cd build
@@ -281,6 +238,34 @@ test_script:
     IF %GTEST%==true meson test --print-errorlogs
 
     cd C:\projects\lc0
+artifacts:
+- path: build/lc0.exe
+  name: lc0-$(NAME)
+- path: arm64-v8a/lc0
+  name: lc0-android-arm64-v8a
+- path: armeabi-v7a/lc0
+  name: lc0-android-armeabi-v7a
+- path: /lc0*.zip/
+  name: lc0-$(APPVEYOR_REPO_TAG_NAME)-windows-$(NAME)-zip
+- path: build/lc0.pdb
+  name: lc0-debug-symbols
+- path: /lc0*.apk/
+  name: lc0-$(APPVEYOR_REPO_TAG_NAME)-android-apk
+- path: dnnl.dll
+  name: dnnl-dll
+deploy:
+- provider: GitHub
+  auth_token:
+    secure: SnXsRak2/nki+m7+JAnuTg==
+  artifact: /.*\.zip/
+  on:
+    appveyor_repo_tag: true
+- provider: GitHub
+  auth_token:
+    secure: SnXsRak2/nki+m7+JAnuTg==
+  artifact: /.*\.apk/
+  on:
+    appveyor_repo_tag: true
 on_finish:
 - cmd: >-
     IF %GTEST%==true cd C:\projects\lc0\build
