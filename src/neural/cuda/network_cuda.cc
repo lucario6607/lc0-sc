@@ -204,9 +204,11 @@ class CudaNetwork : public Network {
     attn_policy_ = file.format().network_format().policy() ==
                    pblczero::NetworkFormat::POLICY_ATTENTION;
 
-    // Mask out the multihead format bit 7.
-    attn_body_ = (file.format().network_format().network() & 127) ==
-                 pblczero::NetworkFormat::NETWORK_ATTENTIONBODY_WITH_HEADFORMAT;
+    attn_body_ =
+        file.format().network_format().network() ==
+            pblczero::NetworkFormat::NETWORK_ATTENTIONBODY_WITH_HEADFORMAT ||
+        file.format().network_format().network() ==
+            pblczero::NetworkFormat::NETWORK_ATTENTIONBODY_WITH_MULTIHEADFORMAT;
 
     max_batch_size_ = options.GetOrDefault<int>("max_batch", 1024);
 
@@ -1074,11 +1076,11 @@ std::unique_ptr<Network> MakeCudaNetwork(const std::optional<WeightsFile>& w,
         " backend requires a network file.");
   }
   const WeightsFile& weights = *w;
-  auto format = weights.format().network_format().network() & 127;
-  if ((weights.format().network_format().network() & 128) == 0 ||
-      (format != pblczero::NetworkFormat::NETWORK_CLASSICAL_WITH_HEADFORMAT &&
+  auto format = weights.format().network_format().network();
+  if (format != pblczero::NetworkFormat::NETWORK_CLASSICAL_WITH_HEADFORMAT &&
       format != pblczero::NetworkFormat::NETWORK_SE_WITH_HEADFORMAT &&
-      format != pblczero::NetworkFormat::NETWORK_ATTENTIONBODY_WITH_HEADFORMAT)) {
+      format != pblczero::NetworkFormat::NETWORK_ATTENTIONBODY_WITH_HEADFORMAT &&
+      format != pblczero::NetworkFormat::NETWORK_ATTENTIONBODY_WITH_MULTIHEADFORMAT) {
     throw Exception("Network format " +
                     pblczero::NetworkFormat::NetworkStructure_Name(
                         weights.format().network_format().network()) +
