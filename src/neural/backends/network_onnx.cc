@@ -278,8 +278,7 @@ void OnnxComputation<DataType>::ComputeBlocking() {
     // same to be true for the ROCm execution provider (at least for CNNs).
     // TODO: This may be a onnxruntime/ROCm bug, check onnxruntime 1.16 release.
     if (network_->provider_ == OnnxProvider::DML ||
-        network_->provider_ == OnnxProvider::ROCM ||
-        network_->provider_ == OnnxProvider::TRT) {
+        network_->provider_ == OnnxProvider::ROCM) {
       network_->lock_.lock();
     }
     network_->session_[step - 1].Run(
@@ -287,8 +286,7 @@ void OnnxComputation<DataType>::ComputeBlocking() {
         network_->outputs_cstr_.data(), output_tensors_.data(),
         output_tensors_.size());
     if (network_->provider_ == OnnxProvider::DML ||
-        network_->provider_ == OnnxProvider::ROCM ||
-        network_->provider_ == OnnxProvider::TRT) {
+        network_->provider_ == OnnxProvider::ROCM) {
       network_->lock_.unlock();
     }
     i += batch;
