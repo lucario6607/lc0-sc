@@ -36,7 +36,14 @@ using net_t = float;
 #include <string>
 #include <vector>
 
-#include "cl2.hpp"
+#if __has_include("CL/opencl.hpp")
+#include "CL/opencl.hpp"
+#elif __has_include("OpenCL/opencl.hpp")
+#include "OpenCL/opencl.hpp"
+#else
+#include "opencl.hpp"
+#endif
+
 #include "neural/backends/opencl/OpenCLBuffers.h"
 #include "neural/backends/opencl/OpenCLParams.h"
 
