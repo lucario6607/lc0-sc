@@ -436,11 +436,12 @@ OnnxNetwork::OnnxNetwork(const WeightsFile& file, const OptionsDict& opts,
     }
     DXGI_ADAPTER_DESC desc;
     if (!adapter->GetDesc(&desc)) {
-      std::wcout << "GPU: " << desc.Description << std::endl;
-      std::cout << "Vendor Id: " << std::hex << desc.VendorId << std::endl;
-      std::cout << "Device Id: " << desc.DeviceId << std::dec << std::endl;
+      CERR << "GPU: " << desc.Description;
+      CERR << "Vendor Id: " << std::hex << desc.VendorId;
+      CERR << "Device Id: " << desc.DeviceId << std::dec;
       auto memory = desc.DedicatedVideoMemory + desc.DedicatedSystemMemory +
                     desc.SharedSystemMemory;
+      CERR << "GPU memory: " << memory / std::pow(2.0f, 30) << " Gb";
       auto model_size = file.onnx_model().model().size();
       // We use 3 * model_size as an uppper limit to the memory required per
       // session. Measurements put the constant term between 1.6 and 2.6.
