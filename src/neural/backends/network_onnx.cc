@@ -41,6 +41,10 @@
 #define USE_DML
 #endif
 
+#if __has_include("cuda_runtime.h")
+#include "cuda_runtime.h"
+#endif
+
 #include "cpu_provider_factory.h"
 #include "neural/factory.h"
 #include "neural/loader.h"
@@ -100,10 +104,7 @@ class OnnxNetwork : public Network {
   const NetworkCapabilities& GetCapabilities() const override {
     return capabilities_;
   }
-  int GetMiniBatchSize() const override {
-    return batch_size_ == -1 ? Network::GetMiniBatchSize()
-                             : batch_size_ * steps_;
-  }
+  int GetMiniBatchSize() const override { return default_batch_size_; }
   bool IsCpu() const override { return provider_ == OnnxProvider::CPU; }
 
   Ort::SessionOptions GetOptions(int gpu, int threads, int batch_size);
@@ -130,6 +131,7 @@ class OnnxNetwork : public Network {
   int batch_size_;
   // The lower limit for variable batch size.
   int min_batch_size_;
+  int default_batch_size_;
   static constexpr int max_batch_size_ = 1024;
   // For conditional locking if running the DML/ROCM/TRT provider.
   OnnxProvider provider_;
@@ -463,6 +465,22 @@ OnnxNetwork::OnnxNetwork(const WeightsFile& file, const OptionsDict& opts,
     batch_size_ = max_batch_size_ / steps_;
   }
 
+  default_batch_size_ = Network::GetMiniBatchSize();
+#ifdef CUDART_VERSION
+  if (provider_ == OnnxProvider::CUDA || provider_ == OnnxProvider::TRT) {
+    cudaDeviceProp deviceProp = {};
+    if (!cudaGetDeviceProperties(&deviceProp, gpu)) {
+      CERR << "GPU: " << deviceProp.name;
+      CERR << "GPU memory: " << deviceProp.totalGlobalMem / std::pow(2.0f, 30)
+           << " Gb";
+      CERR << "GPU clock frequency: " << deviceProp.clockRate / 1e3f << " MHz";
+      default_batch_size_ = 2 * deviceProp.multiProcessorCount;
+    }
+  }
+#endif
+  if (batch_size_ != -1) {
+    default_batch_size_ = batch_size_ * steps_;
+  }
   const auto& md = file.onnx_model();
   if (!md.has_input_planes()) {
     throw Exception("NN doesn't have input planes defined.");
