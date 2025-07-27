@@ -419,7 +419,7 @@ OnnxNetwork::OnnxNetwork(const WeightsFile& file, const OptionsDict& opts,
   int default_batch_size = -1;
   int default_steps = 1;
 #ifdef USE_DML
-  if (kProvider == OnnxProvider::DML) {
+  if (provider == OnnxProvider::DML) {
     default_batch_size = 16;
     default_steps = 8;  // This is an upper limit.
 
@@ -439,9 +439,7 @@ OnnxNetwork::OnnxNetwork(const WeightsFile& file, const OptionsDict& opts,
       std::cout << "Device Id: " << desc.DeviceId << std::dec << std::endl;
       auto memory = desc.DedicatedVideoMemory + desc.DedicatedSystemMemory +
                     desc.SharedSystemMemory;
-      auto model_size = w->has_onnx_model()
-                            ? w->onnx_model().model().size()
-                            : converted.onnx_model().model().size();
+      auto model_size = file.onnx_model().model().size();
       // We use 3 * model_size as an uppper limit to the memory required per
       // session. Measurements put the constant term between 1.6 and 2.6.
       int max_step_size = memory / 2 / (3 * model_size);
