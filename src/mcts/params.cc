@@ -227,6 +227,12 @@ const OptionId SearchParams::kScLimitId{
     "search-contempt-node-limit", "ScLimit",
     "UCT until this number of nodes"
     "thompson sampling beyond this limit."};
+// START: ADDED FOR HYBRID SAMPLING
+const OptionId SearchParams::kHybridSamplingRatioId{
+    "hybrid-sampling-ratio", "HybridSamplingRatio",
+    "The ratio of Thompson Sampling to use in hybrid search-contempt mode. "
+    "1.0 is pure TS, 0.0 is pure PUCT."};
+// END: ADDED FOR HYBRID SAMPLING
 const OptionId SearchParams::kTempDecayMovesId{
     "tempdecay-moves", "TempDecayMoves",
     "Reduce temperature for every move after the first move, decreasing "
@@ -513,12 +519,15 @@ void SearchParams::Populate(OptionsParser* options) {
   options->Add<BoolOption>(kTwoFoldDrawsId) = true;
   options->Add<FloatOption>(kTemperatureId, 0.0f, 100.0f) = 0.0f;
   options->Add<IntOption>(kScLimitId, 1, 1000000000) = 1000000000;
+  // START: ADDED FOR HYBRID SAMPLING
+  options->Add<FloatOption>(kHybridSamplingRatioId, 0.0f, 1.0f) = 0.8f;
+  // END: ADDED FOR HYBRID SAMPLING
   options->Add<IntOption>(kTempDecayMovesId, 0, 640) = 0;
   options->Add<IntOption>(kTempDecayDelayMovesId, 0, 100) = 0;
   options->Add<IntOption>(kTemperatureCutoffMoveId, 0, 1000) = 0;
   options->Add<FloatOption>(kTemperatureEndgameId, 0.0f, 100.0f) = 0.0f;
   options->Add<FloatOption>(kTemperatureWinpctCutoffId, 0.0f, 100.0f) = 100.0f;
-  options->Add<FloatOption>(kTemperatureVisitOffsetId, -1000000.0f, 1000000.0f) =
+  options->Add<FloatOption>(kTemperatureVisitOffsetId, -1000.0f, 1000.0f) =
       0.0f;
   options->Add<FloatOption>(kNoiseEpsilonId, 0.0f, 1.0f) = 0.0f;
   options->Add<FloatOption>(kNoiseAlphaId, 0.0f, 10000000.0f) = 0.3f;
