@@ -128,35 +128,6 @@ Move Edge::GetMove(bool as_opponent) const {
 }
 
 // Policy priors (P) are stored in a compressed 16-bit format.
-//
-// Source values are 32-bit floats:
-// * bit 31 is sign (zero means positive)
-// * bit 30 is sign of exponent (zero means nonpositive)
-// * bits 29..23 are value bits of exponent
-// * bits 22..0 are significand bits (plus a "virtual" always-on bit: s ∈ [1,2))
-// The number is then sign * 2^exponent * significand, usually.
-// See https://www.h-schmidt.net/FloatConverter/IEEE754.html for details.
-//
-// In compressed 16-bit value we store bits 27..12:
-// * bit 31 is always off as values are always >= 0
-// * bit 30 is always off as values are always < 2
-// * bits 29..28 are only off for values < 4.6566e-10, assume they are always on
-// * bits 11..0 are for higher precision, they are dropped leaving only 11 bits
-//     of precision
-//
-// When converting to compressed format, bit 11 is added to in order to make it
-// a rounding rather than truncation.
-//
-// Out of 65556 possible values, 2047 are outside of [0,1] interval (they are in
-// interval (1,2)). This is fine because the values in [0,1] are skewed towards
-// 0, which is also exactly how the components of policy tend to behave (since
-// they add up to 1).
-
-// If the two assumed-on exponent bits (3<<28) are in fact off, the input is
-// rounded up to the smallest value with them on. We accomplish this by
-// subtracting the two bits from the input and checking for a negative result
-// (the subtraction works despite crossing from exponent to significand). This
-// is combined with the round-to-nearest addition (1<<11) into one op.
 void Edge::SetP(float p) {
   assert(0.0f <= p && p <= 1.0f);
   constexpr int32_t roundings = (1 << 11) - (3 << 28);
@@ -250,7 +221,7 @@ std::string Node::DebugString() const {
   oss << " Term:" << static_cast<int>(terminal_type_) << " This:" << this
       << " Parent:" << parent_ << " Index:" << index_
       << " Child:" << child_.get() << " Sibling:" << sibling_.get()
-      << " WL:" << wl_ << " N:" << n_ << " N_:" << n_in_flight_
+      << " WL:" << GetWL() << " D:" << GetD() << " N:" << n_ << " N_:" << n_in_flight_
       << " Edges:" << static_cast<int>(num_edges_)
       << " Bounds:" << static_cast<int>(lower_bound_) - 2 << ","
       << static_cast<int>(upper_bound_) - 2
@@ -317,18 +288,20 @@ void Node::MakeTerminal(GameResult result, float plies_left, Terminal type) {
   terminal_type_ = type;
   m_ = plies_left;
   if (result == GameResult::DRAW) {
-    wl_ = 0.0f;
-    d_ = 1.0f;
+    weighted_wl_sum_ = 0.0;
+    weighted_d_sum_ = 1.0;
   } else if (result == GameResult::WHITE_WON) {
-    wl_ = 1.0f;
-    d_ = 0.0f;
+    weighted_wl_sum_ = 1.0;
+    weighted_d_sum_ = 0.0;
   } else if (result == GameResult::BLACK_WON) {
-    wl_ = -1.0f;
-    d_ = 0.0f;
+    weighted_wl_sum_ = -1.0;
+    weighted_d_sum_ = 0.0;
     // Terminal losses have no uncertainty and no reason for their U value to be
     // comparable to another non-loss choice. Force this by clearing the policy.
     if (GetParent() != nullptr) GetOwnEdge()->SetP(0.0f);
   }
+  total_weight_ = 1.0; // Terminal node has a defined value with weight 1.
+  d_sum_ = static_cast<float>(weighted_d_sum_);
 }
 
 void Node::SetNodeLimitFrozen(bool value) {
@@ -358,24 +331,27 @@ void Node::SetVisitedNumberOfEdges(int value) {
 void Node::MakeNotTerminal() {
   terminal_type_ = Terminal::NonTerminal;
   n_ = 0;
+  weighted_wl_sum_ = 0.0;
+  weighted_d_sum_ = 0.0;
+  total_weight_ = 0.0;
+  d_sum_ = 0.0;
 
-  // If we have edges, we've been extended (1 visit), so include children too.
+  // If we have edges, we've been extended, so include children too.
   if (edges_) {
-    n_++;
+    // This node itself counts as one visit, but it has no Q value yet.
+    // It will be added during FinalizeScoreUpdate.
     for (const auto& child : Edges()) {
       const auto n = child.GetN();
       if (n > 0) {
+        // Here we do unweighted sum because this is a reset.
+        // The proper weighted sums will be rebuilt during subsequent searches.
         n_ += n;
-        // Flip Q for opponent.
-        // Default values don't matter as n is > 0.
-        wl_ += -child.GetWL(0.0f) * n;
-        d_ += child.GetD(0.0f) * n;
+        weighted_wl_sum_ += -child.GetWL() * n;
+        weighted_d_sum_ += child.GetD() * n;
+        total_weight_ += n;
+        d_sum_ += child.GetD() * n;
       }
     }
-
-    // Recompute with current eval (instead of network's) and children's eval.
-    wl_ /= n_;
-    d_ /= n_;
   }
 }
 
@@ -394,40 +370,59 @@ void Node::CancelScoreUpdate(int multivisit) {
   n_in_flight_ -= multivisit;
 }
 
-void Node::FinalizeScoreUpdate(float v, float d, float m, int multivisit) {
-  // Recompute Q.
-  wl_ += multivisit * (v - wl_) / (n_ + multivisit);
-  d_ += multivisit * (d - d_) / (n_ + multivisit);
-  m_ += multivisit * (m - m_) / (n_ + multivisit);
+void Node::FinalizeScoreUpdate(float v, float d, float m, int multivisit, float weight) {
+  const float weighted_multivisit = multivisit * weight;
 
-  // Increment N.
+  weighted_wl_sum_ += v * weighted_multivisit;
+  weighted_d_sum_ += d * weighted_multivisit;
+  total_weight_ += weighted_multivisit;
+  
+  d_sum_ += d * multivisit; // Keep unweighted sum for initial GetQ
+
+  // M and N are not weighted
+  if (n_ + multivisit > 0) {
+    m_ += multivisit * (m - m_) / (n_ + multivisit);
+  } else {
+    m_ = m;
+  }
   n_ += multivisit;
-  // Decrement virtual loss.
   n_in_flight_ -= multivisit;
 }
 
+
 void Node::AdjustForTerminal(float v, float d, float m, int multivisit) {
-  // Recompute Q.
-  wl_ += multivisit * v / n_;
-  d_ += multivisit * d / n_;
-  m_ += multivisit * m / n_;
+  // This function is less critical with weighted backprop, but for safety:
+  // Assume a weight of 1.0 for adjustments.
+  weighted_wl_sum_ += v * multivisit;
+  weighted_d_sum_ += d * multivisit;
+  total_weight_ += multivisit;
+  d_sum_ += d * multivisit;
+
+  if (n_ > 0) {
+      m_ += multivisit * m / n_;
+  }
 }
 
 void Node::RevertTerminalVisits(float v, float d, float m, int multivisit) {
-  // Compute new n_ first, as reducing a node to 0 visits is a special case.
   const int n_new = n_ - multivisit;
   if (n_new <= 0) {
-    // If n_new == 0, reset all relevant values to 0.
-    wl_ = 0.0;
-    d_ = 1.0;
+    weighted_wl_sum_ = 0.0;
+    weighted_d_sum_ = 0.0;
+    total_weight_ = 0.0;
+    d_sum_ = 0.0;
     m_ = 0.0;
     n_ = 0;
   } else {
-    // Recompute Q and M.
-    wl_ -= multivisit * (v - wl_) / n_new;
-    d_ -= multivisit * (d - d_) / n_new;
-    m_ -= multivisit * (m - m_) / n_new;
-    // Decrement N.
+    // This is an approximation as we don't know the original weights.
+    // Assume average weight for reverted visits.
+    const double avg_weight = total_weight_ / n_;
+    const double reverted_weight = multivisit * avg_weight;
+    
+    weighted_wl_sum_ -= v * reverted_weight;
+    weighted_d_sum_ -= d * reverted_weight;
+    total_weight_ -= reverted_weight;
+    d_sum_ -= d * multivisit;
+    m_ -= multivisit * m / n_new; // M is unweighted
     n_ -= multivisit;
   }
 }
