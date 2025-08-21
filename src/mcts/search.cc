@@ -168,6 +168,7 @@ Search::Search(const NodeTree& tree, Network* network,
       searchmoves_(searchmoves),
       start_time_(start_time),
       initial_visits_(root_node_->GetN()),
+      last_bestmove_change_playouts_{0},
       root_move_filter_(MakeRootMoveFilter(
           searchmoves_, syzygy_tb_, played_history_,
           params_.GetSyzygyFastPlay(), &tb_hits_, &root_is_in_dtz_)),
@@ -1125,6 +1126,15 @@ Search::~Search() {
 //////////////////////////////////////////////////////////////////////////////
 // SearchWorker
 //////////////////////////////////////////////////////////////////////////////
+
+// [SYSTEM.Weighting] Add new fields to NodeToProcess for weighting
+// This doesn't affect the main Node size, it's a temporary struct.
+void SearchWorker::NodeToProcess::SetSelectionMethod(
+    SelectionMethod method, float ratio) {
+  selection_method = method;
+  dynamic_hybrid_ratio = ratio;
+}
+
 
 void SearchWorker::RunTasks(int tid) {
   while (true) {
