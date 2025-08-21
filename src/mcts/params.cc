@@ -227,12 +227,53 @@ const OptionId SearchParams::kScLimitId{
     "search-contempt-node-limit", "ScLimit",
     "UCT until this number of nodes"
     "thompson sampling beyond this limit."};
-// START: ADDED FOR HYBRID SAMPLING
+// START: ADDED FOR ADVANCED SEARCH CONTEMPT
+const OptionId SearchParams::kHybridScalingFunctionId{
+    "hybrid-scaling-function", "HybridScalingFunction",
+    "Function to control the dynamic HybridSamplingRatio ('off', 'fixed', 'log', 'linear', 'steps', 'sigmoid', 'power', 'root', 'q_driven', 'recency_based', 'child_type_based', 'oscillating')."};
 const OptionId SearchParams::kHybridSamplingRatioId{
     "hybrid-sampling-ratio", "HybridSamplingRatio",
-    "The ratio of Thompson Sampling to use in hybrid search-contempt mode. "
-    "1.0 is pure TS, 0.0 is pure PUCT."};
-// END: ADDED FOR HYBRID SAMPLING
+    "The fixed ratio of Thompson Sampling to use. Used only when scaling function is 'fixed'."};
+const OptionId SearchParams::kHybridMinRatioId{
+    "hybrid-min-ratio", "HybridMinRatio",
+    "Minimum ratio for dynamic scaling functions (at ScLimit)."};
+const OptionId SearchParams::kHybridMaxRatioId{
+    "hybrid-max-ratio", "HybridMaxRatio",
+    "Maximum ratio for dynamic scaling functions."};
+const OptionId SearchParams::kHybridScalingFactorId{
+    "hybrid-scaling-factor", "HybridScalingFactor",
+    "Controls the speed/range/exponent of dynamic scaling."};
+
+const OptionId SearchParams::kPUCTWeightingFunctionId{
+    "puct-weighting-function", "PUCTWeightingFunction",
+    "Function to weight PUCT-path evaluations ('fixed', 'dynamic_complement', 'q_agreement_skeptical')."};
+const OptionId SearchParams::kPUCTWeightId{
+    "puct-weight", "PUCTWeight",
+    "Fixed weight for PUCT-path evals. Used only when PUCT weighting function is 'fixed'."};
+
+const OptionId SearchParams::kTSWeightingFunctionId{
+    "ts-weighting-function", "TSWeightingFunction",
+    "Function to weight TS-path evaluations ('off', 'fixed', 'fixed_pro', 'dynamic_growth', 'dynamic_pro_growth', 'dynamic_inverse', 'dynamic_complement_ts', 'q_agreement_skeptical', 'q_agreement_pro', 'policy_based', 'path_convergence_based', 'certainty_based')."};
+const OptionId SearchParams::kTSWeightId{
+    "ts-weight", "TSWeight",
+    "Fixed weight for TS-path evals. Used only for 'fixed' and 'fixed_pro' weighting functions."};
+const OptionId SearchParams::kTSMinWeightId{
+    "ts-min-weight", "TSMinWeight",
+    "Minimum weight for dynamic weighting functions."};
+const OptionId SearchParams::kTSMaxWeightId{
+    "ts-max-weight", "TSMaxWeight",
+    "Maximum weight for dynamic weighting functions."};
+const OptionId SearchParams::kWeightingScalingFactorId{
+    "weighting-scaling-factor", "WeightingScalingFactor",
+    "Controls the speed/range of dynamic weighting functions."};
+
+const OptionId SearchParams::kEnableRiskProfileId{
+    "enable-risk-profile", "EnableRiskProfile",
+    "If true, automatically adjust search strategy based on root Q-value."};
+const OptionId SearchParams::kEnableEntropyControlId{
+    "enable-entropy-control", "EnableEntropyControl",
+    "If true, automatically adjust search strategy based on NN policy entropy."};
+// END: ADDED FOR ADVANCED SEARCH CONTEMPT
 const OptionId SearchParams::kTempDecayMovesId{
     "tempdecay-moves", "TempDecayMoves",
     "Reduce temperature for every move after the first move, decreasing "
@@ -519,9 +560,34 @@ void SearchParams::Populate(OptionsParser* options) {
   options->Add<BoolOption>(kTwoFoldDrawsId) = true;
   options->Add<FloatOption>(kTemperatureId, 0.0f, 100.0f) = 0.0f;
   options->Add<IntOption>(kScLimitId, 1, 1000000000) = 1000000000;
-  // START: ADDED FOR HYBRID SAMPLING
+  // START: ADDED FOR ADVANCED SEARCH CONTEMPT
+  std::vector<std::string> scaling_functions = {
+      "off", "fixed", "log", "linear", "steps", "sigmoid", "power", "root", 
+      "q_driven", "recency_based", "child_type_based", "oscillating"};
+  options->Add<ChoiceOption>(kHybridScalingFunctionId, scaling_functions) = "fixed";
   options->Add<FloatOption>(kHybridSamplingRatioId, 0.0f, 1.0f) = 0.8f;
-  // END: ADDED FOR HYBRID SAMPLING
+  options->Add<FloatOption>(kHybridMinRatioId, 0.0f, 1.0f) = 0.5f;
+  options->Add<FloatOption>(kHybridMaxRatioId, 0.0f, 1.0f) = 0.9f;
+  options->Add<FloatOption>(kHybridScalingFactorId, 0.1f, 100.0f) = 4.0f;
+
+  std::vector<std::string> puct_weight_funcs = {
+      "fixed", "dynamic_complement", "q_agreement_skeptical"};
+  options->Add<ChoiceOption>(kPUCTWeightingFunctionId, puct_weight_funcs) = "fixed";
+  options->Add<FloatOption>(kPUCTWeightId, 0.0f, 10.0f) = 1.0f;
+
+  std::vector<std::string> ts_weight_funcs = {
+      "off", "fixed", "fixed_pro", "dynamic_growth", "dynamic_pro_growth",
+      "dynamic_inverse", "dynamic_complement_ts", "q_agreement_skeptical",
+      "q_agreement_pro", "policy_based", "path_convergence_based", "certainty_based"};
+  options->Add<ChoiceOption>(kTSWeightingFunctionId, ts_weight_funcs) = "fixed";
+  options->Add<FloatOption>(kTSWeightId, 0.0f, 10.0f) = 0.25f;
+  options->Add<FloatOption>(kTSMinWeightId, 0.0f, 10.0f) = 0.1f;
+  options->Add<FloatOption>(kTSMaxWeightId, 0.0f, 10.0f) = 0.75f;
+  options->Add<FloatOption>(kWeightingScalingFactorId, 0.1f, 100.0f) = 4.0f;
+
+  options->Add<BoolOption>(kEnableRiskProfileId) = false;
+  options->Add<BoolOption>(kEnableEntropyControlId) = false;
+  // END: ADDED FOR ADVANCED SEARCH CONTEMPT
   options->Add<IntOption>(kTempDecayMovesId, 0, 640) = 0;
   options->Add<IntOption>(kTempDecayDelayMovesId, 0, 100) = 0;
   options->Add<IntOption>(kTemperatureCutoffMoveId, 0, 1000) = 0;
