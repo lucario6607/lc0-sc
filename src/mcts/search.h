@@ -308,6 +308,10 @@ class SearchWorker {
 
  private:
   struct NodeToProcess {
+    // START: ADDED FOR WEIGHTED BACKPROPAGATION
+    enum class SelectionMethod { kPuct, kThompsonSampling };
+    // END: ADDED FOR WEIGHTED BACKPROPAGATION
+
     bool IsExtendable() const { return !is_collision && !node->IsTerminal(); }
     bool IsCollision() const { return is_collision; }
     bool CanEvalOutOfOrder() const {
@@ -332,6 +336,10 @@ class SearchWorker {
     bool is_cache_hit = false;
     bool is_collision = false;
     int probability_transform = 0;
+
+    // START: ADDED FOR WEIGHTED BACKPROPAGATION
+    SelectionMethod selection_method = SelectionMethod::kPuct;
+    // END: ADDED FOR WEIGHTED BACKPROPAGATION
 
     // Details only populated in the multigather path.
 
