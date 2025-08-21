@@ -167,11 +167,27 @@ class Node {
   uint32_t GetChildrenVisits() const { return n_ > 0 ? n_ - 1 : 0; }
   // Returns n = n_if_flight.
   int GetNStarted() const { return n_ + n_in_flight_; }
-  float GetQ(float draw_score) const { return wl_ + draw_score * d_; }
-  // Returns node eval, i.e. average subtree V for non-terminal node and -1/0/1
-  // for terminal nodes.
-  float GetWL() const { return wl_; }
-  float GetD() const { return d_; }
+
+  // START: MODIFIED FOR WEIGHTED BACKPROPAGATION
+  float GetQ(float draw_score) const {
+    // If there are no weighted visits, return an unweighted Q to avoid division by zero.
+    // This happens for newly created nodes before their first real evaluation.
+    if (total_weight_ < 1e-9) {
+      // D is unweighted, wl is 0 for new nodes.
+      return draw_score * (d_sum_ / (n_ > 0 ? n_ : 1.0f));
+    }
+    return static_cast<float>((weighted_wl_sum_ / total_weight_) + draw_score * (weighted_d_sum_ / total_weight_));
+  }
+  float GetWL() const {
+    if (total_weight_ < 1e-9) return 0.0f;
+    return static_cast<float>(weighted_wl_sum_ / total_weight_);
+  }
+  float GetD() const {
+    if (total_weight_ < 1e-9) return (d_sum_ / (n_ > 0 ? n_ : 1.0f));
+    return static_cast<float>(weighted_d_sum_ / total_weight_);
+  }
+  // END: MODIFIED FOR WEIGHTED BACKPROPAGATION
+  
   float GetM() const { return m_; }
 
   // Returns whether the node is known to be draw/lose/win.
@@ -221,12 +237,12 @@ class Node {
   bool TryStartScoreUpdate();
   // Decrements n-in-flight back.
   void CancelScoreUpdate(int multivisit);
+
+  // START: MODIFIED FOR WEIGHTED BACKPROPAGATION
   // Updates the node with newly computed value v.
-  // Updates:
-  // * Q (weighted average of all V in a subtree)
-  // * N (+=1)
-  // * N-in-flight (-=1)
-  void FinalizeScoreUpdate(float v, float d, float m, int multivisit);
+  void FinalizeScoreUpdate(float v, float d, float m, int multivisit, float weight);
+  // END: MODIFIED FOR WEIGHTED BACKPROPAGATION
+
   // Like FinalizeScoreUpdate, but it updates n existing visits by delta amount.
   void AdjustForTerminal(float v, float d, float m, int multivisit);
   // Revert visits to a node which ended in a now reverted terminal.
@@ -298,12 +314,14 @@ class Node {
   // to smallest.
 
   // 8 byte fields.
-  // Average value (from value head of neural network) of all visited nodes in
-  // subtree. For terminal nodes, eval is stored. This is from the perspective
-  // of the player who "just" moved to reach this position, rather than from the
-  // perspective of the player-to-move for the position.
-  // WL stands for "W minus L". Is equal to Q if draw score is 0.
-  double wl_ = 0.0f;
+  // START: MODIFIED FOR WEIGHTED BACKPROPAGATION
+  // Weighted sum of W-L values from all visited nodes in subtree.
+  double weighted_wl_sum_ = 0.0;
+  // Weighted sum of draw probabilities.
+  double weighted_d_sum_ = 0.0;
+  // Sum of all weights applied to backpropagations.
+  double total_weight_ = 0.0;
+  // END: MODIFIED FOR WEIGHTED BACKPROPAGATION
 
   // 8 byte fields on 64-bit platforms, 4 byte on 32-bit.
   // Array of edges.
@@ -318,9 +336,10 @@ class Node {
   std::unique_ptr<Node> sibling_;
 
   // 4 byte fields.
-  // Averaged draw probability. Works similarly to WL, except that D is not
-  // flipped depending on the side to move.
-  float d_ = 0.0f;
+  // START: MODIFIED FOR WEIGHTED BACKPROPAGATION
+  // Unweighted sum of draw probabilities. Needed for initialization and reverting terminals.
+  float d_sum_ = 0.0f;
+  // END: MODIFIED FOR WEIGHTED BACKPROPAGATION
   // Estimated remaining plies.
   float m_ = 0.0f;
   // How many completed visits this node had.
@@ -369,9 +388,9 @@ class Node {
 
 // A basic sanity check. This must be adjusted when Node members are adjusted.
 #if defined(__i386__) || (defined(__arm__) && !defined(__aarch64__))
-static_assert(sizeof(Node) == 48, "Unexpected size of Node for 32bit compile");
+static_assert(sizeof(Node) == 56, "Unexpected size of Node for 32bit compile");
 #else
-static_assert(sizeof(Node) == 64, "Unexpected size of Node");
+static_assert(sizeof(Node) == 80, "Unexpected size of Node");
 #endif
 
 // Contains Edge and Node pair and set of proxy functions to simplify access
