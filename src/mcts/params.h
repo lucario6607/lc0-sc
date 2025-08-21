@@ -68,9 +68,25 @@ class SearchParams {
   bool GetTwoFoldDraws() const { return kTwoFoldDraws; }
   float GetTemperature() const { return options_.Get<float>(kTemperatureId); }
   int GetScLimit() const { return options_.Get<int>(kScLimitId); }
-  // START: ADDED FOR HYBRID SAMPLING
+  // START: ADDED FOR ADVANCED SEARCH CONTEMPT
+  std::string GetHybridScalingFunction() const { return options_.Get<std::string>(kHybridScalingFunctionId); }
   float GetHybridSamplingRatio() const { return options_.Get<float>(kHybridSamplingRatioId); }
-  // END: ADDED FOR HYBRID SAMPLING
+  float GetHybridMinRatio() const { return options_.Get<float>(kHybridMinRatioId); }
+  float GetHybridMaxRatio() const { return options_.Get<float>(kHybridMaxRatioId); }
+  float GetHybridScalingFactor() const { return options_.Get<float>(kHybridScalingFactorId); }
+
+  std::string GetPUCTWeightingFunction() const { return options_.Get<std::string>(kPUCTWeightingFunctionId); }
+  float GetPUCTWeight() const { return options_.Get<float>(kPUCTWeightId); }
+
+  std::string GetTSWeightingFunction() const { return options_.Get<std::string>(kTSWeightingFunctionId); }
+  float GetTSWeight() const { return options_.Get<float>(kTSWeightId); }
+  float GetTSMinWeight() const { return options_.Get<float>(kTSMinWeightId); }
+  float GetTSMaxWeight() const { return options_.Get<float>(kTSMaxWeightId); }
+  float GetWeightingScalingFactor() const { return options_.Get<float>(kWeightingScalingFactorId); }
+
+  bool GetEnableRiskProfile() const { return options_.Get<bool>(kEnableRiskProfileId); }
+  bool GetEnableEntropyControl() const { return options_.Get<bool>(kEnableEntropyControlId); }
+  // END: ADDED FOR ADVANCED SEARCH CONTEMPT
   float GetTemperatureVisitOffset() const {
     return options_.Get<float>(kTemperatureVisitOffsetId);
   }
@@ -181,9 +197,22 @@ class SearchParams {
   static const OptionId kTwoFoldDrawsId;
   static const OptionId kTemperatureId;
   static const OptionId kScLimitId;
-  // START: ADDED FOR HYBRID SAMPLING
+  // START: ADDED FOR ADVANCED SEARCH CONTEMPT
+  static const OptionId kHybridScalingFunctionId;
   static const OptionId kHybridSamplingRatioId;
-  // END: ADDED FOR HYBRID SAMPLING
+  static const OptionId kHybridMinRatioId;
+  static const OptionId kHybridMaxRatioId;
+  static const OptionId kHybridScalingFactorId;
+  static const OptionId kPUCTWeightingFunctionId;
+  static const OptionId kPUCTWeightId;
+  static const OptionId kTSWeightingFunctionId;
+  static const OptionId kTSWeightId;
+  static const OptionId kTSMinWeightId;
+  static const OptionId kTSMaxWeightId;
+  static const OptionId kWeightingScalingFactorId;
+  static const OptionId kEnableRiskProfileId;
+  static const OptionId kEnableEntropyControlId;
+  // END: ADDED FOR ADVANCED SEARCH CONTEMPT
   static const OptionId kTempDecayMovesId;
   static const OptionId kTempDecayDelayMovesId;
   static const OptionId kTemperatureCutoffMoveId;
