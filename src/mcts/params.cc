@@ -230,7 +230,7 @@ const OptionId SearchParams::kScLimitId{
 // START: ADDED FOR ADVANCED SEARCH CONTEMPT
 const OptionId SearchParams::kHybridScalingFunctionId{
     "hybrid-scaling-function", "HybridScalingFunction",
-    "Function to control the dynamic HybridSamplingRatio ('off', 'fixed', 'log', 'linear', 'steps', 'sigmoid', 'power', 'root', 'q_driven', 'inverse_q_abs', 'recency_based', 'child_type_based', 'sawtooth_wave', 'gaussian_peak', 'step_decay')."};
+    "Function to control the dynamic HybridSamplingRatio ('off', 'fixed', 'log', 'linear', 'steps', 'sigmoid', 'power', 'root', 'q_driven', 'inverse_q_abs', 'recency_based', 'child_type_based', 'sawtooth_wave', 'gaussian_peak', 'step_decay', 'oscillating')."};
 const OptionId SearchParams::kHybridSamplingRatioId{
     "hybrid-sampling-ratio", "HybridSamplingRatio",
     "The fixed ratio of Thompson Sampling to use. Used only when scaling function is 'fixed'."};
@@ -253,7 +253,7 @@ const OptionId SearchParams::kPUCTWeightId{
 
 const OptionId SearchParams::kTSWeightingFunctionId{
     "ts-weighting-function", "TSWeightingFunction",
-    "Function to weight TS-path evaluations ('off', 'fixed', 'fixed_pro', 'dynamic_growth', 'dynamic_pro_growth', 'dynamic_inverse', 'dynamic_complement_ts', 'q_agreement_skeptical', 'q_agreement_pro', 'policy_based', 'path_convergence_based', 'certainty_based', 'reciprocal_n', 'q_swing_magnitude')."};
+    "Function to weight TS-path evaluations ('off', 'fixed', 'fixed_pro', 'dynamic_growth', 'dynamic_pro_growth', 'dynamic_inverse', 'dynamic_complement_ts', 'q_agreement_skeptical', 'q_agreement_pro', 'policy_based', 'path_convergence_based', 'certainty_based', 'historical_volatility_based', 'reciprocal_n', 'q_swing_magnitude')."};
 const OptionId SearchParams::kTSWeightId{
     "ts-weight", "TSWeight",
     "Fixed weight for TS-path evals. Used only for 'fixed' and 'fixed_pro' weighting functions."};
@@ -563,7 +563,7 @@ void SearchParams::Populate(OptionsParser* options) {
   // START: ADDED FOR ADVANCED SEARCH CONTEMPT
   std::vector<std::string> scaling_functions = {
       "off", "fixed", "log", "linear", "steps", "sigmoid", "power", "root", 
-      "q_driven", "inverse_q_abs", "recency_based", "child_type_based", "sawtooth_wave", "gaussian_peak", "step_decay"};
+      "q_driven", "inverse_q_abs", "recency_based", "child_type_based", "sawtooth_wave", "gaussian_peak", "step_decay", "oscillating"};
   options->Add<ChoiceOption>(kHybridScalingFunctionId, scaling_functions) = "fixed";
   options->Add<FloatOption>(kHybridSamplingRatioId, 0.0f, 1.0f) = 0.8f;
   options->Add<FloatOption>(kHybridMinRatioId, 0.0f, 1.0f) = 0.5f;
