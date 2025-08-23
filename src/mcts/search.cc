@@ -47,147 +47,6 @@
 
 namespace lczero {
 
-// ... (The file is unchanged up to SearchWorker::PickNodesToExtendTask) ...
-// ... I am omitting the unchanged parts for brevity, but they are included ...
-// ... in the final code block below. The only modified function is shown here ...
-
-void SearchWorker::PickNodesToExtendTask(
-    Node* node, int base_depth, int collision_limit,
-    const std::vector<Move>& moves_to_base,
-    std::vector<NodeToProcess>* receiver,
-    TaskWorkspace* workspace) NO_THREAD_SAFETY_ANALYSIS {
-  // ... (function setup is the same) ...
-
-  // [UNCHANGED CODE]...
-
-  current_path.push_back(-1);
-  while (current_path.size() > 0) {
-    // First prepare visits_to_perform.
-    if (current_path.back() == -1) {
-      // [UNCHANGED CODE]...
-      
-      bool is_opponent_node = ((current_path.size() + base_depth) % 2 == 1);
-
-      int opponent_node_limit = params_.GetScLimit();
-      int current_node_count = node->GetN();
-      bool node_limit_frozen = node->GetNodeLimitFrozen();
-      bool node_limit_frozen_lock = node->GetNodeLimitFrozenLock();
-
-      if (is_opponent_node && current_node_count > opponent_node_limit) {
-        if (!(node_limit_frozen)) {
-          if (!node_limit_frozen_lock) {
-            node->SetNodeLimitFrozenLock(true);
-            float sum_n = 0;
-            float sum_p = 0;
-            int indchild = 0;
-            for (Node* child : node->VisitedNodes()) {
-              sum_n = sum_n + child->GetN();
-              indchild++;
-            }
-            for (Node* child : node->VisitedNodes()) {
-              sum_p = sum_p + child->GetN() / sum_n;
-              child->GetOwnEdge()->SetP_frozen(sum_p);
-            }
-            node->SetNodeLimitFrozen(true);
-            node->SetVisitedNumberOfEdges(indchild);
-            node->SetNodeLimitFrozenLock(false);
-          }
-        }
-      }
-
-      node_limit_frozen = node->GetNodeLimitFrozen();
-      node_limit_frozen_lock = node->GetNodeLimitFrozenLock();
-
-      if (is_opponent_node && node_limit_frozen) {
-        // HYBRID SAMPLING: Get the ratio dynamically based on the selected mode and params.
-        const float hybrid_ratio = params_.GetDynamicHybridRatio(node->GetN());
-        
-        int ts_visits = static_cast<int>(std::round(static_cast<float>(cur_limit) * hybrid_ratio));
-        int puct_visits = cur_limit - ts_visits;
-
-        // --- Part 1: Thompson Sampling visits ---
-        if (ts_visits > 0) {
-            // [UNCHANGED TS LOGIC]
-            // ... (The code for performing Thompson Sampling visits) ...
-        }
-
-        // --- Part 2: PUCT visits ---
-        if (puct_visits > 0) {
-            // [UNCHANGED PUCT LOGIC, but now uses puct_visits as its limit]
-            // ... (The code for performing PUCT visits, using 'current_puct_limit = puct_visits') ...
-        }
-        
-        cur_limit = 0; // All visits have been allocated
-
-      } else {
-        // [UNCHANGED LOGIC FOR NORMAL PUCT SEARCH]
-        // ...
-      }
-      
-      // [UNCHANGED CODE]...
-    }
-    // [UNCHANGED CODE]...
-  }
-}
-
-// ... (Rest of the file is unchanged) ...
-
-}  // namespace lczero
-```
-
----
-Since the above snippet is just a conceptual illustration, here is the **full, complete, and final `search.cc` file** with the logic correctly integrated. I have added comments starting with `// DYNAMIC HYBRID:` to pinpoint the exact changes.
-
-```cpp
-/*
-  This file is part of Leela Chess Zero.
-  Copyright (C) 2018-2023 The LCZero Authors
-
-  Leela Chess is free software: you can redistribute it and/or modify
-  it under the terms of the GNU General Public License as published by
-  the Free Software Foundation, either version 3 of the License, or
-  (at your option) any later version.
-
-  Leela Chess is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU General Public License for more details.
-
-  You should have received a copy of the GNU General Public License
-  along with Leela Chess.  If not, see <http://www.gnu.org/licenses/>.
-
-  Additional permission under GNU GPL version 3 section 7
-
-  If you modify this Program, or any covered work, by linking or
-  combining it with NVIDIA Corporation's libraries from the NVIDIA CUDA
-  Toolkit and the NVIDIA CUDA Deep Neural Network library (or a
-  modified version of those libraries), containing parts covered by the
-  terms of the respective license agreement, the licensors of this
-  Program grant you additional permission to convey the resulting work.
-*/
-
-#include "mcts/search.h"
-
-#include <algorithm>
-#include <array>
-#include <chrono>
-#include <cmath>
-#include <iomanip>
-#include <iostream>
-#include <iterator>
-#include <random>
-#include <sstream>
-#include <thread>
-
-#include "mcts/node.h"
-#include "neural/cache.h"
-#include "neural/encoder.h"
-#include "utils/fastmath.h"
-#include "utils/random.h"
-#include "utils/spinhelper.h"
-
-namespace lczero {
-
 namespace {
 // Maximum delay between outputting "uci info" when nothing interesting happens.
 const int kUciInfoMinimumFrequencyMs = 5000;
@@ -1874,14 +1733,6 @@ void SearchWorker::PickNodesToExtendTask(
       // Cache all constant UCT parameters.
       // When we're near the leaves we can copy less of the policy, since there
       // is no way iteration will ever reach it.
-      // TODO: This is a very conservative formula. It assumes every visit we're
-      // aiming to add is going to trigger a new child, and that any visits
-      // we've already had have also done so and then a couple extra since we go
-      // to 2 unvisited to get second best in worst case.
-      // Unclear we can do better without having already walked the children.
-      // Which we are putting off until after policy is copied so we can create
-      // visited policy without having to cache it in the node (allowing the
-      // node to stay at 64 bytes).
       int max_needed = node->GetNumEdges();
       if (!is_root_node || root_move_filter.empty()) {
         max_needed = std::min(max_needed, node->GetNStarted() + cur_limit + 2);
@@ -2863,3 +2714,5 @@ void SearchWorker::UpdateCounters() {
 }
 
 }  // namespace lczero
+
+
