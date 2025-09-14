@@ -37,6 +37,7 @@
 namespace lczero {
 
 enum class ContemptMode { PLAY, WHITE, BLACK, NONE };
+enum class ContemptModeTB { NONE, ONLY_6_WINS, ONLY_WINS };
 
 // START: ADDED FOR DYNAMIC HYBRID RATIO
 enum class HybridRatioMode {
@@ -171,7 +172,7 @@ class SearchParams {
     assert(mode == "disable");
     return ContemptMode::NONE;
   }
-  bool GetContemptModeTBEnable() const { return kContemptModeTBEnable; }
+  ContemptModeTB GetContemptModeTB() const { return kContemptModeTB; }
   float GetWDLRescaleRatio() const { return kWDLRescaleParams.ratio; }
   float GetWDLRescaleDiff() const { return kWDLRescaleParams.diff; }
   float GetWDLMaxS() const { return kWDLMaxS; }
@@ -271,7 +272,7 @@ class SearchParams {
   static const OptionId kContemptModeId;
   static const OptionId kContemptId;
   static const OptionId kContemptMaxValueId;
-  static const OptionId kContemptModeTBEnableId;
+  static const OptionId kContemptModeTBId;
   static const OptionId kWDLCalibrationEloId;
   static const OptionId kWDLContemptAttenuationId;
   static const OptionId kWDLMaxSId;
@@ -337,7 +338,7 @@ class SearchParams {
   const int kMaxConcurrentSearchers;
   const float kDrawScore;
   const float kContempt;
-  const bool kContemptModeTBEnable;
+  const ContemptModeTB kContemptModeTB;
   const WDLRescaleParams kWDLRescaleParams;
   const float kWDLMaxS;
   const float kWDLEvalObjectivity;
