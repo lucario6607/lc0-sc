@@ -233,12 +233,6 @@ HybridRatioMode EncodeHybridRatioMode(const std::string& mode_str) {
 }
 // END: ADDED FOR DYNAMIC HYBRID RATIO
 
-ContemptModeTB ParseTBMode(const std::string& mode_str) {
-  if (mode_str == "disable") return ContemptModeTB::NONE;
-  if (mode_str == "win_only") return ContemptModeTB::ONLY_WINS;
-  return ContemptModeTB::ONLY_6_WINS;
-}
-
 }  // namespace
 
 const OptionId SearchParams::kMiniBatchSizeId{
@@ -497,10 +491,11 @@ const OptionId SearchParams::kContemptMaxValueId{
     "The maximum value of contempt used. Higher values will be capped."};
 const OptionId SearchParams::kContemptModeTBId{
     "contempt-mode-tb", "ContemptModeTB",
-    "Choose asymmetric tablebase probing method. Default is 'only_6_wins'. It "
-    "uses wins only for the playing side when 6 pieces. Any tablebase result "
-    "will be used when 5 or less pieces. 'only_wins' limits tablebase results "
-    "for any material count. 'disable' uses default tablebase probing method."
+    "Choose asymmetric tablebase probing method. If a position has greator or "
+    "eqaul number of piecese, probing uses only tablebase result on winning "
+    "positions. Setting it to 6 uses only winning information if position has "
+    "6 or more pieces. If a position has less pieces, tablebase is used to "
+    "avoid losing moves too. Setting it to 0 disables assymetric probe."
     };
 const OptionId SearchParams::kWDLCalibrationEloId{
     "wdl-calibration-elo", "WDLCalibrationElo",
@@ -694,8 +689,7 @@ void SearchParams::Populate(OptionsParser* options) {
   // separated kContemptId list will override this.
   options->Add<StringOption>(kContemptId) = "";
   options->Add<FloatOption>(kContemptMaxValueId, 0, 10000.0f) = 420.0f;
-  std::vector<std::string> mode_tb = {"disable", "only_6_wins", "only_wins"};
-  options->Add<ChoiceOption>(kContemptModeTBId, mode_tb) = "only_6_wins";
+  options->Add<IntOption>(kContemptModeTBId, 0, 9) = 6;
   options->Add<FloatOption>(kWDLCalibrationEloId, 0, 10000.0f) = 0.0f;
   options->Add<FloatOption>(kWDLContemptAttenuationId, -10.0f, 10.0f) = 1.0f;
   options->Add<FloatOption>(kWDLMaxSId, 0.0f, 10.0f) = 1.4f;
@@ -791,7 +785,7 @@ SearchParams::SearchParams(const OptionsDict& options)
       kContempt(GetContempt(options.Get<std::string>(kUCIOpponentId),
                             options.Get<std::string>(kContemptId),
                             options.Get<float>(kUCIRatingAdvId))),
-      kContemptModeTB(ParseTBMode(options.Get<std::string>(kContemptModeTBId))),
+      kContemptModeTB(options.Get<int>(kContemptModeTBId)),
       kWDLRescaleParams(
           options.Get<float>(kWDLCalibrationEloId) == 0
               ? AccurateWDLRescaleParams(
