@@ -322,6 +322,11 @@ class SearchWorker {
     float d;
     // Estimated remaining plies left.
     float m;
+    // TB result for assymetric TB probe. It is used to correct NN evaluation.
+    enum {
+      WDL_UNKNOWN,
+      WDL_DRAW,
+    } wdl = WDL_UNKNOWN;
     int multivisit = 0;
     // If greater than multivisit, and other parameters don't imply a lower
     // limit, multivist could be increased to this value without additional
@@ -455,7 +460,7 @@ class SearchWorker {
   void EnsureNodeTwoFoldCorrectForDepth(Node* node, int depth);
   void ProcessPickedTask(int batch_start, int batch_end,
                          TaskWorkspace* workspace);
-  void ExtendNode(Node* node, int depth, const std::vector<Move>& moves_to_add,
+  void ExtendNode(Node* node, NodeToProcess& picked_node,
                   PositionHistory* history);
   template <typename Computation>
   void FetchSingleNodeResult(NodeToProcess* node_to_process,
