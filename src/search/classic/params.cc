@@ -534,11 +534,15 @@ const OptionId BaseSearchParams::kGumbelScaleId{
     "gumbel-scale", "GumbelScale",
     "Scaling factor for the Gumbel noise term in Gumbel-MCTS."};
 
-void SearchParams::Populate(OptionsParser* options) {
-  BaseSearchParams::Populate(options);
-  options->Add<IntOption>(kMaxPrefetchBatchId, 0, 1024) = DEFAULT_MAX_PREFETCH;
-  options->Add<IntOption>(kSolidTreeThresholdId, 1, 2000000000) = 100;
-}
+const OptionId SearchParams::kMaxPrefetchBatchId{
+    "max-prefetch", "MaxPrefetch",
+    "When the engine cannot gather a large enough batch for immediate use, try "
+    "to prefetch up to X positions which are likely to be useful soon, and put "
+    "them into cache."};
+const OptionId SearchParams::kSolidTreeThresholdId{
+    "solid-tree-threshold", "SolidTreeThreshold",
+    "Only nodes with at least this number of visits will be considered for "
+    "solidification for improved cache locality."};
 
 void BaseSearchParams::Populate(OptionsParser* options) {
   // Here the uci optimized defaults" are set.
@@ -632,6 +636,12 @@ void BaseSearchParams::Populate(OptionsParser* options) {
   options->Add<BoolOption>(kSearchSpinBackoffId) = false;
   options->Add<BoolOption>(kUseGumbelSearchId) = false;
   options->Add<FloatOption>(kGumbelScaleId, 0.1f, 10.0f) = 1.0f;
+}
+
+void SearchParams::Populate(OptionsParser* options) {
+  BaseSearchParams::Populate(options);
+  options->Add<IntOption>(kMaxPrefetchBatchId, 0, 1024) = DEFAULT_MAX_PREFETCH;
+  options->Add<IntOption>(kSolidTreeThresholdId, 1, 2000000000) = 100;
 }
 
 BaseSearchParams::BaseSearchParams(const OptionsDict& options)
