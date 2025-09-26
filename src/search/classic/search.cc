@@ -623,7 +623,7 @@ void Search::MaybeTriggerStop(const IterationStats& stats,
   // Already responded bestmove, nothing to do here.
   if (bestmove_is_sent_) return;
   // Don't stop when the root node is not yet expanded.
-  if (total_playouts_ + initial_visits_ == 0) return;
+  if (stats.total_nodes == 0) return;
 
   if (!stop_.load(std::memory_order_acquire)) {
     if (stopper_->ShouldStop(stats, hints)) FireStopInternal();
@@ -1573,6 +1573,9 @@ void SearchWorker::PickNodesToExtendTask(
   auto& vtp_buffer = workspace->vtp_buffer;
   auto& visits_to_perform = workspace->visits_to_perform;
   visits_to_perform.clear();
+  auto& gumbel_noise_buffer = workspace->gumbel_noise_buffer;
+  auto& gumbel_noise_stack = workspace->gumbel_noise_stack;
+  gumbel_noise_stack.clear();
   auto& vtp_last_filled = workspace->vtp_last_filled;
   vtp_last_filled.clear();
   auto& current_path = workspace->current_path;
@@ -1663,6 +1666,15 @@ void SearchWorker::PickNodesToExtendTask(
       } else {
         visits_to_perform.push_back(std::make_unique<std::array<int, 256>>());
       }
+      if (params_.GetUseGumbelSearch()) {
+        if (gumbel_noise_buffer.size() > 0) {
+          gumbel_noise_stack.push_back(std::move(gumbel_noise_buffer.back()));
+          gumbel_noise_buffer.pop_back();
+        } else {
+          gumbel_noise_stack.push_back(
+              std::make_unique<std::array<float, 256>>());
+        }
+      }
       vtp_last_filled.push_back(-1);
 
       // Cache all constant UCT parameters.
@@ -1681,6 +1693,15 @@ void SearchWorker::PickNodesToExtendTask(
         max_needed = std::min(max_needed, node->GetNStarted() + cur_limit + 2);
       }
       node->CopyPolicy(max_needed, current_pol.data());
+      if (params_.GetUseGumbelSearch()) {
+        auto* gumbel_noise_array = gumbel_noise_stack.back().get()->data();
+        for (int i = 0; i < max_needed; i++) {
+          // Use epsilon to avoid log(0)
+          const float u =
+              Random::Get().GetFloat() + std::numeric_limits<float>::epsilon();
+          gumbel_noise_array[i] = -FastLog(-FastLog(u));
+        }
+      }
       for (int i = 0; i < max_needed; i++) {
         current_util[i] = std::numeric_limits<float>::lowest();
       }
@@ -1730,8 +1751,16 @@ void SearchWorker::PickNodesToExtendTask(
           int nstarted = current_nstarted[idx];
           const float util = current_util[idx];
           if (idx > cache_filled_idx) {
-            current_score[idx] =
-                current_pol[idx] * puct_mult / (1 + nstarted) + util;
+            if (params_.GetUseGumbelSearch()) {
+              const float gumbel_term =
+                  params_.GetGumbelScale() *
+                  (*gumbel_noise_stack.back())[idx] * puct_mult *
+                  current_pol[idx] / (1 + nstarted);
+              current_score[idx] = util + gumbel_term;
+            } else {
+              current_score[idx] =
+                  current_pol[idx] * puct_mult / (1 + nstarted) + util;
+            }
             cache_filled_idx++;
           }
           if (is_root_node) {
@@ -1814,9 +1843,18 @@ void SearchWorker::PickNodesToExtendTask(
             child_node->IncrementNInFlight(new_visits);
             current_nstarted[best_idx] += new_visits;
           }
-          current_score[best_idx] = current_pol[best_idx] * puct_mult /
-                                        (1 + current_nstarted[best_idx]) +
-                                    current_util[best_idx];
+          if (params_.GetUseGumbelSearch()) {
+            const float gumbel_term =
+                params_.GetGumbelScale() * (*gumbel_noise_stack.back())[best_idx] *
+                puct_mult * current_pol[best_idx] /
+                (1 + current_nstarted[best_idx]);
+            current_score[best_idx] = current_util[best_idx] + gumbel_term;
+          } else {
+            current_score[best_idx] =
+                current_pol[best_idx] * puct_mult /
+                    (1 + current_nstarted[best_idx]) +
+                current_util[best_idx];
+          }
         }
         if ((decremented &&
              (child_node->GetN() == 0 || child_node->IsTerminal()))) {
@@ -1903,6 +1941,10 @@ void SearchWorker::PickNodesToExtendTask(
       current_path.pop_back();
       vtp_buffer.push_back(std::move(visits_to_perform.back()));
       visits_to_perform.pop_back();
+      if (params_.GetUseGumbelSearch()) {
+        gumbel_noise_buffer.push_back(std::move(gumbel_noise_stack.back()));
+        gumbel_noise_stack.pop_back();
+      }
       vtp_last_filled.pop_back();
     }
   }
@@ -2377,3 +2419,4 @@ void SearchWorker::UpdateCounters() {
 
 }  // namespace classic
 }  // namespace lczero
+
