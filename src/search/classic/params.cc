@@ -33,6 +33,7 @@
 
 #include "neural/shared_params.h"
 #include "utils/exception.h"
+#include "utils/random.h"
 #include "utils/string.h"
 
 #if __has_include("params_override.h")
@@ -525,16 +526,19 @@ const OptionId BaseSearchParams::kUCIRatingAdvId{
 const OptionId BaseSearchParams::kSearchSpinBackoffId{
     "search-spin-backoff", "SearchSpinBackoff",
     "Enable backoff for the spin lock that acquires available searcher."};
+const OptionId BaseSearchParams::kUseGumbelSearchId{
+    "use-gumbel-search", "UseGumbelSearch",
+    "Use Gumbel-MCTS for node selection instead of PUCT. Promotes stochastic "
+    "exploration."};
+const OptionId BaseSearchParams::kGumbelScaleId{
+    "gumbel-scale", "GumbelScale",
+    "Scaling factor for the Gumbel noise term in Gumbel-MCTS."};
 
-const OptionId SearchParams::kMaxPrefetchBatchId{
-    "max-prefetch", "MaxPrefetch",
-    "When the engine cannot gather a large enough batch for immediate use, try "
-    "to prefetch up to X positions which are likely to be useful soon, and put "
-    "them into cache."};
-const OptionId SearchParams::kSolidTreeThresholdId{
-    "solid-tree-threshold", "SolidTreeThreshold",
-    "Only nodes with at least this number of visits will be considered for "
-    "solidification for improved cache locality."};
+void SearchParams::Populate(OptionsParser* options) {
+  BaseSearchParams::Populate(options);
+  options->Add<IntOption>(kMaxPrefetchBatchId, 0, 1024) = DEFAULT_MAX_PREFETCH;
+  options->Add<IntOption>(kSolidTreeThresholdId, 1, 2000000000) = 100;
+}
 
 void BaseSearchParams::Populate(OptionsParser* options) {
   // Here the uci optimized defaults" are set.
@@ -626,12 +630,8 @@ void BaseSearchParams::Populate(OptionsParser* options) {
   options->Add<StringOption>(kUCIOpponentId);
   options->Add<FloatOption>(kUCIRatingAdvId, -10000.0f, 10000.0f) = 0.0f;
   options->Add<BoolOption>(kSearchSpinBackoffId) = false;
-}
-
-void SearchParams::Populate(OptionsParser* options) {
-  BaseSearchParams::Populate(options);
-  options->Add<IntOption>(kMaxPrefetchBatchId, 0, 1024) = DEFAULT_MAX_PREFETCH;
-  options->Add<IntOption>(kSolidTreeThresholdId, 1, 2000000000) = 100;
+  options->Add<BoolOption>(kUseGumbelSearchId) = false;
+  options->Add<FloatOption>(kGumbelScaleId, 0.1f, 10.0f) = 1.0f;
 }
 
 BaseSearchParams::BaseSearchParams(const OptionsDict& options)
@@ -719,7 +719,9 @@ BaseSearchParams::BaseSearchParams(const OptionsDict& options)
           options.Get<int>(kMaxCollisionVisitsScalingEndId)),
       kMaxCollisionVisitsScalingPower(
           options.Get<float>(kMaxCollisionVisitsScalingPowerId)),
-      kSearchSpinBackoff(options_.Get<bool>(kSearchSpinBackoffId)) {}
+      kSearchSpinBackoff(options_.Get<bool>(kSearchSpinBackoffId)),
+      kUseGumbelSearch(options_.Get<bool>(kUseGumbelSearchId)),
+      kGumbelScale(options_.Get<float>(kGumbelScaleId)) {}
 
 SearchParams::SearchParams(const OptionsDict& options)
     : BaseSearchParams(options),
