@@ -158,6 +158,8 @@ class BaseSearchParams {
     return kMaxCollisionVisitsScalingPower;
   }
   bool GetSearchSpinBackoff() const { return kSearchSpinBackoff; }
+  bool GetUseGumbelSearch() const { return kUseGumbelSearch; }
+  float GetGumbelScale() const { return kGumbelScale; }
 
   // Search parameter IDs.
   static const OptionId kMiniBatchSizeId;
@@ -226,6 +228,8 @@ class BaseSearchParams {
   static const OptionId kUCIOpponentId;
   static const OptionId kUCIRatingAdvId;
   static const OptionId kSearchSpinBackoffId;
+  static const OptionId kUseGumbelSearchId;
+  static const OptionId kGumbelScaleId;
 
  protected:
   const OptionsDict& options_;
@@ -284,6 +288,8 @@ class BaseSearchParams {
   const int kMaxCollisionVisitsScalingEnd;
   const float kMaxCollisionVisitsScalingPower;
   const bool kSearchSpinBackoff;
+  const bool kUseGumbelSearch;
+  const float kGumbelScale;
 };
 
 class SearchParams : public BaseSearchParams {
