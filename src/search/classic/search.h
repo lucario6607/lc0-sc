@@ -355,6 +355,8 @@ class SearchWorker {
     std::array<Node::Iterator, 256> cur_iters;
     std::vector<std::unique_ptr<std::array<int, 256>>> vtp_buffer;
     std::vector<std::unique_ptr<std::array<int, 256>>> visits_to_perform;
+    std::vector<std::unique_ptr<std::array<float, 256>>> gumbel_noise_buffer;
+    std::vector<std::unique_ptr<std::array<float, 256>>> gumbel_noise_stack;
     std::vector<int> vtp_last_filled;
     std::vector<int> current_path;
     std::vector<Move> moves_to_path;
@@ -362,6 +364,8 @@ class SearchWorker {
     TaskWorkspace() {
       vtp_buffer.reserve(30);
       visits_to_perform.reserve(30);
+      gumbel_noise_buffer.reserve(30);
+      gumbel_noise_stack.reserve(30);
       vtp_last_filled.reserve(30);
       current_path.reserve(30);
       moves_to_path.reserve(30);
@@ -404,8 +408,8 @@ class SearchWorker {
   bool MaybeSetBounds(Node* p, float m, int* n_to_fix, float* v_delta,
                       float* d_delta, float* m_delta) const;
   void PickNodesToExtend(int collision_limit);
-  void PickNodesToExtendTask(Node* starting_point, int collision_limit,
-                             int base_depth,
+  void PickNodesToExtendTask(Node* starting_point, int base_depth,
+                             int collision_limit,
                              const std::vector<Move>& moves_to_base,
                              std::vector<NodeToProcess>* receiver,
                              TaskWorkspace* workspace);
@@ -431,7 +435,6 @@ class SearchWorker {
   PositionHistory history_;
   int number_out_of_order_ = 0;
   const SearchParams& params_;
-  std::unique_ptr<Node> precached_node_;
   const bool moves_left_support_;
   IterationStats iteration_stats_;
   StoppersHints latest_time_manager_hints_;
