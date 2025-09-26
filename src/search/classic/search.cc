@@ -1698,7 +1698,7 @@ void SearchWorker::PickNodesToExtendTask(
         for (int i = 0; i < max_needed; i++) {
           // Use epsilon to avoid log(0)
           const float u =
-              Random::Get().GetFloat() + std::numeric_limits<float>::epsilon();
+              Random::Get().GetFloat(1.0f) + std::numeric_limits<float>::epsilon();
           gumbel_noise_array[i] = -FastLog(-FastLog(u));
         }
       }
