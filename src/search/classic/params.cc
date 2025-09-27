@@ -525,21 +525,14 @@ const OptionId BaseSearchParams::kUCIRatingAdvId{
 const OptionId BaseSearchParams::kSearchSpinBackoffId{
     "search-spin-backoff", "SearchSpinBackoff",
     "Enable backoff for the spin lock that acquires available searcher."};
-const OptionId BaseSearchParams::kHistoryHeuristicEnableId{
-    "history-heuristic-enable", "HistoryHeuristicEnable",
-    "Enable a history heuristic, giving a small bonus to moves that have been "
-    "found to be good in other parts of the search tree.",
-    OptionId::kProOnly};
-const OptionId BaseSearchParams::kHistoryHeuristicBonusId{
-    "history-heuristic-bonus", "HistoryHeuristicBonus",
-    "The bonus to apply to a move's selection score when the history "
-    "heuristic is triggered.",
-    OptionId::kProOnly};
-const OptionId BaseSearchParams::kHistoryHeuristicQThresholdId{
-    "history-heuristic-q-threshold", "HistoryHeuristicQThreshold",
-    "The Q-value a child node must exceed (from the parent's perspective) to "
-    "trigger the history heuristic bonus for its move.",
-    OptionId::kProOnly};
+const OptionId BaseSearchParams::kSeePenaltyFactorId{
+    "see-penalty-factor", "SeePenaltyFactor",
+    "Penalty applied to the PUCT score of captures with negative SEE. This "
+    "discourages exploring tactically bad captures."};
+const OptionId BaseSearchParams::kHistoryBonusFactorId{
+    "history-bonus-factor", "HistoryBonusFactor",
+    "Bonus applied to the PUCT score of quiet moves that have proven "
+    "successful elsewhere in the search tree."};
 
 const OptionId SearchParams::kMaxPrefetchBatchId{
     "max-prefetch", "MaxPrefetch",
@@ -641,9 +634,8 @@ void BaseSearchParams::Populate(OptionsParser* options) {
   options->Add<StringOption>(kUCIOpponentId);
   options->Add<FloatOption>(kUCIRatingAdvId, -10000.0f, 10000.0f) = 0.0f;
   options->Add<BoolOption>(kSearchSpinBackoffId) = false;
-  options->Add<BoolOption>(kHistoryHeuristicEnableId) = false;
-  options->Add<FloatOption>(kHistoryHeuristicBonusId, 0.0f, 1.0f) = 0.01f;
-  options->Add<FloatOption>(kHistoryHeuristicQThresholdId, 0.0f, 1.0f) = 0.7f;
+  options->Add<FloatOption>(kSeePenaltyFactorId, 0.0f, 10.0f) = 0.5f;
+  options->Add<FloatOption>(kHistoryBonusFactorId, 0.0f, 10.0f) = 0.05f;
 }
 
 void SearchParams::Populate(OptionsParser* options) {
@@ -738,10 +730,8 @@ BaseSearchParams::BaseSearchParams(const OptionsDict& options)
       kMaxCollisionVisitsScalingPower(
           options.Get<float>(kMaxCollisionVisitsScalingPowerId)),
       kSearchSpinBackoff(options_.Get<bool>(kSearchSpinBackoffId)),
-      kHistoryHeuristicEnable(options.Get<bool>(kHistoryHeuristicEnableId)),
-      kHistoryHeuristicBonus(options.Get<float>(kHistoryHeuristicBonusId)),
-      kHistoryHeuristicQThreshold(
-          options.Get<float>(kHistoryHeuristicQThresholdId)) {}
+      kSeePenaltyFactor(options.Get<float>(kSeePenaltyFactorId)),
+      kHistoryBonusFactor(options.Get<float>(kHistoryBonusFactorId)) {}
 
 SearchParams::SearchParams(const OptionsDict& options)
     : BaseSearchParams(options),
