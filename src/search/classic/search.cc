@@ -195,6 +195,32 @@ Search::Search(const NodeTree& tree, Backend* backend,
                            : ContemptMode::WHITE;
     }
   }
+
+  // Initialize history table to zeros.
+  for(auto& val : main_history_) {
+    val.store(0, std::memory_order_relaxed);
+  }
+}
+
+void Search::UpdateHistory(Move m, bool is_black_to_move, int bonus) {
+  const int color_idx = is_black_to_move ? 1 : 0;
+  const int from_idx = m.GetFrom().AsInt();
+  const int to_idx = m.GetTo().AsInt();
+  const int idx = (color_idx * 64 + from_idx) * 64 + to_idx;
+  
+  // This is the update formula used in Stockfish:
+  // entry += bonus - entry * abs(bonus) / limit
+  // It gracefully decays the value towards zero.
+  auto& atomic_val = main_history_[idx];
+  int16_t current_val = atomic_val.load(std::memory_order_relaxed);
+  int32_t new_val32 = static_cast<int32_t>(current_val) + bonus -
+                      static_cast<int32_t>(current_val) * std::abs(bonus) / kHistoryLimit;
+  
+  // Clamp to int16_t range
+  int16_t new_val = static_cast<int16_t>(
+      std::clamp(new_val32, -kHistoryLimit, kHistoryLimit));
+
+  atomic_val.store(new_val, std::memory_order_relaxed);
 }
 
 namespace {
@@ -931,10 +957,10 @@ void Search::PopulateCommonIterationStats(IterationStats* stats) {
   SharedMutex::SharedLock nodes_lock(nodes_mutex_);
   {
     Mutex::Lock counters_lock(counters_mutex_);
-    stats->time_since_first_batch = GetTimeSinceFirstBatch();
     if (!nps_start_time_ && total_playouts_ > 0) {
       nps_start_time_ = std::chrono::steady_clock::now();
     }
+    stats->time_since_first_batch = GetTimeSinceFirstBatch();
   }
   stats->total_nodes = total_playouts_ + initial_visits_;
   stats->nodes_since_movestart = total_playouts_;
@@ -1255,6 +1281,10 @@ void SearchWorker::InitializeIteration(
   computation_ = std::move(computation);
   minibatch_.clear();
   minibatch_.reserve(2 * target_minibatch_size_);
+  main_workspace_.selection_pos = search_->played_history_.Last();
+  for (auto& ws : task_workspaces_) {
+    ws.selection_pos = search_->played_history_.Last();
+  }
 }
 
 // 2. Gather minibatch.
@@ -1630,7 +1660,7 @@ void SearchWorker::PickNodesToExtendTask(
           if (node->TryStartScoreUpdate()) {
             cur_limit -= 1;
             minibatch_.push_back(NodeToProcess::Visit(
-                node, static_cast<uint16_t>(current_path.size() + base_depth)));
+                node, static_cast<uint16_t>(current_path.size() + base_depth), false));
             completed_visits++;
           }
         }
@@ -1648,6 +1678,9 @@ void SearchWorker::PickNodesToExtendTask(
         }
         node = node->GetParent();
         current_path.pop_back();
+        if (node) {
+            workspace->selection_pos.undo_move(moves_to_path.back());
+        }
         continue;
       }
       if (is_root_node) {
@@ -1730,8 +1763,32 @@ void SearchWorker::PickNodesToExtendTask(
           int nstarted = current_nstarted[idx];
           const float util = current_util[idx];
           if (idx > cache_filled_idx) {
+            // Stockfish-inspired Heuristics: SEE and History
+            float see_penalty = 0.0f;
+            float history_bonus = 0.0f;
+            const Move& move = cur_iters[idx].GetMove();
+            const bool is_capture = workspace->selection_pos.IsCapture(move);
+
+            if (is_capture) {
+                // Apply SEE penalty for tactically losing captures
+                if (params_.GetSeePenaltyFactor() > 0.0f &&
+                    !workspace->selection_pos.StaticExchange(move, 0)) {
+                    see_penalty = params_.GetSeePenaltyFactor();
+                }
+            } else {
+                // Apply history bonus for promising quiet moves
+                if (params_.GetHistoryBonusFactor() > 0.0f) {
+                    const int color_idx = workspace->selection_pos.IsBlackToMove() ? 1 : 0;
+                    const int from_idx = move.GetFrom().AsInt();
+                    const int to_idx = move.GetTo().AsInt();
+                    const int history_idx = (color_idx * 64 + from_idx) * 64 + to_idx;
+                    const int16_t history_score = search_->main_history_[history_idx].load(std::memory_order_relaxed);
+                    history_bonus = params_.GetHistoryBonusFactor() * static_cast<float>(history_score) / Search::kHistoryLimit;
+                }
+            }
+
             current_score[idx] =
-                current_pol[idx] * puct_mult / (1 + nstarted) + util;
+                current_pol[idx] * puct_mult / (1 + nstarted) + util + history_bonus - see_penalty;
             cache_filled_idx++;
           }
           if (is_root_node) {
@@ -1746,20 +1803,14 @@ void SearchWorker::PickNodesToExtendTask(
               continue;
             }
             // If root move filter exists, make sure move is in the list.
-            if (!root_move_filter.empty() &&
+            if (!root_move_filter_.empty() &&
                 std::find(root_move_filter.begin(), root_move_filter.end(),
-                          cur_iters[idx].GetMove()) == root_move_filter.end()) {
+                          cur_iters[idx].GetMove()) == root_move_filter_.end()) {
               continue;
             }
           }
 
           float score = current_score[idx];
-          if (params_.GetHistoryHeuristicEnable()) {
-            const Move move = cur_iters[idx].GetMove();
-            score +=
-                search_->history_heuristic_table_[static_cast<int>(move.from()) * 64 + static_cast<int>(move.to())]
-                    .load(std::memory_order_relaxed);
-          }
           if (score > best) {
             second_best = best;
             second_best_edge = best_edge;
@@ -1829,9 +1880,12 @@ void SearchWorker::PickNodesToExtendTask(
           // Reduce 1 for the visits_to_perform to ensure the collision created
           // doesn't include this visit.
           (*visits_to_perform.back())[best_idx] -= 1;
+
+          const bool is_capture = workspace->selection_pos.IsCapture(best_edge.GetMove());
           receiver->push_back(NodeToProcess::Visit(
               child_node,
-              static_cast<uint16_t>(current_path.size() + 1 + base_depth)));
+              static_cast<uint16_t>(current_path.size() + 1 + base_depth), is_capture));
+
           completed_visits++;
           receiver->back().moves_to_visit.reserve(moves_to_path.size() + 1);
           receiver->back().moves_to_visit = moves_to_path;
@@ -1894,6 +1948,7 @@ void SearchWorker::PickNodesToExtendTask(
           } else {
             moves_to_path.back() = child.GetMove();
           }
+          workspace->selection_pos.do_move(child.GetMove());
           current_path.back() = idx;
           current_path.push_back(-1);
           node = child.GetOrSpawnNode(/* parent */ node);
@@ -1905,7 +1960,12 @@ void SearchWorker::PickNodesToExtendTask(
     }
     if (!found_child) {
       node = node->GetParent();
-      if (!moves_to_path.empty()) moves_to_path.pop_back();
+      if (!moves_to_path.empty()) {
+        if (node) { // if not back at root
+            workspace->selection_pos.undo_move(moves_to_path.back());
+        }
+        moves_to_path.pop_back();
+      }
       current_path.pop_back();
       vtp_buffer.push_back(std::move(visits_to_perform.back()));
       visits_to_perform.pop_back();
@@ -2218,10 +2278,6 @@ void SearchWorker::DoBackupUpdateSingleNode(
   auto update_parent_bounds =
       params_.GetStickyEndgames() && node->IsTerminal() && !node->GetN();
 
-  const bool history_heuristic_enabled = params_.GetHistoryHeuristicEnable();
-  const float history_q_threshold = params_.GetHistoryHeuristicQThreshold();
-  const float history_bonus = params_.GetHistoryHeuristicBonus();
-
   // Backup V value up to a root. After 1 visit, V = Q.
   float v = node_to_process.eval->q;
   float d = node_to_process.eval->d;
@@ -2234,6 +2290,19 @@ void SearchWorker::DoBackupUpdateSingleNode(
       static_cast<uint32_t>(params_.GetSolidTreeThreshold());
   for (Node *n = node, *p; n != search_->root_node_->GetParent(); n = p) {
     p = n->GetParent();
+    
+    // Update quiet move history if a quiet move led to a good result.
+    if (p && !node_to_process.is_capture && params_.GetHistoryBonusFactor() > 0.0f) {
+      // "Good result" is defined as the child's value being significantly
+      // better than the parent's current average value.
+      const float parent_q = p->GetQ(search_->GetDrawScore(p == search_->root_node_));
+      const float q_delta = -v - parent_q; // v is from child's perspective
+      if (q_delta > 0.05) { // Threshold to consider it a "good" move
+        const int bonus = static_cast<int>(300 * std::min(1.0f, q_delta));
+        search_->UpdateHistory(n->GetOwnEdge()->GetMove(), p->HeadPosition().IsBlackToMove(), bonus);
+      }
+    }
+
 
     // Current node might have become terminal from some other descendant, so
     // backup the rest of the way with more accurate values.
@@ -2269,23 +2338,6 @@ void SearchWorker::DoBackupUpdateSingleNode(
     // Q will be flipped for opponent.
     v = -v;
     v_delta = -v_delta;
-
-    if (history_heuristic_enabled && p != nullptr) {
-      // The value 'v' is now from the perspective of p, for child n.
-      if (v > history_q_threshold) {
-        const Move move = n->GetOwnEdge()->GetMove();
-        auto& atomic_bonus =
-            search_->history_heuristic_table_[static_cast<int>(move.from()) * 64 + static_cast<int>(move.to())];
-        // Atomic fetch-add for float using a CAS loop.
-        float current_bonus = atomic_bonus.load(std::memory_order_relaxed);
-        float new_bonus;
-        do {
-          new_bonus = current_bonus + history_bonus;
-        } while (!atomic_bonus.compare_exchange_weak(
-            current_bonus, new_bonus, std::memory_order_relaxed));
-      }
-    }
-
     m++;
 
     // Update the stats.
@@ -2404,3 +2456,5 @@ void SearchWorker::UpdateCounters() {
 
 }  // namespace classic
 }  // namespace lczero
+
+
