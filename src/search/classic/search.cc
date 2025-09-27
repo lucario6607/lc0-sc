@@ -1573,9 +1573,6 @@ void SearchWorker::PickNodesToExtendTask(
   auto& vtp_buffer = workspace->vtp_buffer;
   auto& visits_to_perform = workspace->visits_to_perform;
   visits_to_perform.clear();
-  auto& gumbel_noise_buffer = workspace->gumbel_noise_buffer;
-  auto& gumbel_noise_stack = workspace->gumbel_noise_stack;
-  gumbel_noise_stack.clear();
   auto& vtp_last_filled = workspace->vtp_last_filled;
   vtp_last_filled.clear();
   auto& current_path = workspace->current_path;
@@ -1666,15 +1663,6 @@ void SearchWorker::PickNodesToExtendTask(
       } else {
         visits_to_perform.push_back(std::make_unique<std::array<int, 256>>());
       }
-      if (params_.GetUseGumbelSearch()) {
-        if (gumbel_noise_buffer.size() > 0) {
-          gumbel_noise_stack.push_back(std::move(gumbel_noise_buffer.back()));
-          gumbel_noise_buffer.pop_back();
-        } else {
-          gumbel_noise_stack.push_back(
-              std::make_unique<std::array<float, 256>>());
-        }
-      }
       vtp_last_filled.push_back(-1);
 
       // Cache all constant UCT parameters.
@@ -1693,15 +1681,6 @@ void SearchWorker::PickNodesToExtendTask(
         max_needed = std::min(max_needed, node->GetNStarted() + cur_limit + 2);
       }
       node->CopyPolicy(max_needed, current_pol.data());
-      if (params_.GetUseGumbelSearch()) {
-        auto* gumbel_noise_array = gumbel_noise_stack.back().get()->data();
-        for (int i = 0; i < max_needed; i++) {
-          // Use epsilon to avoid log(0)
-          const float u =
-              Random::Get().GetFloat(1.0f) + std::numeric_limits<float>::epsilon();
-          gumbel_noise_array[i] = -FastLog(-FastLog(u));
-        }
-      }
       for (int i = 0; i < max_needed; i++) {
         current_util[i] = std::numeric_limits<float>::lowest();
       }
@@ -1751,16 +1730,8 @@ void SearchWorker::PickNodesToExtendTask(
           int nstarted = current_nstarted[idx];
           const float util = current_util[idx];
           if (idx > cache_filled_idx) {
-            if (params_.GetUseGumbelSearch()) {
-              const float gumbel_term =
-                  params_.GetGumbelScale() *
-                  (*gumbel_noise_stack.back())[idx] * puct_mult *
-                  current_pol[idx] / (1 + nstarted);
-              current_score[idx] = util + gumbel_term;
-            } else {
-              current_score[idx] =
-                  current_pol[idx] * puct_mult / (1 + nstarted) + util;
-            }
+            current_score[idx] =
+                current_pol[idx] * puct_mult / (1 + nstarted) + util;
             cache_filled_idx++;
           }
           if (is_root_node) {
@@ -1776,13 +1747,18 @@ void SearchWorker::PickNodesToExtendTask(
             }
             // If root move filter exists, make sure move is in the list.
             if (!root_move_filter.empty() &&
-                std::find(root_move_filter.begin(), root_move_filter.end(),
+                std::find(root_move_filter_.begin(), root_move_filter_.end(),
                           cur_iters[idx].GetMove()) == root_move_filter.end()) {
               continue;
             }
           }
 
           float score = current_score[idx];
+          if (params_.GetHistoryHeuristicEnable()) {
+            const Move move = cur_iters[idx].GetMove();
+            score += search_->history_heuristic_table_[move.from() * 64 + move.to()]
+                                .load(std::memory_order_relaxed);
+          }
           if (score > best) {
             second_best = best;
             second_best_edge = best_edge;
@@ -1843,18 +1819,9 @@ void SearchWorker::PickNodesToExtendTask(
             child_node->IncrementNInFlight(new_visits);
             current_nstarted[best_idx] += new_visits;
           }
-          if (params_.GetUseGumbelSearch()) {
-            const float gumbel_term =
-                params_.GetGumbelScale() * (*gumbel_noise_stack.back())[best_idx] *
-                puct_mult * current_pol[best_idx] /
-                (1 + current_nstarted[best_idx]);
-            current_score[best_idx] = current_util[best_idx] + gumbel_term;
-          } else {
-            current_score[best_idx] =
-                current_pol[best_idx] * puct_mult /
-                    (1 + current_nstarted[best_idx]) +
-                current_util[best_idx];
-          }
+          current_score[best_idx] = current_pol[best_idx] * puct_mult /
+                                        (1 + current_nstarted[best_idx]) +
+                                    current_util[best_idx];
         }
         if ((decremented &&
              (child_node->GetN() == 0 || child_node->IsTerminal()))) {
@@ -1941,10 +1908,6 @@ void SearchWorker::PickNodesToExtendTask(
       current_path.pop_back();
       vtp_buffer.push_back(std::move(visits_to_perform.back()));
       visits_to_perform.pop_back();
-      if (params_.GetUseGumbelSearch()) {
-        gumbel_noise_buffer.push_back(std::move(gumbel_noise_stack.back()));
-        gumbel_noise_stack.pop_back();
-      }
       vtp_last_filled.pop_back();
     }
   }
@@ -2254,6 +2217,10 @@ void SearchWorker::DoBackupUpdateSingleNode(
   auto update_parent_bounds =
       params_.GetStickyEndgames() && node->IsTerminal() && !node->GetN();
 
+  const bool history_heuristic_enabled = params_.GetHistoryHeuristicEnable();
+  const float history_q_threshold = params_.GetHistoryHeuristicQThreshold();
+  const float history_bonus = params_.GetHistoryHeuristicBonus();
+
   // Backup V value up to a root. After 1 visit, V = Q.
   float v = node_to_process.eval->q;
   float d = node_to_process.eval->d;
@@ -2301,6 +2268,23 @@ void SearchWorker::DoBackupUpdateSingleNode(
     // Q will be flipped for opponent.
     v = -v;
     v_delta = -v_delta;
+
+    if (history_heuristic_enabled && p != nullptr) {
+      // The value 'v' is now from the perspective of p, for child n.
+      if (v > history_q_threshold) {
+        const Move move = n->GetOwnEdge()->GetMove();
+        auto& atomic_bonus =
+            search_->history_heuristic_table_[move.from() * 64 + move.to()];
+        // Atomic fetch-add for float using a CAS loop.
+        float current_bonus = atomic_bonus.load(std::memory_order_relaxed);
+        float new_bonus;
+        do {
+          new_bonus = current_bonus + history_bonus;
+        } while (!atomic_bonus.compare_exchange_weak(
+            current_bonus, new_bonus, std::memory_order_relaxed));
+      }
+    }
+
     m++;
 
     // Update the stats.
@@ -2419,4 +2403,3 @@ void SearchWorker::UpdateCounters() {
 
 }  // namespace classic
 }  // namespace lczero
-
