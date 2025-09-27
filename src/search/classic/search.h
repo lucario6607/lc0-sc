@@ -197,6 +197,9 @@ class Search {
   std::vector<std::pair<Node*, int>> shared_collisions_
       GUARDED_BY(nodes_mutex_);
 
+  // History Heuristic table, indexed by [from_square * 64 + to_square].
+  std::array<std::atomic<float>, 64 * 64> history_heuristic_table_{};
+
   std::unique_ptr<UciResponder> uci_responder_;
   ContemptMode contempt_mode_;
   friend class SearchWorker;
@@ -355,8 +358,6 @@ class SearchWorker {
     std::array<Node::Iterator, 256> cur_iters;
     std::vector<std::unique_ptr<std::array<int, 256>>> vtp_buffer;
     std::vector<std::unique_ptr<std::array<int, 256>>> visits_to_perform;
-    std::vector<std::unique_ptr<std::array<float, 256>>> gumbel_noise_buffer;
-    std::vector<std::unique_ptr<std::array<float, 256>>> gumbel_noise_stack;
     std::vector<int> vtp_last_filled;
     std::vector<int> current_path;
     std::vector<Move> moves_to_path;
@@ -364,8 +365,6 @@ class SearchWorker {
     TaskWorkspace() {
       vtp_buffer.reserve(30);
       visits_to_perform.reserve(30);
-      gumbel_noise_buffer.reserve(30);
-      gumbel_noise_stack.reserve(30);
       vtp_last_filled.reserve(30);
       current_path.reserve(30);
       moves_to_path.reserve(30);
