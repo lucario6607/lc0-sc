@@ -158,11 +158,8 @@ class BaseSearchParams {
     return kMaxCollisionVisitsScalingPower;
   }
   bool GetSearchSpinBackoff() const { return kSearchSpinBackoff; }
-  bool GetHistoryHeuristicEnable() const { return kHistoryHeuristicEnable; }
-  float GetHistoryHeuristicBonus() const { return kHistoryHeuristicBonus; }
-  float GetHistoryHeuristicQThreshold() const {
-    return kHistoryHeuristicQThreshold;
-  }
+  float GetSeePenaltyFactor() const { return kSeePenaltyFactor; }
+  float GetHistoryBonusFactor() const { return kHistoryBonusFactor; }
 
   // Search parameter IDs.
   static const OptionId kMiniBatchSizeId;
@@ -231,9 +228,8 @@ class BaseSearchParams {
   static const OptionId kUCIOpponentId;
   static const OptionId kUCIRatingAdvId;
   static const OptionId kSearchSpinBackoffId;
-  static const OptionId kHistoryHeuristicEnableId;
-  static const OptionId kHistoryHeuristicBonusId;
-  static const OptionId kHistoryHeuristicQThresholdId;
+  static const OptionId kSeePenaltyFactorId;
+  static const OptionId kHistoryBonusFactorId;
 
  protected:
   const OptionsDict& options_;
@@ -292,9 +288,8 @@ class BaseSearchParams {
   const int kMaxCollisionVisitsScalingEnd;
   const float kMaxCollisionVisitsScalingPower;
   const bool kSearchSpinBackoff;
-  const bool kHistoryHeuristicEnable;
-  const float kHistoryHeuristicBonus;
-  const float kHistoryHeuristicQThreshold;
+  const float kSeePenaltyFactor;
+  const float kHistoryBonusFactor;
 };
 
 class SearchParams : public BaseSearchParams {
