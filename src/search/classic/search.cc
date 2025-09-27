@@ -1747,7 +1747,7 @@ void SearchWorker::PickNodesToExtendTask(
             }
             // If root move filter exists, make sure move is in the list.
             if (!root_move_filter.empty() &&
-                std::find(root_move_filter_.begin(), root_move_filter_.end(),
+                std::find(root_move_filter.begin(), root_move_filter.end(),
                           cur_iters[idx].GetMove()) == root_move_filter.end()) {
               continue;
             }
@@ -1756,8 +1756,9 @@ void SearchWorker::PickNodesToExtendTask(
           float score = current_score[idx];
           if (params_.GetHistoryHeuristicEnable()) {
             const Move move = cur_iters[idx].GetMove();
-            score += search_->history_heuristic_table_[move.from() * 64 + move.to()]
-                                .load(std::memory_order_relaxed);
+            score +=
+                search_->history_heuristic_table_[static_cast<int>(move.from()) * 64 + static_cast<int>(move.to())]
+                    .load(std::memory_order_relaxed);
           }
           if (score > best) {
             second_best = best;
@@ -2274,7 +2275,7 @@ void SearchWorker::DoBackupUpdateSingleNode(
       if (v > history_q_threshold) {
         const Move move = n->GetOwnEdge()->GetMove();
         auto& atomic_bonus =
-            search_->history_heuristic_table_[move.from() * 64 + move.to()];
+            search_->history_heuristic_table_[static_cast<int>(move.from()) * 64 + static_cast<int>(move.to())];
         // Atomic fetch-add for float using a CAS loop.
         float current_bonus = atomic_bonus.load(std::memory_order_relaxed);
         float new_bonus;
