@@ -138,6 +138,8 @@ class Search {
 
   PositionHistory GetPositionHistoryAtNode(const Node* node) const;
 
+  void UpdateHistory(Move m, bool is_black_to_move, int bonus);
+
   mutable Mutex counters_mutex_ ACQUIRED_AFTER(nodes_mutex_);
   // Tells all threads to stop.
   std::atomic<bool> stop_{false};
@@ -197,8 +199,10 @@ class Search {
   std::vector<std::pair<Node*, int>> shared_collisions_
       GUARDED_BY(nodes_mutex_);
 
-  // History Heuristic table, indexed by [from_square * 64 + to_square].
-  std::array<std::atomic<float>, 64 * 64> history_heuristic_table_{};
+  // Stockfish-style history table for quiet moves.
+  // Indexed by [color][from_sq][to_sq].
+  static constexpr int kHistoryLimit = 7183;
+  std::array<std::atomic<int16_t>, 2 * 64 * 64> main_history_{};
 
   std::unique_ptr<UciResponder> uci_responder_;
   ContemptMode contempt_mode_;
@@ -228,7 +232,6 @@ class SearchWorker {
     }
     for (int i = 0; i < task_workers_; i++) {
       task_workspaces_.emplace_back();
-      task_threads_.emplace_back([this, i]() { this->RunTasks(i); });
     }
     target_minibatch_size_ = params_.GetMiniBatchSize();
     if (target_minibatch_size_ == 0) {
@@ -238,6 +241,9 @@ class SearchWorker {
     max_out_of_order_ =
         std::max(1, static_cast<int>(params_.GetMaxOutOfOrderEvalsFactor() *
                                      target_minibatch_size_));
+    for (int i = 0; i < task_workers_; i++) {
+        task_threads_.emplace_back([this, i]() { this->RunTasks(i); });
+    }
   }
 
   ~SearchWorker() {
@@ -324,6 +330,7 @@ class SearchWorker {
     bool nn_queried = false;
     bool is_cache_hit = false;
     bool is_collision = false;
+    bool is_capture = false;
     // Only populated for visits,
     std::vector<Move> moves_to_visit;
 
@@ -332,25 +339,26 @@ class SearchWorker {
 
     static NodeToProcess Collision(Node* node, uint16_t depth,
                                    int collision_count) {
-      return NodeToProcess(node, depth, true, collision_count, 0);
+      return NodeToProcess(node, depth, true, collision_count, 0, false);
     }
     static NodeToProcess Collision(Node* node, uint16_t depth,
                                    int collision_count, int max_count) {
-      return NodeToProcess(node, depth, true, collision_count, max_count);
+      return NodeToProcess(node, depth, true, collision_count, max_count, false);
     }
-    static NodeToProcess Visit(Node* node, uint16_t depth) {
-      return NodeToProcess(node, depth, false, 1, 0);
+    static NodeToProcess Visit(Node* node, uint16_t depth, bool is_capture) {
+      return NodeToProcess(node, depth, false, 1, 0, is_capture);
     }
 
    private:
     NodeToProcess(Node* node, uint16_t depth, bool is_collision, int multivisit,
-                  int max_count)
+                  int max_count, bool is_capture)
         : node(node),
           eval(std::make_unique<EvalResult>()),
           multivisit(multivisit),
           maxvisit(max_count),
           depth(depth),
-          is_collision(is_collision) {}
+          is_collision(is_collision),
+          is_capture(is_capture) {}
   };
 
   // Holds per task worker scratch data
@@ -362,6 +370,7 @@ class SearchWorker {
     std::vector<int> current_path;
     std::vector<Move> moves_to_path;
     PositionHistory history;
+    Position selection_pos;
     TaskWorkspace() {
       vtp_buffer.reserve(30);
       visits_to_perform.reserve(30);
