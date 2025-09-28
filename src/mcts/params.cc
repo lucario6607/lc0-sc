@@ -489,6 +489,11 @@ const OptionId SearchParams::kContemptId{
 const OptionId SearchParams::kContemptMaxValueId{
     "contempt-max-value", "ContemptMaxValue",
     "The maximum value of contempt used. Higher values will be capped."};
+const OptionId SearchParams::kContemptModeTBEnableId{
+    "contempt-mode-tb-enable", "ContemptModeTBEnable",
+    "Use only our side winning when probing the tablebase. It modifies "
+    "tablebase lookup based ContemptMode. It has no effect if syzygy table "
+    "bases are missing."};
 const OptionId SearchParams::kWDLCalibrationEloId{
     "wdl-calibration-elo", "WDLCalibrationElo",
     "Elo of the active side, adjusted for time control relative to rapid."
@@ -587,6 +592,10 @@ const OptionId SearchParams::kUCIRatingAdvId{
 const OptionId SearchParams::kSearchSpinBackoffId{
     "search-spin-backoff", "SearchSpinBackoff",
     "Enable backoff for the spin lock that acquires available searcher."};
+const OptionId SearchParams::kOddDepthPenaltyFactorId{
+    "odd-depth-penalty-factor", "OddDepthPenaltyFactor",
+    "Factor 'k' for Q-value penalty at odd depths. Q_new = Q_old * (1 - depth * k). 0.0 to disable."};
+
 
 void SearchParams::Populate(OptionsParser* options) {
   // Here the uci optimized defaults" are set.
@@ -681,6 +690,7 @@ void SearchParams::Populate(OptionsParser* options) {
   // separated kContemptId list will override this.
   options->Add<StringOption>(kContemptId) = "";
   options->Add<FloatOption>(kContemptMaxValueId, 0, 10000.0f) = 420.0f;
+  options->Add<BoolOption>(kContemptModeTBEnableId) = true;
   options->Add<FloatOption>(kWDLCalibrationEloId, 0, 10000.0f) = 0.0f;
   options->Add<FloatOption>(kWDLContemptAttenuationId, -10.0f, 10.0f) = 1.0f;
   options->Add<FloatOption>(kWDLMaxSId, 0.0f, 10.0f) = 1.4f;
@@ -702,6 +712,7 @@ void SearchParams::Populate(OptionsParser* options) {
   options->Add<StringOption>(kUCIOpponentId);
   options->Add<FloatOption>(kUCIRatingAdvId, -10000.0f, 10000.0f) = 0.0f;
   options->Add<BoolOption>(kSearchSpinBackoffId) = false;
+  options->Add<FloatOption>(kOddDepthPenaltyFactorId, 0.0f, 0.1f) = 0.0f;
 
   options->HideOption(kNoiseEpsilonId);
   options->HideOption(kNoiseAlphaId);
@@ -776,6 +787,7 @@ SearchParams::SearchParams(const OptionsDict& options)
       kContempt(GetContempt(options.Get<std::string>(kUCIOpponentId),
                             options.Get<std::string>(kContemptId),
                             options.Get<float>(kUCIRatingAdvId))),
+      kContemptModeTBEnable(options.Get<bool>(kContemptModeTBEnableId)),
       kWDLRescaleParams(
           options.Get<float>(kWDLCalibrationEloId) == 0
               ? AccurateWDLRescaleParams(
@@ -815,6 +827,7 @@ SearchParams::SearchParams(const OptionsDict& options)
       kMaxCollisionVisitsScalingPower(
           options.Get<float>(kMaxCollisionVisitsScalingPowerId)),
       kSearchSpinBackoff(options_.Get<bool>(kSearchSpinBackoffId)),
+      kOddDepthPenaltyFactor(options.Get<float>(kOddDepthPenaltyFactorId)),
       // START: ADDED FOR DYNAMIC HYBRID RATIO
       kHybridRatioMode(EncodeHybridRatioMode(options.Get<std::string>(kHybridRatioModeId))),
       kHybridRatioSchedule(ParseHybridRatioSchedule(options.Get<std::string>(kHybridRatioScheduleId)))
@@ -963,3 +976,4 @@ float SearchParams::GetDynamicHybridRatio(int node_count) const {
 // END: ADDED FOR DYNAMIC HYBRID RATIO
 
 }  // namespace lczero
+
