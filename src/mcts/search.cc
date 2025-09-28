@@ -2182,6 +2182,11 @@ bool IsContemptModeTBEnabled(ContemptMode contempt_mode,
       /* unreachable */
       assert(false);
       return false;
+    default:
+      // This case should not be reached with the current enum,
+      // but it satisfies the compiler warning.
+      assert(false);
+      return false;
   }
 }
 
