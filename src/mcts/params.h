@@ -9,7 +9,7 @@
 
   Leela Chess is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  MERCHANTCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
   GNU General Public License for more details.
 
   You should have received a copy of the GNU General Public License
@@ -171,6 +171,7 @@ class SearchParams {
     assert(mode == "disable");
     return ContemptMode::NONE;
   }
+  bool GetContemptModeTBEnable() const { return kContemptModeTBEnable; }
   float GetWDLRescaleRatio() const { return kWDLRescaleParams.ratio; }
   float GetWDLRescaleDiff() const { return kWDLRescaleParams.diff; }
   float GetWDLMaxS() const { return kWDLMaxS; }
@@ -209,6 +210,7 @@ class SearchParams {
     return kMaxCollisionVisitsScalingPower;
   }
   bool GetSearchSpinBackoff() const { return kSearchSpinBackoff; }
+  float GetOddDepthPenaltyFactor() const { return kOddDepthPenaltyFactor; }
 
   // Search parameter IDs.
   static const OptionId kMiniBatchSizeId;
@@ -270,6 +272,7 @@ class SearchParams {
   static const OptionId kContemptModeId;
   static const OptionId kContemptId;
   static const OptionId kContemptMaxValueId;
+  static const OptionId kContemptModeTBEnableId;
   static const OptionId kWDLCalibrationEloId;
   static const OptionId kWDLContemptAttenuationId;
   static const OptionId kWDLMaxSId;
@@ -294,6 +297,7 @@ class SearchParams {
   static const OptionId kUCIOpponentId;
   static const OptionId kUCIRatingAdvId;
   static const OptionId kSearchSpinBackoffId;
+  static const OptionId kOddDepthPenaltyFactorId;
 
  private:
   const OptionsDict& options_;
@@ -335,6 +339,7 @@ class SearchParams {
   const int kMaxConcurrentSearchers;
   const float kDrawScore;
   const float kContempt;
+  const bool kContemptModeTBEnable;
   const WDLRescaleParams kWDLRescaleParams;
   const float kWDLMaxS;
   const float kWDLEvalObjectivity;
@@ -353,6 +358,7 @@ class SearchParams {
   const int kMaxCollisionVisitsScalingEnd;
   const float kMaxCollisionVisitsScalingPower;
   const bool kSearchSpinBackoff;
+  const float kOddDepthPenaltyFactor;
 
   // START: ADDED FOR DYNAMIC HYBRID RATIO
   const HybridRatioMode kHybridRatioMode;
