@@ -138,8 +138,6 @@ class Search {
 
   PositionHistory GetPositionHistoryAtNode(const Node* node) const;
 
-  void UpdateHistory(Move m, bool is_black_to_move, int bonus);
-
   mutable Mutex counters_mutex_ ACQUIRED_AFTER(nodes_mutex_);
   // Tells all threads to stop.
   std::atomic<bool> stop_{false};
@@ -199,11 +197,6 @@ class Search {
   std::vector<std::pair<Node*, int>> shared_collisions_
       GUARDED_BY(nodes_mutex_);
 
-  // Stockfish-style history table for quiet moves.
-  // Indexed by [color][from_sq][to_sq].
-  static constexpr int kHistoryLimit = 7183;
-  std::array<std::atomic<int16_t>, 2 * 64 * 64> main_history_{};
-
   std::unique_ptr<UciResponder> uci_responder_;
   ContemptMode contempt_mode_;
   friend class SearchWorker;
@@ -232,6 +225,7 @@ class SearchWorker {
     }
     for (int i = 0; i < task_workers_; i++) {
       task_workspaces_.emplace_back();
+      task_threads_.emplace_back([this, i]() { this->RunTasks(i); });
     }
     target_minibatch_size_ = params_.GetMiniBatchSize();
     if (target_minibatch_size_ == 0) {
@@ -241,9 +235,6 @@ class SearchWorker {
     max_out_of_order_ =
         std::max(1, static_cast<int>(params_.GetMaxOutOfOrderEvalsFactor() *
                                      target_minibatch_size_));
-    for (int i = 0; i < task_workers_; i++) {
-        task_threads_.emplace_back([this, i]() { this->RunTasks(i); });
-    }
   }
 
   ~SearchWorker() {
@@ -330,7 +321,6 @@ class SearchWorker {
     bool nn_queried = false;
     bool is_cache_hit = false;
     bool is_collision = false;
-    bool is_capture = false;
     // Only populated for visits,
     std::vector<Move> moves_to_visit;
 
@@ -339,26 +329,25 @@ class SearchWorker {
 
     static NodeToProcess Collision(Node* node, uint16_t depth,
                                    int collision_count) {
-      return NodeToProcess(node, depth, true, collision_count, 0, false);
+      return NodeToProcess(node, depth, true, collision_count, 0);
     }
     static NodeToProcess Collision(Node* node, uint16_t depth,
                                    int collision_count, int max_count) {
-      return NodeToProcess(node, depth, true, collision_count, max_count, false);
+      return NodeToProcess(node, depth, true, collision_count, max_count);
     }
-    static NodeToProcess Visit(Node* node, uint16_t depth, bool is_capture) {
-      return NodeToProcess(node, depth, false, 1, 0, is_capture);
+    static NodeToProcess Visit(Node* node, uint16_t depth) {
+      return NodeToProcess(node, depth, false, 1, 0);
     }
 
    private:
     NodeToProcess(Node* node, uint16_t depth, bool is_collision, int multivisit,
-                  int max_count, bool is_capture)
+                  int max_count)
         : node(node),
           eval(std::make_unique<EvalResult>()),
           multivisit(multivisit),
           maxvisit(max_count),
           depth(depth),
-          is_collision(is_collision),
-          is_capture(is_capture) {}
+          is_collision(is_collision) {}
   };
 
   // Holds per task worker scratch data
@@ -370,7 +359,6 @@ class SearchWorker {
     std::vector<int> current_path;
     std::vector<Move> moves_to_path;
     PositionHistory history;
-    Position selection_pos;
     TaskWorkspace() {
       vtp_buffer.reserve(30);
       visits_to_perform.reserve(30);
@@ -412,6 +400,9 @@ class SearchWorker {
   NodeToProcess PickNodeToExtend(int collision_limit);
   int PrefetchIntoCache(Node* node, int budget, bool is_odd_depth);
   void DoBackupUpdateSingleNode(const NodeToProcess& node_to_process);
+  // HYBRID SEARCH: New methods for the hybrid backup phase.
+  void RunHybridMinimaxPass();
+  void RecursiveHybridUpdate(Node* node);
   // Returns whether a node's bounds were set based on its children.
   bool MaybeSetBounds(Node* p, float m, int* n_to_fix, float* v_delta,
                       float* d_delta, float* m_delta) const;
