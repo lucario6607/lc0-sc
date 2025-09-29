@@ -365,6 +365,32 @@ void Node::FinalizeScoreUpdate(float v, float d, float m, int multivisit) {
   n_in_flight_ -= multivisit;
 }
 
+// HYBRID SEARCH: New method to blend a minimax evaluation into the node's score.
+// This is the "hybrid trick". We treat the minimax result as one additional,
+// powerful visit that pulls the average towards the sharp tactical value.
+void Node::BlendMinimaxEval(const Eval& minimax_eval) {
+    if (n_ == 0) {
+        // If the node has no real visits, the minimax value becomes the primary value.
+        wl_ = minimax_eval.wl;
+        d_ = minimax_eval.d;
+        m_ = minimax_eval.ml;
+    } else {
+        // Calculate the new total value (W) by adding the minimax value.
+        double total_wl = wl_ * n_ + minimax_eval.wl;
+        double total_d = d_ * n_ + minimax_eval.d;
+        double total_m = m_ * n_ + minimax_eval.ml;
+
+        // The new visit count is the old count plus one "virtual visit" from minimax.
+        uint32_t new_n = n_ + 1;
+
+        // Recompute the average.
+        wl_ = total_wl / new_n;
+        d_ = total_d / new_n;
+        m_ = total_m / new_n;
+    }
+}
+
+
 void Node::AdjustForTerminal(float v, float d, float m, int multivisit) {
   // Recompute Q.
   wl_ += multivisit * v / n_;
