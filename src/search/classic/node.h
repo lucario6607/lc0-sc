@@ -32,6 +32,7 @@
 #include <iostream>
 #include <memory>
 #include <mutex>
+#include <atomic> // HYBRID SEARCH: Added for atomic flag
 
 #include "chess/board.h"
 #include "chess/callbacks.h"
@@ -138,7 +139,8 @@ class Node {
         terminal_type_(Terminal::NonTerminal),
         lower_bound_(GameResult::BLACK_WON),
         upper_bound_(GameResult::WHITE_WON),
-        solid_children_(false) {}
+        solid_children_(false),
+        is_minimax_dirty_(false) {} // HYBRID SEARCH: Initialize dirty flag
 
   // We have a custom destructor, but its behavior does not need to be emulated
   // during move operations so default is fine.
@@ -217,6 +219,14 @@ class Node {
   // or visiting terminal nodes several times), it amplifies the visit by
   // incrementing n_in_flight.
   void IncrementNInFlight(int multivisit) { n_in_flight_ += multivisit; }
+  
+  // HYBRID SEARCH: New method to blend a minimax evaluation into the node's score.
+  void BlendMinimaxEval(const Eval& minimax_eval);
+
+  // HYBRID SEARCH: Flag to signal that this node's minimax value is stale.
+  bool IsMinimaxDirty() const { return is_minimax_dirty_.load(std::memory_order_acquire); }
+  void SetMinimaxDirty(bool dirty) { is_minimax_dirty_.store(dirty, std::memory_order_release); }
+
 
   // Updates max depth, if new depth is larger.
   void UpdateMaxDepth(int depth);
@@ -328,6 +338,9 @@ class Node {
   GameResult upper_bound_ : 2;
   // Whether the child_ is actually an array of equal length to edges.
   bool solid_children_ : 1;
+
+  // HYBRID SEARCH: Flag to track if the minimax value is stale.
+  std::atomic<bool> is_minimax_dirty_;
 
   // TODO(mooskagh) Unfriend NodeTree.
   friend class NodeTree;
