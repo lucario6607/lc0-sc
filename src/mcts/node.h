@@ -29,6 +29,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <atomic>
 #include <iostream>
 #include <memory>
 #include <mutex>
@@ -96,6 +97,12 @@ class Edge {
   void SetP(float val);
   void SetP_frozen(float val);
   float GetP_frozen() const;
+  // START: ADDED FOR ENTROPY
+  float GetEntropyScore() const {
+    return entropy_score_.load(std::memory_order_relaxed);
+  }
+  void SetEntropyScore(float val) { entropy_score_.store(val, std::memory_order_release); }
+  // END: ADDED FOR ENTROPY
 
   // Debug information about the edge.
   std::string DebugString() const;
@@ -110,6 +117,9 @@ class Edge {
   // network; compressed to a 16 bit format (5 bits exp, 11 bits significand).
   uint16_t p_ = 0;
   uint16_t p_frozen_ = 0;
+  // START: ADDED FOR ENTROPY
+  std::atomic<float> entropy_score_{0.0f};
+  // END: ADDED FOR ENTROPY
   friend class Node;
 };
 
