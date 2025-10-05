@@ -38,8 +38,13 @@ namespace lczero {
 
 enum class ContemptMode { PLAY, WHITE, BLACK, NONE };
 
-enum class EntropyUpdateMode { PERIODIC, FREQUENT };
-
+// START: ADDED FOR ENTROPY
+enum class EntropyMode {
+  OFF,
+  PERIODIC,
+  ON_VISIT,
+};
+// END: ADDED FOR ENTROPY
 // START: ADDED FOR DYNAMIC HYBRID RATIO
 enum class HybridRatioMode {
   STATIC,
@@ -114,6 +119,12 @@ class SearchParams {
   int GetHybridScalingFactor() const { return options_.Get<int>(kHybridScalingFactorId); }
   float GetHybridShapeParam1() const { return options_.Get<float>(kHybridShapeParam1Id); }
   float GetHybridShapeParam2() const { return options_.Get<float>(kHybridShapeParam2Id); }
+  // START: ADDED FOR ENTROPY
+  EntropyMode GetEntropyMode() const { return kEntropyMode; }
+  float GetEntropyBeta() const { return options_.Get<float>(kEntropyBetaId); }
+  float GetEntropyDelta0() const { return options_.Get<float>(kEntropyDelta0Id); }
+  int GetEntropyDepth() const { return options_.Get<int>(kEntropyDepthId); }
+  // END: ADDED FOR ENTROPY
 
   float GetTemperatureVisitOffset() const {
     return options_.Get<float>(kTemperatureVisitOffsetId);
@@ -213,12 +224,6 @@ class SearchParams {
   }
   bool GetSearchSpinBackoff() const { return kSearchSpinBackoff; }
 
-  // Entropy parameters
-  float GetEntropyBeta() const { return options_.Get<float>(kEntropyBetaId); }
-  float GetEntropyDelta0() const { return options_.Get<float>(kEntropyDelta0Id); }
-  EntropyUpdateMode GetEntropyUpdateMode() const { return kEntropyUpdateMode; }
-
-
   // Search parameter IDs.
   static const OptionId kMiniBatchSizeId;
   static const OptionId kMaxPrefetchBatchId;
@@ -242,6 +247,12 @@ class SearchParams {
   static const OptionId kHybridShapeParam1Id;
   static const OptionId kHybridShapeParam2Id;
   // END: ADDED FOR DYNAMIC HYBRID RATIO
+  // START: ADDED FOR ENTROPY
+  static const OptionId kEntropyModeId;
+  static const OptionId kEntropyBetaId;
+  static const OptionId kEntropyDelta0Id;
+  static const OptionId kEntropyDepthId;
+  // END: ADDED FOR ENTROPY
   static const OptionId kTempDecayMovesId;
   static const OptionId kTempDecayDelayMovesId;
   static const OptionId kTemperatureCutoffMoveId;
@@ -305,11 +316,6 @@ class SearchParams {
   static const OptionId kUCIRatingAdvId;
   static const OptionId kSearchSpinBackoffId;
 
-  // Entropy parameter IDs
-  static const OptionId kEntropyBetaId;
-  static const OptionId kEntropyDelta0Id;
-  static const OptionId kEntropyUpdateModeId;
-
  private:
   const OptionsDict& options_;
   // Cached parameter values. Values have to be cached if either:
@@ -369,13 +375,15 @@ class SearchParams {
   const int kMaxCollisionVisitsScalingEnd;
   const float kMaxCollisionVisitsScalingPower;
   const bool kSearchSpinBackoff;
-  const EntropyUpdateMode kEntropyUpdateMode;
 
   // START: ADDED FOR DYNAMIC HYBRID RATIO
   const HybridRatioMode kHybridRatioMode;
   const std::vector<std::pair<int, float>> kHybridRatioSchedule;
   mutable float chaotic_state_{0.5f}; // Mutable for chaotic function state
   // END: ADDED FOR DYNAMIC HYBRID RATIO
+  // START: ADDED FOR ENTROPY
+  const EntropyMode kEntropyMode;
+  // END: ADDED FOR ENTROPY
 };
 
 }  // namespace lczero
