@@ -84,6 +84,54 @@ namespace lczero {
 class Node;
 class Edge {
  public:
+  // Make Edge movable/copyable even with an atomic member so std::sort works.
+  Edge() = default;
+
+  Edge(const Edge& other) noexcept
+      : move_(other.move_),
+        p_(other.p_),
+        p_frozen_(other.p_frozen_) {
+    entropy_score_.store(other.entropy_score_.load(std::memory_order_relaxed),
+                         std::memory_order_relaxed);
+  }
+  Edge& operator=(const Edge& other) noexcept {
+    if (this != &other) {
+      move_ = other.move_;
+      p_ = other.p_;
+      p_frozen_ = other.p_frozen_;
+      entropy_score_.store(other.entropy_score_.load(std::memory_order_relaxed),
+                           std::memory_order_relaxed);
+    }
+    return *this;
+  }
+  Edge(Edge&& other) noexcept
+      : move_(other.move_),
+        p_(other.p_),
+        p_frozen_(other.p_frozen_) {
+    entropy_score_.store(other.entropy_score_.load(std::memory_order_relaxed),
+                         std::memory_order_relaxed);
+  }
+  Edge& operator=(Edge&& other) noexcept {
+    if (this != &other) {
+      move_ = other.move_;
+      p_ = other.p_;
+      p_frozen_ = other.p_frozen_;
+      entropy_score_.store(other.entropy_score_.load(std::memory_order_relaxed),
+                           std::memory_order_relaxed);
+    }
+    return *this;
+  }
+  friend void swap(Edge& a, Edge& b) noexcept {
+    using std::swap;
+    swap(a.move_, b.move_);
+    swap(a.p_, b.p_);
+    swap(a.p_frozen_, b.p_frozen_);
+    const float ea = a.entropy_score_.load(std::memory_order_relaxed);
+    const float eb = b.entropy_score_.load(std::memory_order_relaxed);
+    a.entropy_score_.store(eb, std::memory_order_relaxed);
+    b.entropy_score_.store(ea, std::memory_order_relaxed);
+  }
+
   // Creates array of edges from the list of moves.
   static std::unique_ptr<Edge[]> FromMovelist(const MoveList& moves);
 
@@ -97,11 +145,14 @@ class Edge {
   void SetP(float val);
   void SetP_frozen(float val);
   float GetP_frozen() const;
+
   // START: ADDED FOR ENTROPY
   float GetEntropyScore() const {
     return entropy_score_.load(std::memory_order_relaxed);
   }
-  void SetEntropyScore(float val) { entropy_score_.store(val, std::memory_order_release); }
+  void SetEntropyScore(float val) {
+    entropy_score_.store(val, std::memory_order_release);
+  }
   // END: ADDED FOR ENTROPY
 
   // Debug information about the edge.
@@ -482,7 +533,7 @@ class Edge_Iterator : public EdgeAndNode {
         total_count_(parent_node.num_edges_) {
     if (edge_ && child_ptr != nullptr) Actualize();
     if (edge_ && child_ptr == nullptr) {
-      node_ = parent_node.child_.get();
+      this->node_ = parent_node.child_.get();
     }
   }
 
@@ -495,13 +546,13 @@ class Edge_Iterator : public EdgeAndNode {
   void operator++() {
     // If it was the last edge in array, become end(), otherwise advance.
     if (++current_idx_ == total_count_) {
-      edge_ = nullptr;
+      this->edge_ = nullptr;
     } else {
-      ++edge_;
+      ++this->edge_;
       if (node_ptr_ != nullptr) {
         Actualize();
       } else {
-        ++node_;
+        ++this->node_;
       }
     }
   }
@@ -509,11 +560,11 @@ class Edge_Iterator : public EdgeAndNode {
 
   // If there is node, return it. Otherwise spawn a new one and return it.
   Node* GetOrSpawnNode(Node* parent) {
-    if (node_) return node_;  // If there is already a node, return it.
+    if (this->node_) return this->node_;  // If there is already a node, return it.
     // Should never reach here in solid mode.
     assert(node_ptr_ != nullptr);
     Actualize();              // But maybe other thread already did that.
-    if (node_) return node_;  // If it did, return.
+    if (this->node_) return this->node_;  // If it did, return.
     // Now we are sure we have to create a new node.
     // Suppose there are nodes with idx 3 and 7, and we want to insert one with
     // idx 5. Here is how it looks like:
@@ -535,7 +586,7 @@ class Edge_Iterator : public EdgeAndNode {
     //    node_ -> &Node(idx_.5)
     //    node_ptr_ -> &Node(idx_.5).sibling_ -> Node(idx_.7)
     Actualize();
-    return node_;
+    return this->node_;
   }
 
  private:
@@ -552,10 +603,10 @@ class Edge_Iterator : public EdgeAndNode {
     // If in the end node_ptr_ points to the node that we need, populate node_
     // and advance node_ptr_.
     if (*node_ptr_ && (*node_ptr_)->index_ == current_idx_) {
-      node_ = (*node_ptr_).get();
-      node_ptr_ = &node_->sibling_;
+      this->node_ = (*node_ptr_).get();
+      node_ptr_ = &this->node_->sibling_;
     } else {
-      node_ = nullptr;
+      this->node_ = nullptr;
     }
   }
 
