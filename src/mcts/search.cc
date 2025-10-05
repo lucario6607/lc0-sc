@@ -53,21 +53,33 @@ const int kUciInfoMinimumFrequencyMs = 5000;
 
 MoveList MakeRootMoveFilter(const MoveList& searchmoves,
                             SyzygyTablebase* syzygy_tb,
-                            const PositionHistory& history, bool fast_play,
+                            const PositionHistory& history,
+                            const SearchParams& params,
                             std::atomic<int>* tb_hits, bool* dtz_success) {
   assert(tb_hits);
   assert(dtz_success);
   // Search moves overrides tablebase.
   if (!searchmoves.empty()) return searchmoves;
+  bool fast_play = params.GetSyzygyFastPlay();
+  int contempt_mode_tb =  params.GetContemptModeTB();
+  ContemptMode contempt_mode = params.GetContemptMode();
   const auto& board = history.Last().GetBoard();
+  const auto piece_count = (board.ours() | board.theirs()).count();
+  bool use_only_wins = contempt_mode_tb > 0 &&
+    (piece_count >= contempt_mode_tb);
+  bool contempt_no_root_probe = contempt_mode_tb != 0 && (
+      (contempt_mode == ContemptMode::WHITE && history.Last().IsBlackToMove()) ||
+      (contempt_mode == ContemptMode::BLACK && !history.Last().IsBlackToMove())
+    );
   MoveList root_moves;
   if (!syzygy_tb || !board.castlings().no_legal_castle() ||
-      (board.ours() | board.theirs()).count() > syzygy_tb->max_cardinality()) {
+      (board.ours() | board.theirs()).count() > syzygy_tb->max_cardinality() ||
+      contempt_no_root_probe) {
     return root_moves;
   }
   if (syzygy_tb->root_probe(
           history.Last(), fast_play || history.DidRepeatSinceLastZeroingMove(),
-          false, &root_moves)) {
+          use_only_wins, &root_moves)) {
     *dtz_success = true;
     tb_hits->fetch_add(1, std::memory_order_acq_rel);
   } else if (syzygy_tb->root_probe_wdl(history.Last(), &root_moves)) {
@@ -170,7 +182,7 @@ Search::Search(const NodeTree& tree, Network* network,
       initial_visits_(root_node_->GetN()),
       root_move_filter_(MakeRootMoveFilter(
           searchmoves_, syzygy_tb_, played_history_,
-          params_.GetSyzygyFastPlay(), &tb_hits_, &root_is_in_dtz_)),
+          params_, &tb_hits_, &root_is_in_dtz_)),
       uci_responder_(std::move(uci_responder)) {
   if (params_.GetMaxConcurrentSearchers() != 0) {
     pending_searchers_.store(params_.GetMaxConcurrentSearchers(),
@@ -291,6 +303,52 @@ inline double WDLRescale(float& v, float& d, float wdl_rescale_ratio,
   return 0;
 }
 }  // namespace
+// START: ADDED FOR ENTROPY
+float Search::CalculatePVEntropy(Node* start_node, int max_depth) const {
+  if (!start_node || start_node->GetN() == 0) {
+    return 0.0f;
+  }
+
+  float total_entropy = 0.0f;
+  Node* current_node = start_node;
+
+  for (int d = 0; d < max_depth; ++d) {
+    if (!current_node || !current_node->HasChildren() || current_node->GetN() < 2) {
+      break; // End of PV or not enough info
+    }
+
+    // Node is at depth (1+d) relative to root, parent is at depth d
+    auto top_children = GetBestChildrenNoTemperature(current_node, 2, 1 + d);
+
+    if (top_children.size() < 2) {
+      break; // Not enough children to calculate a gap
+    }
+
+    const auto& best_child = top_children[0];
+    const auto& second_best_child = top_children[1];
+    // Children are at depth (2+d) relative to root
+    const float draw_score = GetDrawScore(/* is_odd_depth= */ (2 + d) % 2 != 0);
+
+    float q_best = best_child.GetQ(0.0f, draw_score);
+    float q_second = second_best_child.GetQ(0.0f, draw_score);
+    float delta_q = std::abs(q_best - q_second);
+    float delta0 = params_.GetEntropyDelta0();
+
+    total_entropy += std::log2(1.0f + std::exp(-delta_q / delta0));
+
+    current_node = best_child.node();
+  }
+
+  return total_entropy;
+}
+
+void Search::UpdateRootEntropyScores() REQUIRES(nodes_mutex_) {
+  if (params_.GetEntropyMode() != EntropyMode::PERIODIC || !root_node_->HasChildren()) return;
+  for (auto& edge : root_node_->Edges()) {
+    edge.edge()->SetEntropyScore(CalculatePVEntropy(edge.node(), params_.GetEntropyDepth()));
+  }
+}
+// END: ADDED FOR ENTROPY
 
 void Search::SendUciInfo() REQUIRES(nodes_mutex_) REQUIRES(counters_mutex_) {
   const auto max_pv = params_.GetMultiPv();
@@ -432,6 +490,11 @@ void Search::MaybeOutputInfo() {
        last_outputted_uci_info_.time + kUciInfoMinimumFrequencyMs <
            GetTimeSinceStart())) {
     SendUciInfo();
+    // START: ADDED FOR ENTROPY
+    if (params_.GetEntropyMode() == EntropyMode::PERIODIC) {
+      UpdateRootEntropyScores();
+    }
+    // END: ADDED FOR ENTROPY
     if (params_.GetLogLiveStats()) {
       SendMovesStats();
     }
@@ -1504,7 +1567,7 @@ void SearchWorker::ProcessPickedTask(int start_idx, int end_idx,
     // of the game), it means that we already visited this node before.
     if (picked_node.IsExtendable()) {
       // Node was never visited, extend it.
-      ExtendNode(node, picked_node.depth, picked_node.moves_to_visit, &history);
+      ExtendNode(node, picked_node, &history);
       if (!node->IsTerminal()) {
         picked_node.nn_queried = true;
         const auto hash = history.HashLast(params_.GetCacheHistoryLength() + 1);
@@ -2020,6 +2083,27 @@ void SearchWorker::PickNodesToExtendTask(
             }
 
             float score = current_score[idx];
+            // START: ADDED FOR ENTROPY
+            if (is_root_node && params_.GetEntropyMode() != EntropyMode::OFF) {
+                float entropy_bonus = 0.0f;
+                if (params_.GetEntropyMode() == EntropyMode::ON_VISIT) {
+                    Node* child_node = cur_iters[idx].node();
+                    // Check grandchildren for complexity
+                    if (child_node && child_node->HasChildren() && child_node->GetN() > 1) {
+                        auto top_grand_children = search_->GetBestChildrenNoTemperature(child_node, 2, current_depth + 1);
+                        if (top_grand_children.size() > 1) {
+                            const float grandchild_draw_score = odd_draw_score; // Grandchildren are at odd depth
+                            float q_best = top_grand_children[0].GetQ(0.0f, grandchild_draw_score);
+                            float q_second = top_grand_children[1].GetQ(0.0f, grandchild_draw_score);
+                            entropy_bonus = std::log2(1.0f + std::exp(-std::abs(q_best - q_second) / params_.GetEntropyDelta0()));
+                        }
+                    }
+                } else if (params_.GetEntropyMode() == EntropyMode::PERIODIC) {
+                    entropy_bonus = cur_iters[idx].edge()->GetEntropyScore();
+                }
+                score += params_.GetEntropyBeta() * entropy_bonus;
+            }
+            // END: ADDED FOR ENTROPY
             if (score > best) {
               second_best = best;
               second_best_edge = best_edge;
@@ -2163,9 +2247,45 @@ void SearchWorker::PickNodesToExtendTask(
   }
 }
 
-void SearchWorker::ExtendNode(Node* node, int depth,
-                              const std::vector<Move>& moves_to_node,
+namespace {
+
+bool IsContemptModeTBEnabled(ContemptMode contempt_mode,
+                             const PositionHistory& history,
+                             const SearchParams& params) {
+  if (params.GetContemptModeTB() == 0)
+    return history.Last().GetRule50Ply() == 0;
+  switch (contempt_mode) {
+    case ContemptMode::NONE:
+      return history.Last().GetRule50Ply() == 0;
+    case ContemptMode::BLACK:
+      return history.Last().IsBlackToMove();
+    case ContemptMode::WHITE:
+      return !history.Last().IsBlackToMove();
+    case ContemptMode::PLAY:
+      /* unreachable */
+      assert(false);
+      return false;
+  }
+}
+
+bool IsContemptModeTBDrawAllowed(const SearchParams& params,
+                                 const ChessBoard& board) {
+  int mode = params.GetContemptModeTB();
+  switch(mode) {
+    case 0:
+      return false;
+    default:
+      return (board.ours() | board.theirs()).count() < mode;
+  }
+}
+
+}
+
+
+void SearchWorker::ExtendNode(Node* node, NodeToProcess& picked_node,
                               PositionHistory* history) {
+  int depth = picked_node.depth;
+  const std::vector<Move>& moves_to_node = picked_node.moves_to_visit;
   // Initialize position sequence with pre-move position.
   history->Trim(search_->played_history_.GetLength());
   for (size_t i = 0; i < moves_to_node.size(); i++) {
@@ -2221,11 +2341,11 @@ void SearchWorker::ExtendNode(Node* node, int depth,
     // Neither by-position or by-rule termination, but maybe it's a TB position.
     if (search_->syzygy_tb_ && !search_->root_is_in_dtz_ &&
         board.castlings().no_legal_castle() &&
-        history->Last().GetRule50Ply() == 0 &&
+        IsContemptModeTBEnabled(search_->contempt_mode_, *history, params_) &&
         (board.ours() | board.theirs()).count() <=
             search_->syzygy_tb_->max_cardinality()) {
       ProbeState state;
-      const WDLScore wdl =
+      WDLScore wdl =
           search_->syzygy_tb_->probe_wdl(history->Last(), &state);
       // Only fail state means the WDL is wrong, probe_wdl may produce correct
       // result with a stat other than OK.
@@ -2240,18 +2360,46 @@ void SearchWorker::ExtendNode(Node* node, int depth,
             m = std::max(0.0f, parent->GetM() - 1.0f);
           }
         }
+        if (params_.GetContemptModeTB() != 0 &&
+            (wdl == WDL_WIN || wdl == WDL_LOSS)) {
+          int dtz = search_->syzygy_tb_->probe_dtz(history->Last(), &state);
+          if (state != FAIL) {
+            if (history->Last().GetRule50Ply() + std::abs(dtz) >= 100) {
+              // It is a draw by 50 move rule.
+              wdl = WDL_DRAW;
+            } else {
+              // There is a win. Set moves left based on dtz distance.
+              m = dtz;
+            }
+          }
+        }
+        bool use_value = true;
+        bool use_draw_and_lose = params_.GetContemptModeTB() == 0;
         // If the colors seem backwards, check the checkmate check above.
         if (wdl == WDL_WIN) {
           node->MakeTerminal(GameResult::BLACK_WON, m,
                              Node::Terminal::Tablebase);
         } else if (wdl == WDL_LOSS) {
-          node->MakeTerminal(GameResult::WHITE_WON, m,
-                             Node::Terminal::Tablebase);
+          if (use_draw_and_lose) {
+            node->MakeTerminal(GameResult::WHITE_WON, m,
+                               Node::Terminal::Tablebase);
+          } else {
+            use_value = false;
+          }
         } else {  // Cursed wins and blessed losses count as draws.
-          node->MakeTerminal(GameResult::DRAW, m, Node::Terminal::Tablebase);
+          if (use_draw_and_lose) {
+            node->MakeTerminal(GameResult::DRAW, m, Node::Terminal::Tablebase);
+          } else {
+            if (IsContemptModeTBDrawAllowed(params_, board)) {
+              picked_node.wdl = NodeToProcess::WDL_DRAW;
+            }
+            use_value = false;
+          }
         }
-        search_->tb_hits_.fetch_add(1, std::memory_order_acq_rel);
-        return;
+        if (use_value) {
+          search_->tb_hits_.fetch_add(1, std::memory_order_acq_rel);
+          return;
+        }
       }
     }
   }
@@ -2457,6 +2605,13 @@ void SearchWorker::FetchSingleNodeResult(NodeToProcess* node_to_process,
                    ? 0
                    : params_.GetWDLRescaleDiff(),
                sign, false, params_.GetWDLMaxS());
+  }
+  if (node_to_process->wdl == NodeToProcess::WDL_DRAW) {
+    // We use draw as minumum evaluation when tablebase evaluated it as a draw.
+    if (v > 0.0f) {
+      v = 0.0f;
+      d = 1.0f;
+    }
   }
   node_to_process->v = v;
   node_to_process->d = d;
@@ -2692,6 +2847,3 @@ void SearchWorker::UpdateCounters() {
 }
 
 }  // namespace lczero
-
-
-
