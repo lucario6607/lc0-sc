@@ -231,6 +231,14 @@ HybridRatioMode EncodeHybridRatioMode(const std::string& mode_str) {
     if (mode_str == "chaotic") return HybridRatioMode::CHAOTIC;
     return HybridRatioMode::STATIC; // Default
 }
+
+// START: ADDED FOR ENTROPY
+EntropyMode EncodeEntropyMode(const std::string& mode_str) {
+    if (mode_str == "periodic") return EntropyMode::PERIODIC;
+    if (mode_str == "on_visit") return EntropyMode::ON_VISIT;
+    return EntropyMode::OFF; // Default is "off"
+}
+// END: ADDED FOR ENTROPY
 // END: ADDED FOR DYNAMIC HYBRID RATIO
 
 }  // namespace
@@ -291,6 +299,23 @@ const OptionId SearchParams::kHybridSamplingRatioId{
     "The ratio of Thompson Sampling to use in hybrid search-contempt mode. "
     "1.0 is pure TS, 0.0 is pure PUCT."};
 // START: ADDED FOR DYNAMIC HYBRID RATIO
+// START: ADDED FOR ENTROPY
+const OptionId SearchParams::kEntropyModeId{
+    "entropy-mode", "EntropyMode",
+    "Strategy for applying entropy bonus to root moves. 'off' disables it. "
+    "'periodic' periodically calculates full PV entropy. 'on_visit' calculates "
+    "a fast one-ply lookahead bonus on each visit."};
+const OptionId SearchParams::kEntropyBetaId{
+    "entropy-beta", "EntropyBeta",
+    "Multiplier for the entropy bonus. Higher values make the engine seek "
+    "more complex/high-entropy positions."};
+const OptionId SearchParams::kEntropyDelta0Id{
+    "entropy-delta0", "EntropyDelta0",
+    "Player skill parameter (Δ₀) for entropy calculation, in Q-value scale. "
+    "Defines the evaluation gap that is considered 'difficult'."};
+const OptionId SearchParams::kEntropyDepthId{"entropy-depth", "EntropyDepth",
+                                             "Max depth for periodic PV entropy calculation."};
+// END: ADDED FOR ENTROPY
 const OptionId SearchParams::kHybridRatioModeId{
     "hybrid-ratio-mode", "HybridRatioMode",
     "Selects the function or mode for dynamically adjusting the hybrid "
@@ -489,6 +514,14 @@ const OptionId SearchParams::kContemptId{
 const OptionId SearchParams::kContemptMaxValueId{
     "contempt-max-value", "ContemptMaxValue",
     "The maximum value of contempt used. Higher values will be capped."};
+const OptionId SearchParams::kContemptModeTBId{
+    "contempt-mode-tb", "ContemptModeTB",
+    "Choose asymmetric tablebase probing method. If a position has greator or "
+    "eqaul number of piecese, probing uses only tablebase result on winning "
+    "positions. Setting it to 6 uses only winning information if position has "
+    "6 or more pieces. If a position has less pieces, tablebase is used to "
+    "avoid losing moves too. Setting it to 0 disables assymetric probe."
+    };
 const OptionId SearchParams::kWDLCalibrationEloId{
     "wdl-calibration-elo", "WDLCalibrationElo",
     "Elo of the active side, adjusted for time control relative to rapid."
@@ -619,6 +652,14 @@ void SearchParams::Populate(OptionsParser* options) {
   options->Add<FloatOption>(kHybridShapeParam1Id, -10000.0f, 10000.0f) = 0.5f;
   options->Add<FloatOption>(kHybridShapeParam2Id, -10000.0f, 10000.0f) = 0.1f;
   // END: ADDED FOR DYNAMIC HYBRID RATIO
+  // START: ADDED FOR ENTROPY
+  std::vector<std::string> entropy_modes = {"off", "periodic", "on_visit"};
+  options->Add<ChoiceOption>(kEntropyModeId, entropy_modes) = "off";
+  options->Add<FloatOption>(kEntropyBetaId, 0.0f, 100.0f) = 0.05f;
+  options->Add<FloatOption>(kEntropyDelta0Id, 0.01f, 1.0f) = 0.2f;
+  options->Add<IntOption>(kEntropyDepthId, 1, 100) = 20;
+  // END: ADDED FOR ENTROPY
+
 
   options->Add<IntOption>(kTempDecayMovesId, 0, 640) = 0;
   options->Add<IntOption>(kTempDecayDelayMovesId, 0, 100) = 0;
@@ -681,6 +722,7 @@ void SearchParams::Populate(OptionsParser* options) {
   // separated kContemptId list will override this.
   options->Add<StringOption>(kContemptId) = "";
   options->Add<FloatOption>(kContemptMaxValueId, 0, 10000.0f) = 420.0f;
+  options->Add<IntOption>(kContemptModeTBId, 0, 9) = 6;
   options->Add<FloatOption>(kWDLCalibrationEloId, 0, 10000.0f) = 0.0f;
   options->Add<FloatOption>(kWDLContemptAttenuationId, -10.0f, 10.0f) = 1.0f;
   options->Add<FloatOption>(kWDLMaxSId, 0.0f, 10.0f) = 1.4f;
@@ -776,6 +818,7 @@ SearchParams::SearchParams(const OptionsDict& options)
       kContempt(GetContempt(options.Get<std::string>(kUCIOpponentId),
                             options.Get<std::string>(kContemptId),
                             options.Get<float>(kUCIRatingAdvId))),
+      kContemptModeTB(options.Get<int>(kContemptModeTBId)),
       kWDLRescaleParams(
           options.Get<float>(kWDLCalibrationEloId) == 0
               ? AccurateWDLRescaleParams(
@@ -817,8 +860,11 @@ SearchParams::SearchParams(const OptionsDict& options)
       kSearchSpinBackoff(options_.Get<bool>(kSearchSpinBackoffId)),
       // START: ADDED FOR DYNAMIC HYBRID RATIO
       kHybridRatioMode(EncodeHybridRatioMode(options.Get<std::string>(kHybridRatioModeId))),
-      kHybridRatioSchedule(ParseHybridRatioSchedule(options.Get<std::string>(kHybridRatioScheduleId)))
+      kHybridRatioSchedule(ParseHybridRatioSchedule(options.Get<std::string>(kHybridRatioScheduleId))),
       // END: ADDED FOR DYNAMIC HYBRID RATIO
+      // START: ADDED FOR ENTROPY
+      kEntropyMode(EncodeEntropyMode(options.Get<std::string>(kEntropyModeId)))
+      // END: ADDED FOR ENTROPY
       {}
 
 // START: ADDED FOR DYNAMIC HYBRID RATIO
