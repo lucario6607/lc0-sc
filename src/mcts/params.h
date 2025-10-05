@@ -38,6 +38,8 @@ namespace lczero {
 
 enum class ContemptMode { PLAY, WHITE, BLACK, NONE };
 
+enum class EntropyUpdateMode { PERIODIC, FREQUENT };
+
 // START: ADDED FOR DYNAMIC HYBRID RATIO
 enum class HybridRatioMode {
   STATIC,
@@ -171,6 +173,7 @@ class SearchParams {
     assert(mode == "disable");
     return ContemptMode::NONE;
   }
+  int GetContemptModeTB() const { return kContemptModeTB; }
   float GetWDLRescaleRatio() const { return kWDLRescaleParams.ratio; }
   float GetWDLRescaleDiff() const { return kWDLRescaleParams.diff; }
   float GetWDLMaxS() const { return kWDLMaxS; }
@@ -209,6 +212,12 @@ class SearchParams {
     return kMaxCollisionVisitsScalingPower;
   }
   bool GetSearchSpinBackoff() const { return kSearchSpinBackoff; }
+
+  // Entropy parameters
+  float GetEntropyBeta() const { return options_.Get<float>(kEntropyBetaId); }
+  float GetEntropyDelta0() const { return options_.Get<float>(kEntropyDelta0Id); }
+  EntropyUpdateMode GetEntropyUpdateMode() const { return kEntropyUpdateMode; }
+
 
   // Search parameter IDs.
   static const OptionId kMiniBatchSizeId;
@@ -270,6 +279,7 @@ class SearchParams {
   static const OptionId kContemptModeId;
   static const OptionId kContemptId;
   static const OptionId kContemptMaxValueId;
+  static const OptionId kContemptModeTBId;
   static const OptionId kWDLCalibrationEloId;
   static const OptionId kWDLContemptAttenuationId;
   static const OptionId kWDLMaxSId;
@@ -294,6 +304,11 @@ class SearchParams {
   static const OptionId kUCIOpponentId;
   static const OptionId kUCIRatingAdvId;
   static const OptionId kSearchSpinBackoffId;
+
+  // Entropy parameter IDs
+  static const OptionId kEntropyBetaId;
+  static const OptionId kEntropyDelta0Id;
+  static const OptionId kEntropyUpdateModeId;
 
  private:
   const OptionsDict& options_;
@@ -335,6 +350,7 @@ class SearchParams {
   const int kMaxConcurrentSearchers;
   const float kDrawScore;
   const float kContempt;
+  const int kContemptModeTB;
   const WDLRescaleParams kWDLRescaleParams;
   const float kWDLMaxS;
   const float kWDLEvalObjectivity;
@@ -353,6 +369,7 @@ class SearchParams {
   const int kMaxCollisionVisitsScalingEnd;
   const float kMaxCollisionVisitsScalingPower;
   const bool kSearchSpinBackoff;
+  const EntropyUpdateMode kEntropyUpdateMode;
 
   // START: ADDED FOR DYNAMIC HYBRID RATIO
   const HybridRatioMode kHybridRatioMode;
