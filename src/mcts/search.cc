@@ -162,11 +162,12 @@ class MEvaluator {
 
 }  // namespace
 
+// NEW plausibility helpers
 namespace {
-// Helper to build implausibility-aware odds priors.
+
 inline float LogSafe(float x) { return std::log(std::max(x, 1e-20f)); }
 
-// Build opponent prior from NN policy using temperature tau_opp (>1 => flatter).
+// Opponent prior from policy with temperature tau_opp (>1 => flatter)
 inline void BuildOppPriorFromPolicy(const float* pol, int n, float tau_opp,
                                     std::array<float, 256>& p_opp) {
   const float inv_tau = 1.0f / std::max(1e-6f, tau_opp);
@@ -181,8 +182,7 @@ inline void BuildOppPriorFromPolicy(const float* pol, int n, float tau_opp,
   }
 }
 
-// Build opponent prior from frozen cumulative distribution (first `visited`).
-// For [visited..n-1], fall back to temperature-flattened policy.
+// Opponent prior from frozen cumulative (first `visited` entries are CDF), fallback to policy
 inline void BuildOppPriorFromFrozenCumulative(const float* cumulative, int visited,
                                               const float* pol, int n, float tau_opp,
                                               std::array<float, 256>& p_opp) {
@@ -204,6 +204,77 @@ inline void BuildOppPriorFromFrozenCumulative(const float* cumulative, int visit
   if (sum > 0.0f) {
     float inv = 1.0f / sum;
     for (int i = 0; i < n; ++i) p_opp[i] *= inv;
+  }
+}
+
+} // namespace
+
+Search::Search(const NodeTree& tree, Network* network,
+               std::unique_ptr<UciResponder> uci_responder,
+               const MoveList& searchmoves,
+               std::chrono::steady_clock::time_point start_time,
+               std::unique_ptr<SearchStopper> stopper, bool infinite,
+               bool ponder, const OptionsDict& options, NNCache* cache,
+               SyzygyTablebase* syzygy_tb)
+    : ok_to_respond_bestmove_(!infinite && !ponder),
+      stopper_(std::move(stopper)),
+      root_node_(tree.GetCurrentHead()),
+      cache_(cache),
+      syzygy_tb_(syzygy_tb),
+      played_history_(tree.GetPositionHistory()),
+      network_(network),
+      params_(options),
+      searchmoves_(searchmoves),
+      start_time_(start_time),
+      initial_visits_(root_node_->GetN()),
+      root_move_filter_(MakeRootMoveFilter(
+          searchmoves_, syzygy_tb_, played_history_,
+          params_, &tb_hits_, &root_is_in_dtz_)),
+      uci_responder_(std::move(uci_responder)) {
+  if (params_.GetMaxConcurrentSearchers() != 0) {
+    pending_searchers_.store(params_.GetMaxConcurrentSearchers(),
+                             std::memory_order_release);
+  }
+  contempt_mode_ = params_.GetContemptMode();
+  // Make sure the contempt mode is never "play" beyond this point.
+  if (contempt_mode_ == ContemptMode::PLAY) {
+    if (infinite) {
+      // For infinite search disable contempt, only "white"/"black" make sense.
+      contempt_mode_ = ContemptMode::NONE;
+      // Issue a warning only if contempt mode would have an effect.
+      if (params_.GetWDLRescaleDiff() != 0.0f) {
+        std::vector<ThinkingInfo> info(1);
+        info.back().comment =
+            "WARNING: Contempt mode set to 'disable' as 'play' not supported "
+            "for infinite search.";
+        uci_responder_->OutputThinkingInfo(&info);
+      }
+    } else {
+      // Otherwise set it to the root move's side, unless pondering.
+      contempt_mode_ = played_history_.IsBlackToMove() != ponder
+                           ? ContemptMode::BLACK
+                           : ContemptMode::WHITE;
+    }
+  }
+}
+
+namespace {
+void ApplyDirichletNoise(Node* node, float eps, double alpha) {
+  float total = 0;
+  std::vector<float> noise;
+
+  for (int i = 0; i < node->GetNumEdges(); ++i) {
+    float eta = Random::Get().GetGamma(alpha, 1.0);
+    noise.emplace_back(eta);
+    total += eta;
+  }
+
+  if (total < std::numeric_limits<float>::min()) return;
+
+  int noise_idx = 0;
+  for (const auto& child : node->Edges()) {
+    auto* edge = child.edge();
+    edge->SetP(edge->GetP() * (1 - eps) + eps * noise[noise_idx++] / total);
   }
 }
 }  // namespace
@@ -1613,7 +1684,6 @@ void SearchWorker::EnsureNodeTwoFoldCorrectForDepth(Node* child_node,
   }
 }
 
-// Core selection logic with plausibility regularization at odd depth.
 void SearchWorker::PickNodesToExtendTask(
     Node* node, int base_depth, int collision_limit,
     const std::vector<Move>& moves_to_base,
@@ -1751,7 +1821,6 @@ void SearchWorker::PickNodesToExtendTask(
             static_cast<int>(std::round(static_cast<float>(cur_limit) * hybrid_ratio));
         int puct_visits = cur_limit - ts_visits;
 
-        // Thompson sampling from frozen distribution (unchanged).
         if (ts_visits > 0) {
           while (node_limit_frozen_lock) {
             node_limit_frozen_lock = node->GetNodeLimitFrozenLock();
@@ -1828,151 +1897,144 @@ void SearchWorker::PickNodesToExtendTask(
           }
         }
 
-        // PUCT portion post-Nscl with plausibility regularization at odd nodes.
         if (puct_visits > 0) {
-          m_evaluator.SetParent(node);
+            m_evaluator.SetParent(node);
 
-          // Build P_opp from frozen cumulative for visited children; fallback to policy.
-          node->CopyPolicy_frozen(max_needed, current_cumulative_pol_frozen.data());
-          int visited_num_nodes = int(node->GetVisitedNumberOfEdges());
-          std::array<float, 256> P_opp;
-          const float tau_opp = params_.GetOppTau();
-          BuildOppPriorFromFrozenCumulative(current_cumulative_pol_frozen.data(),
-                                            visited_num_nodes,
-                                            current_pol.data(), max_needed,
-                                            tau_opp, P_opp);
-          const float beta = params_.GetOppBeta();
+            // Build P_opp from frozen cumulative + fallback
+            node->CopyPolicy_frozen(max_needed, current_cumulative_pol_frozen.data());
+            int visited_num_nodes = int(node->GetVisitedNumberOfEdges());
+            std::array<float, 256> P_opp;
+            const float tau_opp = params_.GetOppTau();
+            BuildOppPriorFromFrozenCumulative(current_cumulative_pol_frozen.data(),
+                                              visited_num_nodes,
+                                              current_pol.data(), max_needed,
+                                              tau_opp, P_opp);
+            const float beta = params_.GetOppBeta();
 
-          float visited_pol = 0.0f;
-          for (Node* child : node->VisitedNodes()) {
-            int index = child->Index();
-            visited_pol += current_pol[index];
-            float q = child->GetQ(draw_score);
-            current_util[index] = q + m_evaluator.GetMUtility(child, q);
-          }
-          const float fpu =
-              GetFpu(params_, node, is_root_node, draw_score, visited_pol);
-          for (int i = 0; i < max_needed; i++) {
-            if (current_util[i] == std::numeric_limits<float>::lowest()) {
-              current_util[i] = fpu + m_evaluator.GetDefaultMUtility();
+            float visited_pol = 0.0f;
+            for (Node* child : node->VisitedNodes()) {
+              int index = child->Index();
+              visited_pol += current_pol[index];
+              float q = child->GetQ(draw_score);
+              current_util[index] = q + m_evaluator.GetMUtility(child, q);
             }
-          }
+            const float fpu = GetFpu(params_, node, is_root_node, draw_score, visited_pol);
+            for (int i = 0; i < max_needed; i++) {
+              if (current_util[i] == std::numeric_limits<float>::lowest()) {
+                current_util[i] = fpu + m_evaluator.GetDefaultMUtility();
+              }
+            }
 
-          const float cpuct_base = ComputeCpuct(params_, node->GetN(), is_root_node);
-          const float cpuct = cpuct_base * params_.GetCpuctOddScale();
-          const float puct_mult =
-              cpuct * std::sqrt(std::max(node->GetChildrenVisits(), 1u));
+            const float cpuct_base = ComputeCpuct(params_, node->GetN(), is_root_node);
+            const float cpuct = cpuct_base * params_.GetCpuctOddScale();
+            const float puct_mult =
+                cpuct * std::sqrt(std::max(node->GetChildrenVisits(), 1u));
 
-          int cache_filled_idx = -1;
-          int current_puct_limit = puct_visits;
-          while (current_puct_limit > 0) {
-            float best = std::numeric_limits<float>::lowest();
-            int best_idx = -1;
-            float best_without_u = std::numeric_limits<float>::lowest();
-            float second_best = std::numeric_limits<float>::lowest();
-            bool can_exit = false;
-            best_edge.Reset();
+            int cache_filled_idx = -1;
+            int current_puct_limit = puct_visits;
+            while (current_puct_limit > 0) {
+              float best = std::numeric_limits<float>::lowest();
+              int best_idx = -1;
+              float best_without_u = std::numeric_limits<float>::lowest();
+              float second_best = std::numeric_limits<float>::lowest();
+              bool can_exit = false;
+              best_edge.Reset();
 
-            for (int idx = 0; idx < max_needed; ++idx) {
-              if (idx > cache_filled_idx) {
-                if (idx == 0) {
-                  cur_iters[idx] = node->Edges();
-                } else {
-                  cur_iters[idx] = cur_iters[idx - 1];
-                  ++cur_iters[idx];
+              for (int idx = 0; idx < max_needed; ++idx) {
+                if (idx > cache_filled_idx) {
+                  if (idx == 0) { cur_iters[idx] = node->Edges(); }
+                  else { cur_iters[idx] = cur_iters[idx - 1]; ++cur_iters[idx]; }
+                  current_nstarted[idx] = cur_iters[idx].GetNStarted();
                 }
-                current_nstarted[idx] = cur_iters[idx].GetNStarted();
-              }
-              int nstarted = current_nstarted[idx];
-              const float util = current_util[idx];
-              const float plaus = -beta * LogSafe(P_opp[idx]);
+                int nstarted = current_nstarted[idx];
+                const float util = current_util[idx];
+                const float plaus = -beta * LogSafe(P_opp[idx]);
 
-              if (idx > cache_filled_idx) {
-                current_score[idx] =
-                    (P_opp[idx] * puct_mult / (1 + nstarted)) + (util + plaus);
-                cache_filled_idx++;
+                if (idx > cache_filled_idx) {
+                  current_score[idx] =
+                      (P_opp[idx] * puct_mult / (1 + nstarted)) + (util + plaus);
+                  cache_filled_idx++;
+                }
+
+                float score = current_score[idx];
+                if (score > best) {
+                  second_best = best;
+                  second_best_edge = best_edge;
+                  best = score;
+                  best_idx = idx;
+                  best_without_u = util + plaus;
+                  best_edge = cur_iters[idx];
+                } else if (score > second_best) {
+                  second_best = score;
+                  second_best_edge = cur_iters[idx];
+                }
+                if (can_exit) break;
+                if (nstarted == 0) can_exit = true;
               }
 
-              float score = current_score[idx];
-              if (score > best) {
-                second_best = best;
-                second_best_edge = best_edge;
-                best = score;
-                best_idx = idx;
-                best_without_u = util + plaus;
-                best_edge = cur_iters[idx];
-              } else if (score > second_best) {
-                second_best = score;
-                second_best_edge = cur_iters[idx];
+              int new_visits = 0;
+              if (second_best_edge) {
+                int estimated_visits_to_change_best = std::numeric_limits<int>::max();
+                if (best_without_u < second_best) {
+                  const auto n1 = current_nstarted[best_idx] + 1;
+                  estimated_visits_to_change_best = static_cast<int>(std::max(
+                      1.0f, std::min(P_opp[best_idx] * puct_mult / (second_best - best_without_u) - n1 + 1, 1e9f)));
+                }
+                second_best_edge.Reset();
+                new_visits = std::min(current_puct_limit, estimated_visits_to_change_best);
+              } else {
+                new_visits = current_puct_limit;
               }
-              if (can_exit) break;
-              if (nstarted == 0) {
-                can_exit = true;
-              }
-            }
 
-            int new_visits = 0;
-            if (second_best_edge) {
-              int estimated_visits_to_change_best =
-                  std::numeric_limits<int>::max();
-              if (best_without_u < second_best) {
-                const auto n1 = current_nstarted[best_idx] + 1;
-                estimated_visits_to_change_best = static_cast<int>(
-                    std::max(1.0f, std::min(P_opp[best_idx] * puct_mult /
-                                                   (second_best - best_without_u) -
-                                               n1 + 1,
-                                           1e9f)));
+              if (best_idx >= vtp_last_filled.back()) {
+                auto* vtp_array = visits_to_perform.back().get()->data();
+                std::fill(vtp_array + (vtp_last_filled.back() + 1), vtp_array + best_idx + 1, 0);
               }
-              second_best_edge.Reset();
-              new_visits =
-                  std::min(current_puct_limit, estimated_visits_to_change_best);
-            } else {
-              new_visits = current_puct_limit;
-            }
-            if (best_idx >= vtp_last_filled.back()) {
-              auto* vtp_array = visits_to_perform.back().get()->data();
-              std::fill(vtp_array + (vtp_last_filled.back() + 1),
-                        vtp_array + best_idx + 1, 0);
-            }
-            (*visits_to_perform.back())[best_idx] += new_visits;
-            current_puct_limit -= new_visits;
-            Node* child_node = best_edge.GetOrSpawnNode(node);
-            EnsureNodeTwoFoldCorrectForDepth(
-                child_node, current_path.size() + base_depth);
-            bool decremented = false;
-            if (child_node->TryStartScoreUpdate()) {
-              current_nstarted[best_idx]++;
-              new_visits -= 1;
-              decremented = true;
-              if (child_node->GetN() > 0 && !child_node->IsTerminal()) {
-                child_node->IncrementNInFlight(new_visits);
-                current_nstarted[best_idx] += new_visits;
+              (*visits_to_perform.back())[best_idx] += new_visits;
+              current_puct_limit -= new_visits;
+
+              Node* child_node = best_edge.GetOrSpawnNode(node);
+              EnsureNodeTwoFoldCorrectForDepth(child_node, current_path.size() + base_depth);
+
+              bool decremented = false;
+              if (child_node->TryStartScoreUpdate()) {
+                current_nstarted[best_idx]++;
+                new_visits -= 1;
+                decremented = true;
+                if (child_node->GetN() > 0 && !child_node->IsTerminal()) {
+                  child_node->IncrementNInFlight(new_visits);
+                  current_nstarted[best_idx] += new_visits;
+                }
+                current_score[best_idx] =
+                    (P_opp[best_idx] * puct_mult / (1 + current_nstarted[best_idx])) +
+                    (current_util[best_idx] - beta * LogSafe(P_opp[best_idx]));
               }
-              current_score[best_idx] =
-                  (P_opp[best_idx] * puct_mult /
-                       (1 + current_nstarted[best_idx])) +
-                  (current_util[best_idx] - beta * LogSafe(P_opp[best_idx]));
+              if ((decremented && (child_node->GetN() == 0 || child_node->IsTerminal()))) {
+                (*visits_to_perform.back())[best_idx] -= 1;
+                receiver->push_back(NodeToProcess::Visit(
+                    child_node, static_cast<uint16_t>(current_path.size() + base_depth)));
+                completed_visits++;
+                receiver->back().moves_to_visit.reserve(moves_to_path.size() + 1);
+                receiver->back().moves_to_visit = moves_to_path;
+                receiver->back().moves_to_visit.push_back(best_edge.GetMove());
+              }
+              if (best_idx > vtp_last_filled.back() &&
+                  (*visits_to_perform.back())[best_idx] > 0) {
+                vtp_last_filled.back() = best_idx;
+              }
             }
-            if ((decremented &&
-                 (child_node->GetN() == 0 || child_node->IsTerminal()))) {
-              (*visits_to_perform.back())[best_idx] -= 1;
-              receiver->push_back(NodeToProcess::Visit(
-                  child_node,
-                  static_cast<uint16_t>(current_path.size() + base_depth)));
-              completed_visits++;
-              receiver->back().moves_to_visit.reserve(moves_to_path.size() + 1);
-              receiver->back().moves_to_visit = moves_to_path;
-              receiver->back().moves_to_visit.push_back(best_edge.GetMove());
-            }
-            if (best_idx > vtp_last_filled.back() &&
-                (*visits_to_perform.back())[best_idx] > 0) {
-              vtp_last_filled.back() = best_idx;
-            }
-          }
         }
       } else {
-        // Pre-Nscl or even-depth: standard PUCT at even nodes; plausibility-regularized PUCT at odd nodes.
         m_evaluator.SetParent(node);
+
+        // Build P_opp only for odd-depth nodes
+        std::array<float, 256> P_opp;
+        const bool use_opp = is_opponent_node;
+        if (use_opp) {
+          const float tau_opp = params_.GetOppTau();
+          BuildOppPriorFromPolicy(current_pol.data(), max_needed, tau_opp, P_opp);
+        }
+        
         float visited_pol = 0.0f;
         for (Node* child : node->VisitedNodes()) {
           int index = child->Index();
@@ -1986,14 +2048,6 @@ void SearchWorker::PickNodesToExtendTask(
           if (current_util[i] == std::numeric_limits<float>::lowest()) {
             current_util[i] = fpu + m_evaluator.GetDefaultMUtility();
           }
-        }
-
-        // Build P_opp only if odd-depth node.
-        std::array<float, 256> P_opp;
-        const bool use_opp = is_opponent_node;
-        if (use_opp) {
-          const float tau_opp = params_.GetOppTau();
-          BuildOppPriorFromPolicy(current_pol.data(), max_needed, tau_opp, P_opp);
         }
 
         const float cpuct_base = ComputeCpuct(params_, node->GetN(), is_root_node);
@@ -2022,7 +2076,6 @@ void SearchWorker::PickNodesToExtendTask(
             }
             int nstarted = current_nstarted[idx];
             const float util = current_util[idx];
-
             if (idx > cache_filled_idx) {
               if (use_opp) {
                 const float plaus = -beta * LogSafe(P_opp[idx]);
@@ -2034,7 +2087,6 @@ void SearchWorker::PickNodesToExtendTask(
               }
               cache_filled_idx++;
             }
-
             if (is_root_node) {
               if (cur_iters[idx] != search_->current_best_edge_ &&
                   latest_time_manager_hints_.GetEstimatedRemainingPlayouts() <
@@ -2072,10 +2124,9 @@ void SearchWorker::PickNodesToExtendTask(
                 std::numeric_limits<int>::max();
             if (best_without_u < second_best) {
               const auto n1 = current_nstarted[best_idx] + 1;
-              const float prior_for_best =
-                  use_opp ? P_opp[best_idx] : current_pol[best_idx];
+              const float prior = use_opp ? P_opp[best_idx] : current_pol[best_idx];
               estimated_visits_to_change_best = static_cast<int>(
-                  std::max(1.0f, std::min(prior_for_best * puct_mult /
+                  std::max(1.0f, std::min(prior * puct_mult /
                                                   (second_best - best_without_u) -
                                               n1 + 1,
                                           1e9f)));
@@ -2109,8 +2160,7 @@ void SearchWorker::PickNodesToExtendTask(
             }
             if (use_opp) {
               current_score[best_idx] =
-                  (P_opp[best_idx] * puct_mult /
-                       (1 + current_nstarted[best_idx])) +
+                  (P_opp[best_idx] * puct_mult / (1 + current_nstarted[best_idx])) +
                   (current_util[best_idx] - beta * LogSafe(P_opp[best_idx]));
             } else {
               current_score[best_idx] =
@@ -2414,7 +2464,7 @@ void SearchWorker::CollectCollisions() {
 void SearchWorker::MaybePrefetchIntoCache() {
   // TODO(mooskagh) Remove prefetch into cache if node collisions work well.
   // If there are requests to NN, but the batch is not full, try to prefetch
-  // nodes which are likely to be useful in future.
+  // nodes which are likely useful in future.
   if (search_->stop_.load(std::memory_order_acquire)) return;
   if (computation_->GetCacheMisses() > 0 &&
       computation_->GetCacheMisses() < params_.GetMaxPrefetchBatch()) {
