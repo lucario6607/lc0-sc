@@ -530,6 +530,22 @@ const OptionId BaseSearchParams::kGarbageCollectionDelayId{
     "The percentage of expected move time until garbage collection start. "
     "Delay lets search find transpositions to freed search tree branches."};
 
+const OptionId BaseSearchParams::kDRMCTSEnabledId{
+    {.long_flag = "drmcts-enabled",
+     .uci_option = "DRMCTSEnabled",
+     .help_text = "Enable Doubly Robust MCTS for value backpropagation.",
+     .visibility = OptionId::kProOnly}};
+const OptionId BaseSearchParams::kDRMCTSBetaId{
+    {.long_flag = "drmcts-beta",
+     .uci_option = "DRMCTSBeta",
+     .help_text = "Beta weighting for DR-MCTS. V_hybrid = beta*V_mcts + (1-beta)*V_dr.",
+     .visibility = OptionId::kProOnly}};
+const OptionId BaseSearchParams::kDRMCTSTauId{
+    {.long_flag = "drmcts-tau",
+     .uci_option = "DRMCTSTau",
+     .help_text = "Temperature (tau) for the target policy softmax in DR-MCTS.",
+     .visibility = OptionId::kProOnly}};
+
 const OptionId SearchParams::kMaxPrefetchBatchId{
     "max-prefetch", "MaxPrefetch",
     "When the engine cannot gather a large enough batch for immediate use, try "
@@ -631,6 +647,11 @@ void BaseSearchParams::Populate(OptionsParser* options) {
   options->Add<FloatOption>(kUCIRatingAdvId, -10000.0f, 10000.0f) = 0.0f;
   options->Add<BoolOption>(kSearchSpinBackoffId) = false;
   options->Add<FloatOption>(kGarbageCollectionDelayId, 0.0f, 100.0f) = 10.0f;
+  
+  // DR-MCTS Options
+  options->Add<BoolOption>(kDRMCTSEnabledId) = false;
+  options->Add<FloatOption>(kDRMCTSBetaId, 0.0f, 1.0f) = 0.35f;
+  options->Add<FloatOption>(kDRMCTSTauId, 0.01f, 10.0f) = 0.5f;
 }
 
 void SearchParams::Populate(OptionsParser* options) {
@@ -725,7 +746,10 @@ BaseSearchParams::BaseSearchParams(const OptionsDict& options)
       kMaxCollisionVisitsScalingPower(
           options.Get<float>(kMaxCollisionVisitsScalingPowerId)),
       kSearchSpinBackoff(options_.Get<bool>(kSearchSpinBackoffId)),
-      kGarbageCollectionDelay(options_.Get<float>(kGarbageCollectionDelayId)) {}
+      kGarbageCollectionDelay(options_.Get<float>(kGarbageCollectionDelayId)),
+      kDRMCTSEnabled(options.Get<bool>(kDRMCTSEnabledId)),
+      kDRMCTSBeta(options.Get<float>(kDRMCTSBetaId)),
+      kDRMCTSTau(options.Get<float>(kDRMCTSTauId)) {}
 
 SearchParams::SearchParams(const OptionsDict& options)
     : BaseSearchParams(options),
