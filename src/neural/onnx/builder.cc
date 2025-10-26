@@ -83,6 +83,14 @@ void AddFloatAttribute(pblczero::NodeProto* node, const std::string& name,
   attr->set_f(val);
 }
 
+void AddStringAttribute(pblczero::NodeProto* node, const std::string& name,
+                        std::string val) {
+  auto* attr = node->add_attribute();
+  attr->set_name(name);
+  attr->set_type(pblczero::AttributeProto::STRING);
+  attr->set_s(val);
+}
+
 void AddIntsAttribute(pblczero::NodeProto* node, const std::string& name,
                       std::initializer_list<int> vals) {
   auto* attr = node->add_attribute();
@@ -243,6 +251,18 @@ std::string OnnxBuilder::Reshape(const std::string& name,
   auto* node = model_.mutable_graph()->add_node();
   auto out = PopulateStdNodeFields(node, name, input, "Reshape");
   node->add_input(shape);
+  return out;
+}
+
+std::string OnnxBuilder::Reshape(const std::string& name,
+                                 const std::string& input,
+                                 std::initializer_list<int> shape) {
+  auto* node = model_.mutable_graph()->add_node();
+  auto out = PopulateStdNodeFields(node, name, input, "Reshape");
+  node->add_input(AddInitializer(
+      name + "/shape",
+      Int64OnnxConst(std::vector<int64_t>(begin(shape), end(shape)),
+                     {static_cast<int>(shape.size())})));
   return out;
 }
 
@@ -474,6 +494,36 @@ std::string OnnxBuilder::ReduceMean(const std::string& name,
                        {static_cast<int>(axes.size())})));
   }
   AddIntAttribute(node, "keepdims", keepdims);
+  return out;
+}
+
+std::string OnnxBuilder::Einsum(const std::string& name,
+                                const std::vector<std::string>& input,
+                                std::string equation) {
+  auto* node = model_.mutable_graph()->add_node();
+  node->set_name(name);
+  node->set_op_type("Einsum");
+  for (const auto& in : input) {
+    node->add_input(in);
+  }
+  node->add_output(name);
+  AddStringAttribute(node, "equation", equation);
+  return name;
+}
+
+std::string OnnxBuilder::Unsqueeze(const std::string& name,
+                                   const std::string& input,
+                                   std::initializer_list<int> axes) {
+  auto* node = model_.mutable_graph()->add_node();
+  auto out = PopulateStdNodeFields(node, name, input, "Unsqueeze");
+  if (opset_ < 13) {
+    AddIntsAttribute(node, "axes", axes);
+  } else {
+    node->add_input(AddInitializer(
+        name + "/axes",
+        Int64OnnxConst(std::vector<int64_t>(begin(axes), end(axes)),
+                       {static_cast<int>(axes.size())})));
+  }
   return out;
 }
 
