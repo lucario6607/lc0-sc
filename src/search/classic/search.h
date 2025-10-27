@@ -397,6 +397,22 @@ class SearchWorker {
         : task_type(kProcessing), start_idx(start_idx), end_idx(end_idx) {}
   };
 
+  // ********************************************************************
+  // START DR-MCTS DECLARATION
+  // ********************************************************************
+  // Helper struct for the return value of the DR-MCTS calculation.
+  struct HybridValue {
+    float v; // Win-Loss value
+    float d; // Draw value
+    float m; // Moves-left value
+  };
+
+  // Core DR-MCTS calculation function.
+  HybridValue CalculateHybridValue(Node* p, float v_child, const Edge* action_edge);
+  // ********************************************************************
+  // END DR-MCTS DECLARATION
+  // ********************************************************************
+
   NodeToProcess PickNodeToExtend(int collision_limit);
   int PrefetchIntoCache(Node* node, int budget, bool is_odd_depth);
   void DoBackupUpdateSingleNode(const NodeToProcess& node_to_process);
