@@ -1132,11 +1132,11 @@ SearchWorker::HybridValue SearchWorker::CalculateHybridValue(Node* p, float v_ch
             q_values[child_idx] = -child_edge.GetWL(-p->GetWL());
             d_values[child_idx] = child_edge.GetD(p->GetD());
         } else {
-            // CRITICAL FIX: For unvisited children, the best independent prior is the parent's value.
+            // CRITICAL FIX: For unvisited children, the best independent prior is the parent's own value.
             // A naive 0.0 prior is unbiased but extremely uninformative, leading to high variance
             // and poor performance. The parent's value is from before the current rollout and
             // is thus independent.
-            q_values[child_idx] = -p->GetWL();
+            q_values[child_idx] = p->GetWL();
             d_values[child_idx] = p->GetD();
         }
         child_idx++;
@@ -2385,8 +2385,7 @@ void SearchWorker::DoBackupUpdateSingleNode(
         MaybeSetBounds(p, m, &n_to_fix, &v_delta, &d_delta, &m_delta);
 
     // Prepare values for the next iteration (updating parent `p`).
-    // The value from child `n`'s perspective is `v`. From parent `p`'s perspective,
-    // it's `-v`. This is the value we use as input for the next stage.
+    // The value from child `n`'s perspective is `v`.
     float child_v_for_parent = v;
     float child_d_for_parent = d;
 
