@@ -530,6 +530,7 @@ const OptionId BaseSearchParams::kGarbageCollectionDelayId{
     "The percentage of expected move time until garbage collection start. "
     "Delay lets search find transpositions to freed search tree branches."};
 
+// DR-MCTS Option IDs
 const OptionId BaseSearchParams::kDRMCTSEnabledId{
     {.long_flag = "drmcts-enabled",
      .uci_option = "DRMCTSEnabled",
@@ -651,7 +652,7 @@ void BaseSearchParams::Populate(OptionsParser* options) {
   // DR-MCTS Options
   options->Add<BoolOption>(kDRMCTSEnabledId) = false;
   options->Add<FloatOption>(kDRMCTSBetaId, 0.0f, 1.0f) = 0.35f;
-  options->Add<FloatOption>(kDRMCTSTauId, 0.01f, 10.0f) = 0.5f;
+  options->Add<FloatOption>(kDRMCTSTauId, 0.001f, 10.0f) = 0.5f;
 }
 
 void SearchParams::Populate(OptionsParser* options) {
