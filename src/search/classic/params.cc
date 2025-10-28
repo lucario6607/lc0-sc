@@ -550,6 +550,16 @@ const OptionId BaseSearchParams::kDRMCTSRhoCapId{
      .uci_option = "DRMCTSRhoCap",
      .help_text = "Maximum value (cap) for the importance sampling weight (rho) in DR-MCTS.",
      .visibility = OptionId::kProOnly}};
+const OptionId BaseSearchParams::kDRMCTSGammaId{
+    {.long_flag = "drmcts-gamma",
+     .uci_option = "DRMCTSGamma",
+     .help_text = "Discount factor (gamma) for future rewards in DR-MCTS. Default 1.0 for chess.",
+     .visibility = OptionId::kProOnly}};
+const OptionId BaseSearchParams::kDRMCTSAdaptiveBetaId{
+    {.long_flag = "drmcts-adaptive-beta",
+     .uci_option = "DRMCTSAdaptiveBeta",
+     .help_text = "Enable adaptive beta based on importance ratio variance in DR-MCTS.",
+     .visibility = OptionId::kProOnly}};
 
 const OptionId SearchParams::kMaxPrefetchBatchId{
     "max-prefetch", "MaxPrefetch",
@@ -658,6 +668,8 @@ void BaseSearchParams::Populate(OptionsParser* options) {
   options->Add<FloatOption>(kDRMCTSBetaId, 0.0f, 1.0f) = 0.35f;
   options->Add<FloatOption>(kDRMCTSTauId, 0.0f, 10.0f) = 0.5f;
   options->Add<FloatOption>(kDRMCTSRhoCapId, 0.01f, 100.0f) = 1.0f;
+  options->Add<FloatOption>(kDRMCTSGammaId, 0.0f, 1.0f) = 1.0f;
+  options->Add<BoolOption>(kDRMCTSAdaptiveBetaId) = false;
 }
 
 void SearchParams::Populate(OptionsParser* options) {
@@ -756,7 +768,9 @@ BaseSearchParams::BaseSearchParams(const OptionsDict& options)
       kDRMCTSEnabled(options.Get<bool>(kDRMCTSEnabledId)),
       kDRMCTSBeta(options.Get<float>(kDRMCTSBetaId)),
       kDRMCTSTau(options.Get<float>(kDRMCTSTauId)),
-      kDRMCTSRhoCap(options.Get<float>(kDRMCTSRhoCapId)) {}
+      kDRMCTSRhoCap(options.Get<float>(kDRMCTSRhoCapId)),
+      kDRMCTSGamma(options.Get<float>(kDRMCTSGammaId)),
+      kDRMCTSAdaptiveBeta(options.Get<bool>(kDRMCTSAdaptiveBetaId)) {}
 
 SearchParams::SearchParams(const OptionsDict& options)
     : BaseSearchParams(options),
