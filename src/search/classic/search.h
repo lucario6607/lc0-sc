@@ -304,12 +304,12 @@ class SearchWorker {
   // ********************************************************************
   // START DR-MCTS PUBLIC DECLARATIONS
   // ********************************************************************
-  // Helper struct for the return value of the DR-MCTS calculation.
-  // CORRECTED: Moved to public section.
-  struct HybridValue {
-    float v; // Win-Loss value
-    float d; // Draw value
-    float m; // Moves-left value
+  // Helper struct for the return value of the DR-MCTS step calculation.
+  struct DRStepResult {
+    float v;           // Value (from parent's perspective)
+    float d;           // Draw probability
+    float m;           // Moves left
+    bool dr_applied;   // Whether DR was successfully applied
   };
   // ********************************************************************
   // END DR-MCTS PUBLIC DECLARATIONS
@@ -414,9 +414,14 @@ class SearchWorker {
   // ********************************************************************
   // START DR-MCTS PRIVATE DECLARATION
   // ********************************************************************
-  // Core DR-MCTS calculation function.
-  // CORRECTED: Signature now matches implementation.
-  HybridValue CalculateHybridValue(Node* p, float v_child, float d_child, const Edge* action_edge);
+  // Helper struct for DR-MCTS backup state. Defined in search.cc.
+  struct DRBackupContext;
+
+  // Core DR-MCTS step calculation function.
+  DRStepResult CalculateDRStep(Node* parent, Node* child,
+                               const Edge* action_edge, float child_v,
+                               float child_d, float child_m,
+                               DRBackupContext* context);
   // ********************************************************************
   // END DR-MCTS PRIVATE DECLARATION
   // ********************************************************************
