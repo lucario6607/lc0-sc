@@ -301,6 +301,20 @@ class SearchWorker {
   // 7. Update the Search's status and progress information.
   void UpdateCounters();
 
+  // ********************************************************************
+  // START DR-MCTS PUBLIC DECLARATIONS
+  // ********************************************************************
+  // Helper struct for the return value of the DR-MCTS calculation.
+  // CORRECTED: Moved to public section.
+  struct HybridValue {
+    float v; // Win-Loss value
+    float d; // Draw value
+    float m; // Moves-left value
+  };
+  // ********************************************************************
+  // END DR-MCTS PUBLIC DECLARATIONS
+  // ********************************************************************
+
  private:
   struct NodeToProcess {
     bool IsExtendable() const { return !is_collision && !node->IsTerminal(); }
@@ -398,19 +412,13 @@ class SearchWorker {
   };
 
   // ********************************************************************
-  // START DR-MCTS DECLARATION
+  // START DR-MCTS PRIVATE DECLARATION
   // ********************************************************************
-  // Helper struct for the return value of the DR-MCTS calculation.
-  struct HybridValue {
-    float v; // Win-Loss value
-    float d; // Draw value
-    float m; // Moves-left value
-  };
-
   // Core DR-MCTS calculation function.
-  HybridValue CalculateHybridValue(Node* p, float v_child, const Edge* action_edge);
+  // CORRECTED: Signature now matches implementation.
+  HybridValue CalculateHybridValue(Node* p, float v_child, float d_child, const Edge* action_edge);
   // ********************************************************************
-  // END DR-MCTS DECLARATION
+  // END DR-MCTS PRIVATE DECLARATION
   // ********************************************************************
 
   NodeToProcess PickNodeToExtend(int collision_limit);
