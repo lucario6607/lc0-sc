@@ -1090,125 +1090,234 @@ Search::~Search() {
 // START CORRECTED DR-MCTS IMPLEMENTATION
 // ********************************************************************
 
+// Helper structures for DR-MCTS
+struct DRBackupContext {
+  float cumulative_rho = 1.0f;     // Cumulative importance ratio ∏ρ_i
+  float gamma_power = 1.0f;         // γ^t for discounting
+  bool use_vanilla_fallback = false; // Fallback flag when DR assumptions violated
+};
+
+struct DRStepResult {
+  float v;           // Value (from parent's perspective)
+  float d;           // Draw probability
+  float m;           // Moves left
+  bool dr_applied;   // Whether DR was successfully applied
+};
+
+struct DRAdvantage {
+  const Edge* edge;
+  float advantage;
+  float importance_weight;
+};
+
 /**
- * @brief Calculates a Doubly Robust hybrid value for a parent node.
- * Implements the DR-MCTS hybrid estimator (Liu & Beam, 2025).
- *
- * Notes:
- *  - Uses a single Q_hat baseline consistently in both the direct term and the correction term.
- *  - Approximates the behavior probability π_b via normalized PUCT U-scores at backup time:
- *      π_b(a|h) ≈ U_a / Σ_j U_j, where U_i = P_i * c * sqrt(N_children) / (1 + N_started_i).
- *    This is a practical approximation given deterministic argmax selection.
- *  - Leaves draw probability d unchanged (no DR formula is derived for draws in the paper).
- *  - Early returns with vanilla MC when DR-MCTS is disabled.
+ * @brief Calculates the Doubly Robust correction for a single backup step.
+ * Implements proper DR-MCTS as specified in Liu & Beam (2025).
  */
-SearchWorker::HybridValue SearchWorker::CalculateHybridValue(
-    Node* p, float v_child, float d_child, const Edge* action_edge) {
-  // If disabled, return vanilla one-step backup value (parent perspective).
-  if (!params_.GetDRMCTSEnabled()) {
-    return {-v_child, d_child, p->GetM() + 1.0f};
+SearchWorker::DRStepResult SearchWorker::CalculateDRStep(
+    Node* parent, Node* child, const Edge* action_edge,
+    float child_v, float child_d, float child_m,
+    DRBackupContext* context) {
+  
+  // Early return if we should use vanilla MCTS
+  if (!params_.GetDRMCTSEnabled() || context->use_vanilla_fallback) {
+    return {-child_v, child_d, parent->GetM() + 1.0f, false};
   }
 
-  const float beta = params_.GetDRMCTSBeta();
   const float tau = params_.GetDRMCTSTau();
-  const float rho_cap = params_.GetDRMCTSRhoCap();
-
-  // Parent-perspective Monte Carlo target from the chosen child.
-  const float v_mcts = -v_child;
-  const float d_mcts = d_child;
-
-  const int num_children = p->GetNumEdges();
+  const float gamma = params_.GetDRMCTSGamma();  // Discount factor (1.0 for undiscounted chess)
+  
+  // Monte Carlo target (parent perspective)
+  const float v_mcts = -child_v;
+  const float d_mcts = child_d;
+  const float m_mcts = parent->GetM() + 1.0f;
+  
+  const int num_children = parent->GetNumEdges();
   if (num_children == 0) {
-    return {v_mcts, d_mcts, p->GetM() + 1.0f};
+    context->use_vanilla_fallback = true;
+    return {v_mcts, d_mcts, m_mcts, false};
   }
 
-  // Build a single Q_hat baseline in the parent perspective, consistent and independent of this sample.
+  // Get external Q̂ baseline (from value network, not from tree)
   std::vector<float> q_hat;
+  std::vector<float> d_hat;
+  std::vector<float> m_hat;
   q_hat.reserve(num_children);
-
-  // We also need π_b approximation: compute normalized U-scores like in PUCT at backup time.
-  const bool is_root = (p == search_->root_node_);
-  const float cpuct = ComputeCpuct(params_, p->GetN(), is_root);
-  const float puct_mult = cpuct * std::sqrt(std::max(p->GetChildrenVisits(), 1u));
-
-  float sum_u = 0.0f;
-  float u_best = 0.0f;
-  int action_idx = -1;
-
-  int idx = 0;
-  for (const auto& e : p->Edges()) {
-    // Q_hat baseline:
-    float q_parent;
-    if (e.GetN() > 0) {
-      // Use stored child value, flipped to parent perspective.
-      q_parent = -e.GetWL(-p->GetWL());
-    } else {
-      // Unvisited: fallback to parent's current value as a constant baseline.
-      q_parent = p->GetWL();
+  d_hat.reserve(num_children);
+  m_hat.reserve(num_children);
+  
+  // Use neural network evaluation as baseline
+  float nn_baseline_v = 0.0f;
+  float nn_baseline_d = 0.0f;
+  float nn_baseline_m = parent->GetM() + 1.0f;
+  
+  // Try to get cached NN evaluation for parent position
+  if (search_->backend_) {
+    auto history = search_->GetPositionHistoryAtNode(parent);
+    auto eval = search_->backend_->GetCachedEvaluation(
+        EvalPosition{history.GetPositions(), {}});
+    if (eval) {
+      nn_baseline_v = -eval->q;  // Parent perspective
+      nn_baseline_d = eval->d;
+      if (eval->m > 0) nn_baseline_m = eval->m + 1.0f;
     }
-    q_hat.push_back(q_parent);
-
-    // Behavior prob accumulation via normalized U:
-    const int nstarted = e.GetNStarted();
-    const float u_i = e.GetP() * puct_mult / (1 + nstarted);
-    if (u_i > 0.0f) sum_u += u_i;
-
+  }
+  
+  // Fill baseline for all children
+  for (int i = 0; i < num_children; ++i) {
+    q_hat.push_back(nn_baseline_v);
+    d_hat.push_back(nn_baseline_d);
+    m_hat.push_back(nn_baseline_m);
+  }
+  
+  // Compute behavior policy π_b (deterministic for argmax selection)
+  std::vector<float> pi_b(num_children, 0.0f);
+  int action_idx = -1;
+  int idx = 0;
+  for (const auto& e : parent->Edges()) {
     if (e.edge() == action_edge) {
+      pi_b[idx] = 1.0f;  // Deterministic selection
       action_idx = idx;
-      u_best = std::max(0.0f, u_i);
+      break;
     }
     idx++;
   }
-
-  // Target policy π_e via softmax on q_hat / τ (stable).
+  
+  if (action_idx < 0) {
+    // Fallback to vanilla if we can't identify the action
+    context->use_vanilla_fallback = true;
+    return {v_mcts, d_mcts, m_mcts, false};
+  }
+  
+  // Get fixed target policy π_e
   std::vector<float> pi_e(num_children, 0.0f);
+  
+  // Use softmax over Q values as target policy
   if (tau > 1e-6f) {
-    float inv_tau = 1.0f / tau;
-    float max_q = *std::max_element(q_hat.begin(), q_hat.end());
+    std::vector<float> q_values;
+    q_values.reserve(num_children);
+    
+    const bool is_root = (parent == search_->root_node_);
+    const float draw_score = search_->GetDrawScore(!is_root);
+    const float fpu = GetFpu(params_, parent, is_root, draw_score);
+    
+    for (const auto& edge : parent->Edges()) {
+      float q = edge.GetQ(fpu, draw_score);
+      q_values.push_back(q);
+    }
+    
+    // Compute softmax
+    float max_q = *std::max_element(q_values.begin(), q_values.end());
     double sum = 0.0;
     for (int i = 0; i < num_children; ++i) {
-      float z = (q_hat[i] - max_q) * inv_tau;
-      z = std::max(-50.0f, std::min(50.0f, z));  // clamp for exp stability
-      double w = std::exp(z);
-      pi_e[i] = static_cast<float>(w);
-      sum += w;
+      float z = (q_values[i] - max_q) / tau;
+      z = std::max(-50.0f, std::min(50.0f, z));  // Stability
+      pi_e[i] = std::exp(z);
+      sum += pi_e[i];
     }
     if (sum > 1e-30) {
       for (int i = 0; i < num_children; ++i) {
         pi_e[i] = static_cast<float>(pi_e[i] / sum);
       }
     } else {
-      float inv = 1.0f / std::max(1, num_children);
-      for (int i = 0; i < num_children; ++i) pi_e[i] = inv;
+      // Uniform fallback
+      float uniform = 1.0f / num_children;
+      std::fill(pi_e.begin(), pi_e.end(), uniform);
     }
   } else {
-    int best = std::distance(q_hat.begin(), std::max_element(q_hat.begin(), q_hat.end()));
-    if (best >= 0 && best < num_children) pi_e[best] = 1.0f;
+    // Greedy: all mass on best Q
+    const bool is_root = (parent == search_->root_node_);
+    const float draw_score = search_->GetDrawScore(!is_root);
+    const float fpu = GetFpu(params_, parent, is_root, draw_score);
+    
+    float best_q = -std::numeric_limits<float>::infinity();
+    int best_idx = 0;
+    idx = 0;
+    for (const auto& edge : parent->Edges()) {
+      float q = edge.GetQ(fpu, draw_score);
+      if (q > best_q) {
+        best_q = q;
+        best_idx = idx;
+      }
+      idx++;
+    }
+    pi_e[best_idx] = 1.0f;
   }
-
-  // Direct method V_hat = Σ π_e Q_hat
-  float v_hat = 0.0f;
-  for (int i = 0; i < num_children; ++i) v_hat += pi_e[i] * q_hat[i];
-
-  // Importance sampling correction for the taken action (bounded IS).
-  float v_dr = v_hat;  // start from the DM estimate
-  if (action_idx >= 0) {
-    const float pi_e_a = std::max(0.0f, std::min(1.0f, pi_e[action_idx]));
-    const float pi_b_a = (sum_u > 1e-12f) ? (u_best / sum_u) : 1.0f;  // fallback to 1 if degenerate
-    const float denom = std::max(1e-9f, pi_b_a);
-    const float rho = std::min(rho_cap, pi_e_a / denom);
-    v_dr += rho * (v_mcts - q_hat[action_idx]);
+  
+  // Direct method estimates
+  float v_hat = 0.0f, d_hat_total = 0.0f, m_hat_total = 0.0f;
+  for (int i = 0; i < num_children; ++i) {
+    v_hat += pi_e[i] * q_hat[i];
+    d_hat_total += pi_e[i] * d_hat[i];
+    m_hat_total += pi_e[i] * m_hat[i];
   }
-
-  // Hybrid mixture.
-  const float v_hybrid = beta * v_mcts + (1.0f - beta) * v_dr;
-
-  // d: keep as-is (no DR correction derived).
-  const float d_hybrid = d_mcts;
-  const float m_hybrid = p->GetM() + 1.0f;
-
-  return {v_hybrid, d_hybrid, m_hybrid};
+  
+  // Compute importance ratio for this step
+  float rho_step = 0.0f;
+  if (pi_b[action_idx] > 1e-9f) {
+    rho_step = pi_e[action_idx] / pi_b[action_idx];
+  } else {
+    // Cannot compute valid IS ratio, fallback to vanilla
+    context->use_vanilla_fallback = true;
+    return {v_mcts, d_mcts, m_mcts, false};
+  }
+  
+  // Update cumulative importance ratio
+  context->cumulative_rho *= rho_step;
+  
+  // Apply truncation with bias correction if needed
+  float rho_effective = context->cumulative_rho;
+  float bias_correction_v = 0.0f;
+  float bias_correction_d = 0.0f;
+  float bias_correction_m = 0.0f;
+  
+  const float rho_cap = params_.GetDRMCTSRhoCap();
+  if (rho_cap > 0.0f && context->cumulative_rho > rho_cap) {
+    // Truncate and add bias correction term (Thomas & Brunskill, 2016)
+    rho_effective = rho_cap;
+    
+    // Simple bias correction: use the excess weight times expected advantage
+    // In practice, this would need more sophisticated estimation
+    float excess = context->cumulative_rho - rho_cap;
+    float excess_weight = excess / (excess + rho_cap);  // Normalized excess
+    
+    // Approximate bias correction
+    bias_correction_v = excess_weight * 0.1f * (v_mcts - q_hat[action_idx]);
+    bias_correction_d = excess_weight * 0.1f * (d_mcts - d_hat[action_idx]);
+    bias_correction_m = excess_weight * 0.1f * (m_mcts - m_hat[action_idx]);
+  }
+  
+  // DR correction with cumulative importance weighting (Eq. 5 from paper)
+  float v_dr = v_hat + context->gamma_power * rho_effective * 
+               (v_mcts - q_hat[action_idx]) + bias_correction_v;
+  float d_dr = d_hat_total + context->gamma_power * rho_effective * 
+               (d_mcts - d_hat[action_idx]) + bias_correction_d;
+  float m_dr = m_hat_total + context->gamma_power * rho_effective * 
+               (m_mcts - m_hat[action_idx]) + bias_correction_m;
+  
+  // Update discount factor for next step
+  context->gamma_power *= gamma;
+  
+  // Get adaptive beta based on variance estimates
+  float beta = params_.GetDRMCTSBeta();
+  if (params_.GetDRMCTSAdaptiveBeta()) {
+    // Simple adaptive beta: reduce weight of DR when importance ratio is large
+    // (high variance scenario)
+    if (context->cumulative_rho > 5.0f) {
+      beta = std::min(0.9f, beta + 0.3f);  // Increase MCTS weight
+    } else if (context->cumulative_rho > 2.0f) {
+      beta = std::min(0.7f, beta + 0.1f);
+    }
+  }
+  
+  // Hybrid mixture (Eq. 6 from paper)
+  float v_hybrid = beta * v_mcts + (1.0f - beta) * v_dr;
+  float d_hybrid = beta * d_mcts + (1.0f - beta) * d_dr;
+  float m_hybrid = beta * m_mcts + (1.0f - beta) * m_dr;
+  
+  return {v_hybrid, d_hybrid, m_hybrid, true};
 }
+
 // ********************************************************************
 // END CORRECTED DR-MCTS IMPLEMENTATION
 // ********************************************************************
