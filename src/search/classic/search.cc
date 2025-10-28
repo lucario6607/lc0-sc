@@ -1119,8 +1119,16 @@ SearchWorker::HybridValue SearchWorker::CalculateHybridValue(Node* p, float v_ch
     std::vector<float> q_values(num_children);
     int child_idx = 0;
     for (const auto& child_edge : p->Edges()) {
-        // Q-value is from the parent's perspective. For unvisited nodes, use parent's own value as a reasonable prior.
-        q_values[child_idx] = -child_edge.GetWL(-p->GetWL());
+        // ** CRITICAL FIX FOR LOW NODE COUNTS **
+        if (child_edge.GetN() > 0) {
+            // For visited children, use their stored Q-value.
+            q_values[child_idx] = -child_edge.GetWL(-p->GetWL());
+        } else {
+            // For unvisited children, the parent's old value is a poor, stale estimate.
+            // The most recent information we have is v_mcts from the sibling's NN eval.
+            // Using this as a more informed prior prevents information suppression.
+            q_values[child_idx] = v_mcts;
+        }
         child_idx++;
     }
 
@@ -1178,6 +1186,7 @@ SearchWorker::HybridValue SearchWorker::CalculateHybridValue(Node* p, float v_ch
         // rho = pi_e / 1 = pi_e.
         float rho = pi_e;
         // The term is rho * (reward - Q(s,a)). Here, reward is v_mcts and Q(s,a) is q_values[action_idx].
+        // Note: q_values[action_idx] is the value *before* this backup.
         is_correction = rho * (v_mcts - q_values[action_idx]);
     }
     
