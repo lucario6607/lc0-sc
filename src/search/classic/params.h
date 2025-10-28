@@ -162,11 +162,13 @@ class BaseSearchParams {
   float GetGarbageCollectionDelay() const {
     return kGarbageCollectionDelay;
   }
-
+  
   // DR-MCTS Getters
   bool GetDRMCTSEnabled() const { return kDRMCTSEnabled; }
   float GetDRMCTSBeta() const { return kDRMCTSBeta; }
   float GetDRMCTSTau() const { return kDRMCTSTau; }
+  float GetDRMCTSRhoCap() const { return kDRMCTSRhoCap; }
+
 
   // Search parameter IDs.
   static const OptionId kMiniBatchSizeId;
@@ -240,6 +242,8 @@ class BaseSearchParams {
   static const OptionId kDRMCTSEnabledId;
   static const OptionId kDRMCTSBetaId;
   static const OptionId kDRMCTSTauId;
+  static const OptionId kDRMCTSRhoCapId;
+
 
  protected:
   const OptionsDict& options_;
@@ -303,6 +307,7 @@ class BaseSearchParams {
   const bool kDRMCTSEnabled;
   const float kDRMCTSBeta;
   const float kDRMCTSTau;
+  const float kDRMCTSRhoCap;
 };
 
 class SearchParams : public BaseSearchParams {
