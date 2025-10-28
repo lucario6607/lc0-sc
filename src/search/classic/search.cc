@@ -2365,7 +2365,7 @@ void SearchWorker::DoBackupUpdateSingleNode(
 
     // Prepare values for the next iteration (updating parent `p`).
     // The value from child `n`'s perspective is `v`. From parent `p`'s perspective,
-    // it's `-v`. This is the value we use as input for the DR-MCTS calculation.
+    // it's `-v`. This is the value we use as input for the next stage.
     float child_value_for_parent = -v;
 
     // If the child node `n` is terminal, its value is exact and should be used.
@@ -2380,13 +2380,14 @@ void SearchWorker::DoBackupUpdateSingleNode(
     if (params_.GetDRMCTSEnabled() && p->HasChildren() && p->GetN() > 0) {
         HybridValue hv = CalculateHybridValue(p, child_value_for_parent, n->GetOwnEdge());
         // The new (v,d,m) for the next backup step are from the hybrid calculation.
-        // They are already from parent `p`'s perspective, so we must negate `v` for
-        // the next loop iteration, which expects the value from the child's perspective.
-        v = -hv.v;
+        // This value is from the parent `p`'s perspective. The loop variable `v`
+        // must hold this value for the next iteration's update of `p`.
+        v = hv.v;
         d = hv.d;
         m = hv.m;
     } else {
-        // Standard MCTS backup for parent
+        // Standard MCTS backup for parent.
+        // The value from the child `n` is flipped to the parent `p`'s perspective.
         v = child_value_for_parent;
         v_delta = -v_delta;
         m++;
@@ -2502,4 +2503,5 @@ void SearchWorker::UpdateCounters() {
 
 }  // namespace classic
 }  // namespace lczero
+
 
