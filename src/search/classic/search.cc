@@ -1185,9 +1185,19 @@ SearchWorker::HybridValue SearchWorker::CalculateHybridValue(Node* p, float v_ch
     // 4. Calculate Importance Sampling (IS) correction term.
     float v_correction = 0.0f;
     float d_correction = 0.0f;
-    int action_idx = std::distance(p->Edges().begin(), p->FindEdge(action_edge->GetMove()));
+    
+    // CORRECTED: Find the index of the action that was taken by iterating.
+    int action_idx = -1;
+    child_idx = 0;
+    for (const auto& edge : p->Edges()) {
+        if (edge.edge() == action_edge) {
+            action_idx = child_idx;
+            break;
+        }
+        child_idx++;
+    }
 
-    if (action_idx < num_children) {
+    if (action_idx != -1) {
         float pi_e = target_policy[action_idx];
         float rho = std::min(rho_cap, pi_e);
 
