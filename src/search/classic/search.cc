@@ -1132,11 +1132,12 @@ SearchWorker::HybridValue SearchWorker::CalculateHybridValue(Node* p, float v_ch
             q_values[child_idx] = -child_edge.GetWL(-p->GetWL());
             d_values[child_idx] = child_edge.GetD(p->GetD());
         } else {
-            // AUDIT FIX #1: Independence of Q_hat and rollout return G.
-            // For unvisited children, use a neutral prior (0.0) instead of the
-            // just-sampled `v_mcts`, which would bias the DR estimate.
-            q_values[child_idx] = 0.0f;
-            d_values[child_idx] = 0.0f; // A neutral prior for draw probability.
+            // CRITICAL FIX: For unvisited children, the best independent prior is the parent's value.
+            // A naive 0.0 prior is unbiased but extremely uninformative, leading to high variance
+            // and poor performance. The parent's value is from before the current rollout and
+            // is thus independent.
+            q_values[child_idx] = -p->GetWL();
+            d_values[child_idx] = p->GetD();
         }
         child_idx++;
     }
@@ -1157,7 +1158,6 @@ SearchWorker::HybridValue SearchWorker::CalculateHybridValue(Node* p, float v_ch
             for (int i = 0; i < num_children; ++i) target_policy[i] /= target_policy_sum;
         }
     } else { // Argmax for temperature tau -> 0
-        // AUDIT FIX #2: Handle tau=0 case correctly.
         float max_q = -std::numeric_limits<float>::infinity();
         int best_idx = -1;
         for (int i = 0; i < num_children; ++i) {
@@ -1194,7 +1194,7 @@ SearchWorker::HybridValue SearchWorker::CalculateHybridValue(Node* p, float v_ch
     if (action_idx != -1) {
         float pi_e = target_policy[action_idx];
         // The behavior policy pi_b is 1 for the chosen path, so rho = pi_e / 1.
-        // AUDIT FIX #3: Importance weight clipping to control variance.
+        // Clip the importance weight to control variance.
         float rho = std::min(rho_cap, pi_e);
 
         // The correction is rho * (reward - Q(s,a)).
@@ -1209,13 +1209,11 @@ SearchWorker::HybridValue SearchWorker::CalculateHybridValue(Node* p, float v_ch
     const float d_dr = d_hat + d_correction;
 
     // 6. Calculate final hybrid value (Eq. 6) and consistent (d, m)
-    // AUDIT FIX #4: Blend the draw component `d` using DR, not a heuristic.
     float v_hybrid = beta * v_mcts + (1.0f - beta) * v_dr;
     float d_hybrid = beta * d_mcts + (1.0f - beta) * d_dr;
     d_hybrid = std::max(0.0f, std::min(1.0f, d_hybrid)); // Clamp to [0, 1] to maintain invariant
 
-    // AUDIT FIX #5: Moves-left `m` component uses a simple, acceptable heuristic.
-    // A more complex backup (min for wins, max for losses) could be used but is not required by DR.
+    // Moves-left `m` component uses a simple, acceptable heuristic.
     float m_hybrid = p->GetM() + 1.0f;
 
     return {v_hybrid, d_hybrid, m_hybrid};
@@ -2398,7 +2396,7 @@ void SearchWorker::DoBackupUpdateSingleNode(
         child_d_for_parent = n->GetD();
     }
 
-    // AUDIT FIX #6: Correctly track deltas for AdjustForTerminal().
+    // Correctly track deltas for AdjustForTerminal().
     const float prev_v = v;
     const float prev_d = d;
     const float prev_m = m;
@@ -2407,7 +2405,7 @@ void SearchWorker::DoBackupUpdateSingleNode(
     // DR-MCTS RECURSIVE MODIFICATION
     // ********************************************************************
     if (params_.GetDRMCTSEnabled() && p->HasChildren() && p->GetN() > 0) {
-        // AUDIT FIX #7: The nodes_mutex_ lock is held by the caller, ensuring thread-safety.
+        // The nodes_mutex_ lock is held by the caller, ensuring thread-safety.
         HybridValue hv = CalculateHybridValue(p, child_v_for_parent, child_d_for_parent, n->GetOwnEdge());
         // The new (v,d,m) for the next backup step are from the hybrid calculation.
         // This value is from the parent `p`'s perspective. The loop variables
@@ -2539,5 +2537,3 @@ void SearchWorker::UpdateCounters() {
 
 }  // namespace classic
 }  // namespace lczero
-
-
