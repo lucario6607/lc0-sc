@@ -674,7 +674,7 @@ std::int64_t Search::GetTotalPlayouts() const {
 }
 
 void Search::ResetBestMove() {
-  SharedMutex::Lock nodes_lock(nodes_mutex_);
+  SharedMutex::Lock nodes_mutex(nodes_mutex_);
   Mutex::Lock lock(counters_mutex_);
   bool old_sent = bestmove_is_sent_;
   bestmove_is_sent_ = false;
@@ -1092,132 +1092,122 @@ Search::~Search() {
 
 /**
  * @brief Calculates a Doubly Robust hybrid value for a parent node.
- * This function implements the core logic of the DR-MCTS algorithm as described
- * in "Doubly Robust Monte Carlo Tree Search" (Liu & Beam, 2025). It computes
- * a refined value estimate for a parent node `p` by separating the model used for
- * the responsive direct estimate (`V_hat`) from the model used for the unbiased
- * correction term.
+ * Implements the DR-MCTS hybrid estimator (Liu & Beam, 2025).
  *
- * NOTE: This function must be called while holding the nodes_mutex_ lock, as it
- * iterates over the parent node's edges and accesses child node statistics.
- *
- * @param p The parent node for which to calculate the hybrid value.
- * @param v_child The win-loss value (-1 to 1) from the child's perspective.
- * @param d_child The draw probability (0 to 1) from the child's perspective.
- * @param action_edge The edge corresponding to the action taken from `p` to the child.
- * @return A HybridValue struct containing a consistent (v, d, m) triple.
+ * Notes:
+ *  - Uses a single Q_hat baseline consistently in both the direct term and the correction term.
+ *  - Approximates the behavior probability π_b via normalized PUCT U-scores at backup time:
+ *      π_b(a|h) ≈ U_a / Σ_j U_j, where U_i = P_i * c * sqrt(N_children) / (1 + N_started_i).
+ *    This is a practical approximation given deterministic argmax selection.
+ *  - Leaves draw probability d unchanged (no DR formula is derived for draws in the paper).
+ *  - Early returns with vanilla MC when DR-MCTS is disabled.
  */
-SearchWorker::HybridValue SearchWorker::CalculateHybridValue(Node* p, float v_child, float d_child, const Edge* action_edge) {
-    const float beta = params_.GetDRMCTSBeta();
-    const float tau = params_.GetDRMCTSTau();
-    const float rho_cap = params_.GetDRMCTSRhoCap();
+SearchWorker::HybridValue SearchWorker::CalculateHybridValue(
+    Node* p, float v_child, float d_child, const Edge* action_edge) {
+  // If disabled, return vanilla one-step backup value (parent perspective).
+  if (!params_.GetDRMCTSEnabled()) {
+    return {-v_child, d_child, p->GetM() + 1.0f};
+  }
 
-    // The MCTS rollout value (G) is the value from the child's evaluation, from the parent's perspective.
-    const float v_mcts = -v_child;
-    const float d_mcts = d_child;
+  const float beta = params_.GetDRMCTSBeta();
+  const float tau = params_.GetDRMCTSTau();
+  const float rho_cap = params_.GetDRMCTSRhoCap();
 
-    const int num_children = p->GetNumEdges();
-    if (num_children == 0) {
-        return {v_mcts, d_mcts, p->GetM() + 1.0f};
+  // Parent-perspective Monte Carlo target from the chosen child.
+  const float v_mcts = -v_child;
+  const float d_mcts = d_child;
+
+  const int num_children = p->GetNumEdges();
+  if (num_children == 0) {
+    return {v_mcts, d_mcts, p->GetM() + 1.0f};
+  }
+
+  // Build a single Q_hat baseline in the parent perspective, consistent and independent of this sample.
+  std::vector<float> q_hat;
+  q_hat.reserve(num_children);
+
+  // We also need π_b approximation: compute normalized U-scores like in PUCT at backup time.
+  const bool is_root = (p == search_->root_node_);
+  const float cpuct = ComputeCpuct(params_, p->GetN(), is_root);
+  const float puct_mult = cpuct * std::sqrt(std::max(p->GetChildrenVisits(), 1u));
+
+  float sum_u = 0.0f;
+  float u_best = 0.0f;
+  int action_idx = -1;
+
+  int idx = 0;
+  for (const auto& e : p->Edges()) {
+    // Q_hat baseline:
+    float q_parent;
+    if (e.GetN() > 0) {
+      // Use stored child value, flipped to parent perspective.
+      q_parent = -e.GetWL(-p->GetWL());
+    } else {
+      // Unvisited: fallback to parent's current value as a constant baseline.
+      q_parent = p->GetWL();
     }
+    q_hat.push_back(q_parent);
 
-    // We use two different models for Q_hat, depending on the context:
-    // 1. For V_hat and pi_e: A responsive model that uses the fresh v_mcts for unvisited siblings.
-    //    This makes the direct estimate react quickly to new information.
-    // 2. For the correction term: An independent model that uses the parent's stale value.
-    //    This ensures the correction term remains unbiased.
-    std::vector<float> q_model_responsive(num_children);
-    std::vector<float> d_model_responsive(num_children);
-    std::vector<float> q_model_unbiased(num_children);
-    std::vector<float> d_model_unbiased(num_children);
+    // Behavior prob accumulation via normalized U:
+    const int nstarted = e.GetNStarted();
+    const float u_i = e.GetP() * puct_mult / (1 + nstarted);
+    if (u_i > 0.0f) sum_u += u_i;
 
-    int child_idx = 0;
-    for (const auto& child_edge : p->Edges()) {
-        if (child_edge.GetN() > 0) {
-            // For visited children, both models use the stored Q-value.
-            const float q_val = -child_edge.GetWL(-p->GetWL());
-            const float d_val = child_edge.GetD(p->GetD());
-            q_model_responsive[child_idx] = q_val;
-            d_model_responsive[child_idx] = d_val;
-            q_model_unbiased[child_idx] = q_val;
-            d_model_unbiased[child_idx] = d_val;
-        } else {
-            // For unvisited children, the models differ.
-            // Responsive model uses the fresh sibling evaluation.
-            q_model_responsive[child_idx] = v_mcts;
-            d_model_responsive[child_idx] = d_mcts;
-            // Unbiased model uses the parent's (stale but independent) value.
-            q_model_unbiased[child_idx] = p->GetWL();
-            d_model_unbiased[child_idx] = p->GetD();
-        }
-        child_idx++;
+    if (e.edge() == action_edge) {
+      action_idx = idx;
+      u_best = std::max(0.0f, u_i);
     }
+    idx++;
+  }
 
-    // --- Calculations using the RESPONSIVE model ---
-
-    // 2. Calculate Target Policy (pi_e) using the responsive model for Q_hat.
-    std::vector<float> target_policy(num_children, 0.0f);
-    if (tau > 1e-6) { // Softmax
-        double target_policy_sum = 0.0;
-        float max_q = *std::max_element(q_model_responsive.begin(), q_model_responsive.end());
-        for (int i = 0; i < num_children; ++i) {
-            target_policy[i] = std::exp((q_model_responsive[i] - max_q) / tau);
-            target_policy_sum += target_policy[i];
-        }
-        if (target_policy_sum > 1e-9) {
-            for (int i = 0; i < num_children; ++i) target_policy[i] /= target_policy_sum;
-        }
-    } else { // Argmax
-        int best_idx = std::distance(q_model_responsive.begin(), std::max_element(q_model_responsive.begin(), q_model_responsive.end()));
-        if (best_idx < num_children) target_policy[best_idx] = 1.0f;
-    }
-
-    // 3. Calculate V_hat and D_hat (Direct Method estimates) using the responsive model.
-    float v_hat = 0.0f;
-    float d_hat = 0.0f;
+  // Target policy π_e via softmax on q_hat / τ (stable).
+  std::vector<float> pi_e(num_children, 0.0f);
+  if (tau > 1e-6f) {
+    float inv_tau = 1.0f / tau;
+    float max_q = *std::max_element(q_hat.begin(), q_hat.end());
+    double sum = 0.0;
     for (int i = 0; i < num_children; ++i) {
-        v_hat += target_policy[i] * q_model_responsive[i];
-        d_hat += target_policy[i] * d_model_responsive[i];
+      float z = (q_hat[i] - max_q) * inv_tau;
+      z = std::max(-50.0f, std::min(50.0f, z));  // clamp for exp stability
+      double w = std::exp(z);
+      pi_e[i] = static_cast<float>(w);
+      sum += w;
     }
-
-    // --- Calculations using the UNBIASED model ---
-
-    // 4. Calculate Importance Sampling (IS) correction term.
-    float v_correction = 0.0f;
-    float d_correction = 0.0f;
-    
-    // CORRECTED: Find the index of the action that was taken by iterating.
-    int action_idx = -1;
-    child_idx = 0;
-    for (const auto& edge : p->Edges()) {
-        if (edge.edge() == action_edge) {
-            action_idx = child_idx;
-            break;
-        }
-        child_idx++;
+    if (sum > 1e-30) {
+      for (int i = 0; i < num_children; ++i) {
+        pi_e[i] = static_cast<float>(pi_e[i] / sum);
+      }
+    } else {
+      float inv = 1.0f / std::max(1, num_children);
+      for (int i = 0; i < num_children; ++i) pi_e[i] = inv;
     }
+  } else {
+    int best = std::distance(q_hat.begin(), std::max_element(q_hat.begin(), q_hat.end()));
+    if (best >= 0 && best < num_children) pi_e[best] = 1.0f;
+  }
 
-    if (action_idx != -1) {
-        float pi_e = target_policy[action_idx];
-        float rho = std::min(rho_cap, pi_e);
+  // Direct method V_hat = Σ π_e Q_hat
+  float v_hat = 0.0f;
+  for (int i = 0; i < num_children; ++i) v_hat += pi_e[i] * q_hat[i];
 
-        // The correction is rho * (G - Q_hat_unbiased). This is the key to unbiasedness.
-        v_correction = rho * (v_mcts - q_model_unbiased[action_idx]);
-        d_correction = rho * (d_mcts - d_model_unbiased[action_idx]);
-    }
+  // Importance sampling correction for the taken action (bounded IS).
+  float v_dr = v_hat;  // start from the DM estimate
+  if (action_idx >= 0) {
+    const float pi_e_a = std::max(0.0f, std::min(1.0f, pi_e[action_idx]));
+    const float pi_b_a = (sum_u > 1e-12f) ? (u_best / sum_u) : 1.0f;  // fallback to 1 if degenerate
+    const float denom = std::max(1e-9f, pi_b_a);
+    const float rho = std::min(rho_cap, pi_e_a / denom);
+    v_dr += rho * (v_mcts - q_hat[action_idx]);
+  }
 
-    // 5. Calculate Doubly Robust values (V_DR, D_DR)
-    const float v_dr = v_hat + v_correction;
-    const float d_dr = d_hat + d_correction;
+  // Hybrid mixture.
+  const float v_hybrid = beta * v_mcts + (1.0f - beta) * v_dr;
 
-    // 6. Calculate final hybrid value
-    float v_hybrid = beta * v_mcts + (1.0f - beta) * v_dr;
-    float d_hybrid = beta * d_mcts + (1.0f - beta) * d_dr;
-    d_hybrid = std::max(0.0f, std::min(1.0f, d_hybrid));
+  // d: keep as-is (no DR correction derived).
+  const float d_hybrid = d_mcts;
+  const float m_hybrid = p->GetM() + 1.0f;
 
-    float m_hybrid = p->GetM() + 1.0f;
-
-    return {v_hybrid, d_hybrid, m_hybrid};
+  return {v_hybrid, d_hybrid, m_hybrid};
 }
 // ********************************************************************
 // END CORRECTED DR-MCTS IMPLEMENTATION
@@ -2355,17 +2345,43 @@ void SearchWorker::DoBackupUpdateSingleNode(
   float v = node_to_process.eval->q;
   float d = node_to_process.eval->d;
   float m = node_to_process.eval->m;
+
   int n_to_fix = 0;
   float v_delta = 0.0f;
   float d_delta = 0.0f;
   float m_delta = 0.0f;
   uint32_t solid_threshold =
       static_cast<uint32_t>(params_.GetSolidTreeThreshold());
+
+  bool applied_dr_once = false;
+
   for (Node *n = node, *p; n != search_->root_node_->GetParent(); n = p) {
     p = n->GetParent();
 
-    // Update node `n` with the current (v,d,m) values from the previous iteration.
-    n->FinalizeScoreUpdate(v, d, m, node_to_process.multivisit);
+    // If we have a parent, compute DR hybrid for this (p <- n) step once,
+    // then write DR-adjusted value into the child and pass hybrid upward.
+    SearchWorker::HybridValue hv{-v, d, (p ? p->GetM() + 1.0f : n->GetM())};
+    bool use_dr = false;
+
+    if (!applied_dr_once && params_.GetDRMCTSEnabled() && p && p->HasChildren() &&
+        p->GetN() > 0) {
+      // If the child is terminal, use exact child values going up.
+      float child_v_for_parent = n->IsTerminal() ? n->GetWL() : v;
+      float child_d_for_parent = n->IsTerminal() ? n->GetD() : d;
+
+      hv = CalculateHybridValue(p, child_v_for_parent, child_d_for_parent,
+                                n->GetOwnEdge());
+      use_dr = true;
+      applied_dr_once = true;
+    }
+
+    // First, write back to the child node n (use DR-adjusted value if available).
+    const float v_for_child = use_dr ? -hv.v : v;
+    const float d_for_child = use_dr ? hv.d : d;
+    const float m_for_child = m;  // No DR for moves-left.
+
+    n->FinalizeScoreUpdate(v_for_child, d_for_child, m_for_child,
+                           node_to_process.multivisit);
     if (n_to_fix > 0 && !n->IsTerminal()) {
       n->AdjustForTerminal(v_delta, d_delta, m_delta, n_to_fix);
     }
@@ -2376,54 +2392,33 @@ void SearchWorker::DoBackupUpdateSingleNode(
       }
     }
 
-    if (!p) break; // Reached parent of root, backup is done.
+    if (!p) break;  // Reached parent of root, backup is done.
 
     // If the node `n` just became terminal, check if we can update parent bounds.
     bool old_update_parent_bounds = update_parent_bounds;
     if (p->IsTerminal()) n_to_fix = 0;
     update_parent_bounds =
         update_parent_bounds && p != search_->root_node_ && !p->IsTerminal() &&
-        MaybeSetBounds(p, m, &n_to_fix, &v_delta, &d_delta, &m_delta);
+        MaybeSetBounds(p, m_for_child, &n_to_fix, &v_delta, &d_delta, &m_delta);
 
     // Prepare values for the next iteration (updating parent `p`).
-    // The value from child `n`'s perspective is `v`.
-    float child_v_for_parent = v;
-    float child_d_for_parent = d;
-
-    // If the child node `n` is terminal, its value is exact and should be used.
-    if (n->IsTerminal()) {
-        child_v_for_parent = n->GetWL();
-        child_d_for_parent = n->GetD();
-    }
-
-    // Correctly track deltas for AdjustForTerminal().
     const float prev_v = v;
     const float prev_d = d;
     const float prev_m = m;
-    
-    // ********************************************************************
-    // DR-MCTS RECURSIVE MODIFICATION
-    // ********************************************************************
-    if (params_.GetDRMCTSEnabled() && p->HasChildren() && p->GetN() > 0) {
-        // The nodes_mutex_ lock is held by the caller, ensuring thread-safety.
-        HybridValue hv = CalculateHybridValue(p, child_v_for_parent, child_d_for_parent, n->GetOwnEdge());
-        // The new (v,d,m) for the next backup step are from the hybrid calculation.
-        // This value is from the parent `p`'s perspective. The loop variables
-        // must be updated to hold this value for the next iteration's update of `p`.
-        v = hv.v;
-        d = hv.d;
-        m = hv.m;
+
+    if (use_dr) {
+      v = hv.v;               // parent-perspective hybrid
+      d = hv.d;               // unchanged
+      m = hv.m;               // parent's m
     } else {
-        // Standard MCTS backup for parent.
-        v = -child_v_for_parent;
-        d = child_d_for_parent; // Draw probability is perspective-invariant.
-        // The parent's moves-left is one more than the child's (n's) moves-left.
-        // We must read the now-finalized value from the child node `n`.
-        m = n->GetM() + 1.0f;
+      // Vanilla one-step backup to the parent.
+      const float child_v_for_parent = n->IsTerminal() ? n->GetWL() : v;
+      const float child_d_for_parent = n->IsTerminal() ? n->GetD() : d;
+      v = -child_v_for_parent;
+      d = child_d_for_parent;
+      m = n->GetM() + 1.0f;
     }
-    // ********************************************************************
-    
-    // After v,d,m are updated (either by DR or standard backup), calculate the deltas.
+
     v_delta = v - prev_v;
     d_delta = d - prev_d;
     m_delta = m - prev_m;
