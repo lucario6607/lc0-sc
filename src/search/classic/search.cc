@@ -2440,17 +2440,22 @@ void SearchWorker::DoBackupUpdate() {
 
 void SearchWorker::DoBackupUpdateSingleNode(
     const NodeToProcess& node_to_process) REQUIRES(search_->nodes_mutex_) {
+  
   Node* node = node_to_process.node;
   if (node_to_process.IsCollision()) {
-    // Collisions are handled via shared_collisions instead.
-    return;
+    return;  // Collisions handled via shared_collisions
   }
 
-  // For the first visit to a terminal, maybe update parent bounds too.
+  // Initialize DR context for this backup path
+  DRBackupContext dr_context;
+  dr_context.gamma_power = 1.0f;  // γ^0 = 1
+  dr_context.cumulative_rho = 1.0f;  // No importance weighting yet
+  
+  // For terminal bounds update if needed
   auto update_parent_bounds =
       params_.GetStickyEndgames() && node->IsTerminal() && !node->GetN();
 
-  // Backup V value up to a root. After 1 visit, V = Q.
+  // Initial values from the leaf
   float v = node_to_process.eval->q;
   float d = node_to_process.eval->d;
   float m = node_to_process.eval->m;
@@ -2462,77 +2467,96 @@ void SearchWorker::DoBackupUpdateSingleNode(
   uint32_t solid_threshold =
       static_cast<uint32_t>(params_.GetSolidTreeThreshold());
 
-  bool applied_dr_once = false;
-
+  // Backup loop - apply DR at EACH step (not just once)
   for (Node *n = node, *p; n != search_->root_node_->GetParent(); n = p) {
     p = n->GetParent();
-
-    // If we have a parent, compute DR hybrid for this (p <- n) step once,
-    // then write DR-adjusted value into the child and pass hybrid upward.
-    SearchWorker::HybridValue hv{-v, d, (p ? p->GetM() + 1.0f : n->GetM())};
-    bool use_dr = false;
-
-    if (!applied_dr_once && params_.GetDRMCTSEnabled() && p && p->HasChildren() &&
-        p->GetN() > 0) {
-      // If the child is terminal, use exact child values going up.
-      float child_v_for_parent = n->IsTerminal() ? n->GetWL() : v;
-      float child_d_for_parent = n->IsTerminal() ? n->GetD() : d;
-
-      hv = CalculateHybridValue(p, child_v_for_parent, child_d_for_parent,
-                                n->GetOwnEdge());
-      use_dr = true;
-      applied_dr_once = true;
+    
+    // Values to write to child node n
+    float v_for_child = v;
+    float d_for_child = d;
+    float m_for_child = m;
+    
+    // Prepare values for parent update
+    float v_for_parent = -v;  // Default vanilla backup
+    float d_for_parent = d;
+    float m_for_parent = (p ? p->GetM() + 1.0f : n->GetM());
+    
+    // If we have a parent, potentially apply DR correction
+    if (p && p->HasChildren() && p->GetN() > 0) {
+      
+      // Get child values for DR (use exact values if terminal)
+      float child_v = n->IsTerminal() ? n->GetWL() : v;
+      float child_d = n->IsTerminal() ? n->GetD() : d;
+      float child_m = n->IsTerminal() ? n->GetM() : m;
+      
+      // Apply DR for this step (if enabled and not in fallback mode)
+      auto dr_result = CalculateDRStep(p, n, n->GetOwnEdge(),
+                                       child_v, child_d, child_m,
+                                       &dr_context);
+      
+      if (dr_result.dr_applied) {
+        // Use DR-corrected values
+        v_for_parent = dr_result.v;
+        d_for_parent = dr_result.d;
+        m_for_parent = dr_result.m;
+        
+        // Child sees the negated parent-perspective value
+        v_for_child = -v_for_parent;
+        d_for_child = d_for_parent;
+        m_for_child = m_for_parent - 1.0f;
+      } else {
+        // Vanilla backup (DR disabled or fallback triggered)
+        v_for_parent = -child_v;
+        d_for_parent = child_d;
+        m_for_parent = p->GetM() + 1.0f;
+        
+        v_for_child = child_v;
+        d_for_child = child_d;
+        m_for_child = child_m;
+      }
     }
-
-    // First, write back to the child node n (use DR-adjusted value if available).
-    const float v_for_child = use_dr ? -hv.v : v;
-    const float d_for_child = use_dr ? hv.d : d;
-    const float m_for_child = m;  // No DR for moves-left.
-
+    
+    // Write values to child node
     n->FinalizeScoreUpdate(v_for_child, d_for_child, m_for_child,
                            node_to_process.multivisit);
+    
+    // Handle terminal adjustments
     if (n_to_fix > 0 && !n->IsTerminal()) {
       n->AdjustForTerminal(v_delta, d_delta, m_delta, n_to_fix);
     }
+    
+    // Check if node should become solid
     if (n->GetN() >= solid_threshold) {
       if (n->MakeSolid() && n == search_->root_node_) {
         search_->current_best_edge_ =
             search_->GetBestChildNoTemperature(search_->root_node_, 0);
       }
     }
-
-    if (!p) break;  // Reached parent of root, backup is done.
-
-    // If the node `n` just became terminal, check if we can update parent bounds.
+    
+    if (!p) break;  // Reached parent of root
+    
+    // Update bounds if needed
     bool old_update_parent_bounds = update_parent_bounds;
     if (p->IsTerminal()) n_to_fix = 0;
     update_parent_bounds =
         update_parent_bounds && p != search_->root_node_ && !p->IsTerminal() &&
         MaybeSetBounds(p, m_for_child, &n_to_fix, &v_delta, &d_delta, &m_delta);
-
-    // Prepare values for the next iteration (updating parent `p`).
-    const float prev_v = v;
-    const float prev_d = d;
-    const float prev_m = m;
-
-    if (use_dr) {
-      v = hv.v;               // parent-perspective hybrid
-      d = hv.d;               // unchanged
-      m = hv.m;               // parent's m
-    } else {
-      // Vanilla one-step backup to the parent.
-      const float child_v_for_parent = n->IsTerminal() ? n->GetWL() : v;
-      const float child_d_for_parent = n->IsTerminal() ? n->GetD() : d;
-      v = -child_v_for_parent;
-      d = child_d_for_parent;
-      m = n->GetM() + 1.0f;
-    }
-
+    
+    // Prepare for next iteration (going up to parent)
+    float prev_v = v_for_parent;
+    float prev_d = d_for_parent;
+    float prev_m = m_for_parent;
+    
+    v = v_for_parent;
+    d = d_for_parent;
+    m = m_for_parent;
+    
+    // Track deltas for terminal adjustments
     v_delta = v - prev_v;
     d_delta = d - prev_d;
     m_delta = m - prev_m;
-
-    // Update stats for the best move.
+    
+    // Update best edge if needed
     if (p == search_->root_node_ &&
         ((old_update_parent_bounds && n->IsTerminal()) ||
          (n != search_->current_best_edge_.node() &&
@@ -2541,6 +2565,8 @@ void SearchWorker::DoBackupUpdateSingleNode(
           search_->GetBestChildNoTemperature(search_->root_node_, 0);
     }
   }
+  
+  // Update global counters
   search_->total_playouts_ += node_to_process.multivisit;
   search_->cum_depth_ += node_to_process.depth * node_to_process.multivisit;
   search_->max_depth_ = std::max(search_->max_depth_, node_to_process.depth);
