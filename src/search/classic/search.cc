@@ -1087,67 +1087,77 @@ Search::~Search() {
 //////////////////////////////////////////////////////////////////////////////
 
 // ********************************************************************
-// START DR-MCTS IMPLEMENTATION
+// START CORRECTED DR-MCTS IMPLEMENTATION
 // ********************************************************************
 
 /**
  * @brief Calculates a Doubly Robust hybrid value for a parent node.
  * This function implements the core logic of the DR-MCTS algorithm as described
- * in the paper "Doubly Robust Monte Carlo Tree Search". It computes a refined
- * value estimate for a parent node `p` based on the value `v_child` from one of its
+ * in "Doubly Robust Monte Carlo Tree Search" (Liu & Beam, 2025). It computes
+ * a refined value estimate for a parent node `p` based on the value from one of its
  * children and the current tree statistics of all its children.
  *
+ * NOTE: This function must be called while holding the nodes_mutex_ lock, as it
+ * iterates over the parent node's edges and accesses child node statistics.
+ *
  * @param p The parent node for which to calculate the hybrid value.
- * @param v_child The value (from parent's perspective) from the child that was just evaluated.
+ * @param v_child The win-loss value (-1 to 1) from the child's perspective.
+ * @param d_child The draw probability (0 to 1) from the child's perspective.
  * @param action_edge The edge corresponding to the action taken from `p` to the child.
  * @return A HybridValue struct containing a consistent (v, d, m) triple.
  */
-SearchWorker::HybridValue SearchWorker::CalculateHybridValue(Node* p, float v_child, const Edge* action_edge) {
+SearchWorker::HybridValue SearchWorker::CalculateHybridValue(Node* p, float v_child, float d_child, const Edge* action_edge) {
     const float beta = params_.GetDRMCTSBeta();
     const float tau = params_.GetDRMCTSTau();
-    
-    // V_MCTS is simply the value from the child's simulation/evaluation.
-    const float v_mcts = v_child;
+    const float rho_cap = params_.GetDRMCTSRhoCap();
+
+    // V_MCTS is the value from the child's simulation/evaluation, from the parent's perspective.
+    const float v_mcts = -v_child;
+    const float d_mcts = d_child;
 
     const int num_children = p->GetNumEdges();
     // If there are no children, we can't compute policies. Fallback to standard backup.
     if (num_children == 0) {
-        return {v_mcts, 1.0f - std::abs(v_mcts), p->GetM() + 1.0f};
+        return {v_mcts, d_mcts, p->GetM() + 1.0f};
     }
 
-    // 1. Calculate Target Policy (pi_e) - Softmax over child Q-values (Eq. 7)
+    // 1. Gather Q-values (Q_hat) for all children.
+    //    This is crucial for both the Direct Method estimate and the target policy.
     std::vector<float> q_values(num_children);
+    std::vector<float> d_values(num_children);
     int child_idx = 0;
     for (const auto& child_edge : p->Edges()) {
-        // ** CRITICAL FIX FOR LOW NODE COUNTS **
         if (child_edge.GetN() > 0) {
-            // For visited children, use their stored Q-value.
+            // For visited children, use their stored Q-value (from parent's perspective).
             q_values[child_idx] = -child_edge.GetWL(-p->GetWL());
+            d_values[child_idx] = child_edge.GetD(p->GetD());
         } else {
-            // For unvisited children, the parent's old value is a poor, stale estimate.
-            // The most recent information we have is v_mcts from the sibling's NN eval.
-            // Using this as a more informed prior prevents information suppression.
-            q_values[child_idx] = v_mcts;
+            // AUDIT FIX #1: Independence of Q_hat and rollout return G.
+            // For unvisited children, use a neutral prior (0.0) instead of the
+            // just-sampled `v_mcts`, which would bias the DR estimate.
+            q_values[child_idx] = 0.0f;
+            d_values[child_idx] = 0.0f; // A neutral prior for draw probability.
         }
         child_idx++;
     }
 
+    // 2. Calculate Target Policy (pi_e) - Softmax over child Q-values (Eq. 7)
     std::vector<float> target_policy(num_children, 0.0f);
-    double target_policy_sum = 0.0;
-    if (tau > 1e-6) {
+    if (tau > 1e-6) { // Softmax for temperature > 0
+        double target_policy_sum = 0.0;
         // For numerical stability, subtract the max Q-value before exponentiating.
         float max_q = -std::numeric_limits<float>::infinity();
         for (float q : q_values) if (q > max_q) max_q = q;
-        
+
         for (int i = 0; i < num_children; ++i) {
             target_policy[i] = std::exp((q_values[i] - max_q) / tau);
             target_policy_sum += target_policy[i];
         }
-    }
-    
-    if (target_policy_sum > 1e-9) {
-        for (int i = 0; i < num_children; ++i) target_policy[i] /= target_policy_sum;
-    } else { // Fallback for tau=0 or uniform low Q-values (argmax)
+        if (target_policy_sum > 1e-9) {
+            for (int i = 0; i < num_children; ++i) target_policy[i] /= target_policy_sum;
+        }
+    } else { // Argmax for temperature tau -> 0
+        // AUDIT FIX #2: Handle tau=0 case correctly.
         float max_q = -std::numeric_limits<float>::infinity();
         int best_idx = -1;
         for (int i = 0; i < num_children; ++i) {
@@ -1159,18 +1169,18 @@ SearchWorker::HybridValue SearchWorker::CalculateHybridValue(Node* p, float v_ch
         if (best_idx != -1) target_policy[best_idx] = 1.0f;
     }
 
-    // 2. Behavior Policy (pi_b) is deterministic for a single backup path: 1 for the taken action, 0 otherwise.
-    // This means the importance ratio rho = pi_e / pi_b = pi_e / 1 = pi_e.
-    
-    // 3. Calculate V_hat(p) - Direct Method estimate (weighted avg of child Qs)
-    float v_hat = 0.0;
+    // 3. Calculate V_hat(p) and D_hat(p) - Direct Method estimates (weighted avg of child values)
+    float v_hat = 0.0f;
+    float d_hat = 0.0f;
     for (int i = 0; i < num_children; ++i) {
         v_hat += target_policy[i] * q_values[i];
+        d_hat += target_policy[i] * d_values[i];
     }
 
     // 4. Calculate Importance Sampling (IS) correction term
-    float is_correction = 0.0;
-    // Find the index of the action that was taken.
+    float v_correction = 0.0f;
+    float d_correction = 0.0f;
+    // Find the index of the action that was actually taken.
     int action_idx = -1;
     child_idx = 0;
     for (const auto& edge : p->Edges()) {
@@ -1183,26 +1193,35 @@ SearchWorker::HybridValue SearchWorker::CalculateHybridValue(Node* p, float v_ch
 
     if (action_idx != -1) {
         float pi_e = target_policy[action_idx];
-        // rho = pi_e / 1 = pi_e.
-        float rho = pi_e;
-        // The term is rho * (reward - Q(s,a)). Here, reward is v_mcts and Q(s,a) is q_values[action_idx].
-        // Note: q_values[action_idx] is the value *before* this backup.
-        is_correction = rho * (v_mcts - q_values[action_idx]);
+        // The behavior policy pi_b is 1 for the chosen path, so rho = pi_e / 1.
+        // AUDIT FIX #3: Importance weight clipping to control variance.
+        float rho = std::min(rho_cap, pi_e);
+
+        // The correction is rho * (reward - Q(s,a)).
+        // Reward is the value from the MCTS rollout/NN eval.
+        // Q(s,a) is the prior Q-value for the action taken.
+        v_correction = rho * (v_mcts - q_values[action_idx]);
+        d_correction = rho * (d_mcts - d_values[action_idx]);
     }
-    
-    // 5. Calculate Doubly Robust value (V_DR) (Eq. 5, adapted)
-    float v_dr = v_hat + is_correction;
+
+    // 5. Calculate Doubly Robust values (V_DR, D_DR) (Eq. 5, adapted)
+    const float v_dr = v_hat + v_correction;
+    const float d_dr = d_hat + d_correction;
 
     // 6. Calculate final hybrid value (Eq. 6) and consistent (d, m)
+    // AUDIT FIX #4: Blend the draw component `d` using DR, not a heuristic.
     float v_hybrid = beta * v_mcts + (1.0f - beta) * v_dr;
-    float d_hybrid = 1.0f - std::abs(v_hybrid);
-    d_hybrid = std::max(0.0f, std::min(1.0f, d_hybrid)); // Clamp to [0, 1]
-    float m_hybrid = p->GetM() + 1.0f; // Simple increment for moves-left, as in standard backup
+    float d_hybrid = beta * d_mcts + (1.0f - beta) * d_dr;
+    d_hybrid = std::max(0.0f, std::min(1.0f, d_hybrid)); // Clamp to [0, 1] to maintain invariant
+
+    // AUDIT FIX #5: Moves-left `m` component uses a simple, acceptable heuristic.
+    // A more complex backup (min for wins, max for losses) could be used but is not required by DR.
+    float m_hybrid = p->GetM() + 1.0f;
 
     return {v_hybrid, d_hybrid, m_hybrid};
 }
 // ********************************************************************
-// END DR-MCTS IMPLEMENTATION
+// END CORRECTED DR-MCTS IMPLEMENTATION
 // ********************************************************************
 
 void SearchWorker::RunTasks(int tid) {
@@ -2370,18 +2389,26 @@ void SearchWorker::DoBackupUpdateSingleNode(
     // Prepare values for the next iteration (updating parent `p`).
     // The value from child `n`'s perspective is `v`. From parent `p`'s perspective,
     // it's `-v`. This is the value we use as input for the next stage.
-    float child_value_for_parent = -v;
+    float child_v_for_parent = v;
+    float child_d_for_parent = d;
 
     // If the child node `n` is terminal, its value is exact and should be used.
     if (n->IsTerminal()) {
-        child_value_for_parent = -n->GetWL();
+        child_v_for_parent = n->GetWL();
+        child_d_for_parent = n->GetD();
     }
+
+    // AUDIT FIX #6: Correctly track deltas for AdjustForTerminal().
+    const float prev_v = v;
+    const float prev_d = d;
+    const float prev_m = m;
     
     // ********************************************************************
-    // DR-MCTS RECURSIVE MODIFICATION (FINAL CORRECTED VERSION)
+    // DR-MCTS RECURSIVE MODIFICATION
     // ********************************************************************
     if (params_.GetDRMCTSEnabled() && p->HasChildren() && p->GetN() > 0) {
-        HybridValue hv = CalculateHybridValue(p, child_value_for_parent, n->GetOwnEdge());
+        // AUDIT FIX #7: The nodes_mutex_ lock is held by the caller, ensuring thread-safety.
+        HybridValue hv = CalculateHybridValue(p, child_v_for_parent, child_d_for_parent, n->GetOwnEdge());
         // The new (v,d,m) for the next backup step are from the hybrid calculation.
         // This value is from the parent `p`'s perspective. The loop variables
         // must be updated to hold this value for the next iteration's update of `p`.
@@ -2390,14 +2417,19 @@ void SearchWorker::DoBackupUpdateSingleNode(
         m = hv.m;
     } else {
         // Standard MCTS backup for parent.
-        v = child_value_for_parent;
-        v_delta = -v_delta;
+        v = -child_v_for_parent;
+        d = child_d_for_parent; // Draw probability is perspective-invariant.
         // The parent's moves-left is one more than the child's (n's) moves-left.
         // We must read the now-finalized value from the child node `n`.
         m = n->GetM() + 1.0f;
     }
     // ********************************************************************
     
+    // After v,d,m are updated (either by DR or standard backup), calculate the deltas.
+    v_delta = v - prev_v;
+    d_delta = d - prev_d;
+    m_delta = m - prev_m;
+
     // Update stats for the best move.
     if (p == search_->root_node_ &&
         ((old_update_parent_bounds && n->IsTerminal()) ||
