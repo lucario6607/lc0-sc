@@ -168,6 +168,8 @@ class BaseSearchParams {
   float GetDRMCTSBeta() const { return kDRMCTSBeta; }
   float GetDRMCTSTau() const { return kDRMCTSTau; }
   float GetDRMCTSRhoCap() const { return kDRMCTSRhoCap; }
+  float GetDRMCTSGamma() const { return kDRMCTSGamma; }
+  bool GetDRMCTSAdaptiveBeta() const { return kDRMCTSAdaptiveBeta; }
 
 
   // Search parameter IDs.
@@ -243,6 +245,8 @@ class BaseSearchParams {
   static const OptionId kDRMCTSBetaId;
   static const OptionId kDRMCTSTauId;
   static const OptionId kDRMCTSRhoCapId;
+  static const OptionId kDRMCTSGammaId;
+  static const OptionId kDRMCTSAdaptiveBetaId;
 
 
  protected:
@@ -308,6 +312,8 @@ class BaseSearchParams {
   const float kDRMCTSBeta;
   const float kDRMCTSTau;
   const float kDRMCTSRhoCap;
+  const float kDRMCTSGamma;
+  const bool kDRMCTSAdaptiveBeta;
 };
 
 class SearchParams : public BaseSearchParams {
