@@ -1094,8 +1094,9 @@ Search::~Search() {
  * @brief Calculates a Doubly Robust hybrid value for a parent node.
  * This function implements the core logic of the DR-MCTS algorithm as described
  * in "Doubly Robust Monte Carlo Tree Search" (Liu & Beam, 2025). It computes
- * a refined value estimate for a parent node `p` based on the value from one of its
- * children and the current tree statistics of all its children.
+ * a refined value estimate for a parent node `p` by separating the model used for
+ * the responsive direct estimate (`V_hat`) from the model used for the unbiased
+ * correction term.
  *
  * NOTE: This function must be called while holding the nodes_mutex_ lock, as it
  * iterates over the parent node's edges and accesses child node statistics.
@@ -1111,109 +1112,99 @@ SearchWorker::HybridValue SearchWorker::CalculateHybridValue(Node* p, float v_ch
     const float tau = params_.GetDRMCTSTau();
     const float rho_cap = params_.GetDRMCTSRhoCap();
 
-    // V_MCTS is the value from the child's simulation/evaluation, from the parent's perspective.
+    // The MCTS rollout value (G) is the value from the child's evaluation, from the parent's perspective.
     const float v_mcts = -v_child;
     const float d_mcts = d_child;
 
     const int num_children = p->GetNumEdges();
-    // If there are no children, we can't compute policies. Fallback to standard backup.
     if (num_children == 0) {
         return {v_mcts, d_mcts, p->GetM() + 1.0f};
     }
 
-    // 1. Gather Q-values (Q_hat) for all children.
-    //    This is crucial for both the Direct Method estimate and the target policy.
-    std::vector<float> q_values(num_children);
-    std::vector<float> d_values(num_children);
+    // We use two different models for Q_hat, depending on the context:
+    // 1. For V_hat and pi_e: A responsive model that uses the fresh v_mcts for unvisited siblings.
+    //    This makes the direct estimate react quickly to new information.
+    // 2. For the correction term: An independent model that uses the parent's stale value.
+    //    This ensures the correction term remains unbiased.
+    std::vector<float> q_model_responsive(num_children);
+    std::vector<float> d_model_responsive(num_children);
+    std::vector<float> q_model_unbiased(num_children);
+    std::vector<float> d_model_unbiased(num_children);
+
     int child_idx = 0;
     for (const auto& child_edge : p->Edges()) {
         if (child_edge.GetN() > 0) {
-            // For visited children, use their stored Q-value (from parent's perspective).
-            q_values[child_idx] = -child_edge.GetWL(-p->GetWL());
-            d_values[child_idx] = child_edge.GetD(p->GetD());
+            // For visited children, both models use the stored Q-value.
+            const float q_val = -child_edge.GetWL(-p->GetWL());
+            const float d_val = child_edge.GetD(p->GetD());
+            q_model_responsive[child_idx] = q_val;
+            d_model_responsive[child_idx] = d_val;
+            q_model_unbiased[child_idx] = q_val;
+            d_model_unbiased[child_idx] = d_val;
         } else {
-            // CRITICAL FIX: For unvisited children, the best independent prior is the parent's own value.
-            // A naive 0.0 prior is unbiased but extremely uninformative, leading to high variance
-            // and poor performance. The parent's value is from before the current rollout and
-            // is thus independent.
-            q_values[child_idx] = p->GetWL();
-            d_values[child_idx] = p->GetD();
+            // For unvisited children, the models differ.
+            // Responsive model uses the fresh sibling evaluation.
+            q_model_responsive[child_idx] = v_mcts;
+            d_model_responsive[child_idx] = d_mcts;
+            // Unbiased model uses the parent's (stale but independent) value.
+            q_model_unbiased[child_idx] = p->GetWL();
+            d_model_unbiased[child_idx] = p->GetD();
         }
         child_idx++;
     }
 
-    // 2. Calculate Target Policy (pi_e) - Softmax over child Q-values (Eq. 7)
-    std::vector<float> target_policy(num_children, 0.0f);
-    if (tau > 1e-6) { // Softmax for temperature > 0
-        double target_policy_sum = 0.0;
-        // For numerical stability, subtract the max Q-value before exponentiating.
-        float max_q = -std::numeric_limits<float>::infinity();
-        for (float q : q_values) if (q > max_q) max_q = q;
+    // --- Calculations using the RESPONSIVE model ---
 
+    // 2. Calculate Target Policy (pi_e) using the responsive model for Q_hat.
+    std::vector<float> target_policy(num_children, 0.0f);
+    if (tau > 1e-6) { // Softmax
+        double target_policy_sum = 0.0;
+        float max_q = *std::max_element(q_model_responsive.begin(), q_model_responsive.end());
         for (int i = 0; i < num_children; ++i) {
-            target_policy[i] = std::exp((q_values[i] - max_q) / tau);
+            target_policy[i] = std::exp((q_model_responsive[i] - max_q) / tau);
             target_policy_sum += target_policy[i];
         }
         if (target_policy_sum > 1e-9) {
             for (int i = 0; i < num_children; ++i) target_policy[i] /= target_policy_sum;
         }
-    } else { // Argmax for temperature tau -> 0
-        float max_q = -std::numeric_limits<float>::infinity();
-        int best_idx = -1;
-        for (int i = 0; i < num_children; ++i) {
-            if (q_values[i] > max_q) {
-                max_q = q_values[i];
-                best_idx = i;
-            }
-        }
-        if (best_idx != -1) target_policy[best_idx] = 1.0f;
+    } else { // Argmax
+        int best_idx = std::distance(q_model_responsive.begin(), std::max_element(q_model_responsive.begin(), q_model_responsive.end()));
+        if (best_idx < num_children) target_policy[best_idx] = 1.0f;
     }
 
-    // 3. Calculate V_hat(p) and D_hat(p) - Direct Method estimates (weighted avg of child values)
+    // 3. Calculate V_hat and D_hat (Direct Method estimates) using the responsive model.
     float v_hat = 0.0f;
     float d_hat = 0.0f;
     for (int i = 0; i < num_children; ++i) {
-        v_hat += target_policy[i] * q_values[i];
-        d_hat += target_policy[i] * d_values[i];
+        v_hat += target_policy[i] * q_model_responsive[i];
+        d_hat += target_policy[i] * d_model_responsive[i];
     }
 
-    // 4. Calculate Importance Sampling (IS) correction term
+    // --- Calculations using the UNBIASED model ---
+
+    // 4. Calculate Importance Sampling (IS) correction term.
     float v_correction = 0.0f;
     float d_correction = 0.0f;
-    // Find the index of the action that was actually taken.
-    int action_idx = -1;
-    child_idx = 0;
-    for (const auto& edge : p->Edges()) {
-        if (edge.edge() == action_edge) {
-            action_idx = child_idx;
-            break;
-        }
-        child_idx++;
-    }
+    int action_idx = std::distance(p->Edges().begin(), p->FindEdge(action_edge->GetMove()));
 
-    if (action_idx != -1) {
+    if (action_idx < num_children) {
         float pi_e = target_policy[action_idx];
-        // The behavior policy pi_b is 1 for the chosen path, so rho = pi_e / 1.
-        // Clip the importance weight to control variance.
         float rho = std::min(rho_cap, pi_e);
 
-        // The correction is rho * (reward - Q(s,a)).
-        // Reward is the value from the MCTS rollout/NN eval.
-        // Q(s,a) is the prior Q-value for the action taken.
-        v_correction = rho * (v_mcts - q_values[action_idx]);
-        d_correction = rho * (d_mcts - d_values[action_idx]);
+        // The correction is rho * (G - Q_hat_unbiased). This is the key to unbiasedness.
+        v_correction = rho * (v_mcts - q_model_unbiased[action_idx]);
+        d_correction = rho * (d_mcts - d_model_unbiased[action_idx]);
     }
 
-    // 5. Calculate Doubly Robust values (V_DR, D_DR) (Eq. 5, adapted)
+    // 5. Calculate Doubly Robust values (V_DR, D_DR)
     const float v_dr = v_hat + v_correction;
     const float d_dr = d_hat + d_correction;
 
-    // 6. Calculate final hybrid value (Eq. 6) and consistent (d, m)
+    // 6. Calculate final hybrid value
     float v_hybrid = beta * v_mcts + (1.0f - beta) * v_dr;
     float d_hybrid = beta * d_mcts + (1.0f - beta) * d_dr;
-    d_hybrid = std::max(0.0f, std::min(1.0f, d_hybrid)); // Clamp to [0, 1] to maintain invariant
+    d_hybrid = std::max(0.0f, std::min(1.0f, d_hybrid));
 
-    // Moves-left `m` component uses a simple, acceptable heuristic.
     float m_hybrid = p->GetM() + 1.0f;
 
     return {v_hybrid, d_hybrid, m_hybrid};
