@@ -530,7 +530,6 @@ const OptionId BaseSearchParams::kGarbageCollectionDelayId{
     "The percentage of expected move time until garbage collection start. "
     "Delay lets search find transpositions to freed search tree branches."};
 
-// DR-MCTS Option IDs
 const OptionId BaseSearchParams::kDRMCTSEnabledId{
     {.long_flag = "drmcts-enabled",
      .uci_option = "DRMCTSEnabled",
@@ -545,6 +544,11 @@ const OptionId BaseSearchParams::kDRMCTSTauId{
     {.long_flag = "drmcts-tau",
      .uci_option = "DRMCTSTau",
      .help_text = "Temperature (tau) for the target policy softmax in DR-MCTS.",
+     .visibility = OptionId::kProOnly}};
+const OptionId BaseSearchParams::kDRMCTSRhoCapId{
+    {.long_flag = "drmcts-rho-cap",
+     .uci_option = "DRMCTSRhoCap",
+     .help_text = "Maximum value (cap) for the importance sampling weight (rho) in DR-MCTS.",
      .visibility = OptionId::kProOnly}};
 
 const OptionId SearchParams::kMaxPrefetchBatchId{
@@ -652,7 +656,8 @@ void BaseSearchParams::Populate(OptionsParser* options) {
   // DR-MCTS Options
   options->Add<BoolOption>(kDRMCTSEnabledId) = false;
   options->Add<FloatOption>(kDRMCTSBetaId, 0.0f, 1.0f) = 0.35f;
-  options->Add<FloatOption>(kDRMCTSTauId, 0.001f, 10.0f) = 0.5f;
+  options->Add<FloatOption>(kDRMCTSTauId, 0.0f, 10.0f) = 0.5f;
+  options->Add<FloatOption>(kDRMCTSRhoCapId, 0.01f, 100.0f) = 1.0f;
 }
 
 void SearchParams::Populate(OptionsParser* options) {
@@ -750,7 +755,8 @@ BaseSearchParams::BaseSearchParams(const OptionsDict& options)
       kGarbageCollectionDelay(options_.Get<float>(kGarbageCollectionDelayId)),
       kDRMCTSEnabled(options.Get<bool>(kDRMCTSEnabledId)),
       kDRMCTSBeta(options.Get<float>(kDRMCTSBetaId)),
-      kDRMCTSTau(options.Get<float>(kDRMCTSTauId)) {}
+      kDRMCTSTau(options.Get<float>(kDRMCTSTauId)),
+      kDRMCTSRhoCap(options.Get<float>(kDRMCTSRhoCapId)) {}
 
 SearchParams::SearchParams(const OptionsDict& options)
     : BaseSearchParams(options),
