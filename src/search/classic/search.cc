@@ -2346,12 +2346,7 @@ void SearchWorker::DoBackupUpdateSingleNode(
   for (Node *n = node, *p; n != search_->root_node_->GetParent(); n = p) {
     p = n->GetParent();
 
-    // The value to be backed up for this node (`n`) is stored in (v,d,m).
-    // Before we update the parent (`p`), we will calculate the new hybrid
-    // value for it. The loop continues, and this new hybrid value will be
-    // used to calculate the hybrid value for its parent, and so on.
-
-    // Update node `n` with the current (v,d,m) values.
+    // Update node `n` with the current (v,d,m) values from the previous iteration.
     n->FinalizeScoreUpdate(v, d, m, node_to_process.multivisit);
     if (n_to_fix > 0 && !n->IsTerminal()) {
       n->AdjustForTerminal(v_delta, d_delta, m_delta, n_to_fix);
@@ -2383,23 +2378,23 @@ void SearchWorker::DoBackupUpdateSingleNode(
     }
     
     // ********************************************************************
-    // DR-MCTS RECURSIVE MODIFICATION
+    // DR-MCTS RECURSIVE MODIFICATION (FINAL CORRECTED VERSION)
     // ********************************************************************
-    // DR-MCTS only makes sense if the parent has been expanded and has children.
     if (params_.GetDRMCTSEnabled() && p->HasChildren() && p->GetN() > 0) {
         HybridValue hv = CalculateHybridValue(p, child_value_for_parent, n->GetOwnEdge());
         // The new (v,d,m) for the next backup step are from the hybrid calculation.
-        // This value is from the parent `p`'s perspective. The loop variable `v`
-        // must hold this value for the next iteration's update of `p`.
+        // This value is from the parent `p`'s perspective. The loop variables
+        // must be updated to hold this value for the next iteration's update of `p`.
         v = hv.v;
         d = hv.d;
         m = hv.m;
     } else {
         // Standard MCTS backup for parent.
-        // The value from the child `n` is flipped to the parent `p`'s perspective.
         v = child_value_for_parent;
         v_delta = -v_delta;
-        m++;
+        // The parent's moves-left is one more than the child's (n's) moves-left.
+        // We must read the now-finalized value from the child node `n`.
+        m = n->GetM() + 1.0f;
     }
     // ********************************************************************
     
