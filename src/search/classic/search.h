@@ -414,13 +414,17 @@ class SearchWorker {
   // ********************************************************************
   // START DR-MCTS PRIVATE DECLARATION
   // ********************************************************************
-  // Helper struct for DR-MCTS backup state. Defined in search.cc.
-  struct DRBackupContext;
+  // Helper struct for DR-MCTS backup state.
+  struct DRBackupContext {
+    float cumulative_rho = 1.0f;     // Cumulative importance ratio ∏ρ_i
+    float gamma_power = 1.0f;         // γ^t for discounting
+    bool use_vanilla_fallback = false; // Fallback flag when DR assumptions violated
+  };
 
   // Core DR-MCTS step calculation function.
-  DRStepResult CalculateDRStep(Node* parent, Node* child,
+  DRStepResult CalculateDRStep(Node* parent, [[maybe_unused]] Node* child,
                                const Edge* action_edge, float child_v,
-                               float child_d, float child_m,
+                               float child_d, [[maybe_unused]] float child_m,
                                DRBackupContext* context);
   // ********************************************************************
   // END DR-MCTS PRIVATE DECLARATION
