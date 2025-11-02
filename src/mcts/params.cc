@@ -176,7 +176,6 @@ SearchParams::WDLRescaleParams SimplifiedWDLRescaleParams(
   return SearchParams::WDLRescaleParams(ratio, diff);
 }
 
-// START: ADDED FOR DYNAMIC HYBRID RATIO
 // Helper function to parse the manual schedule string.
 std::vector<std::pair<int, float>> ParseHybridRatioSchedule(
     const std::string& schedule_str) {
@@ -231,7 +230,6 @@ HybridRatioMode EncodeHybridRatioMode(const std::string& mode_str) {
     if (mode_str == "chaotic") return HybridRatioMode::CHAOTIC;
     return HybridRatioMode::STATIC; // Default
 }
-// END: ADDED FOR DYNAMIC HYBRID RATIO
 
 }  // namespace
 
@@ -290,7 +288,6 @@ const OptionId SearchParams::kHybridSamplingRatioId{
     "hybrid-sampling-ratio", "HybridSamplingRatio",
     "The ratio of Thompson Sampling to use in hybrid search-contempt mode. "
     "1.0 is pure TS, 0.0 is pure PUCT."};
-// START: ADDED FOR DYNAMIC HYBRID RATIO
 const OptionId SearchParams::kHybridRatioModeId{
     "hybrid-ratio-mode", "HybridRatioMode",
     "Selects the function or mode for dynamically adjusting the hybrid "
@@ -316,7 +313,16 @@ const OptionId SearchParams::kHybridShapeParam1Id{
 const OptionId SearchParams::kHybridShapeParam2Id{
     "hybrid-shape-param2", "HybridShapeParam2",
     "Second generic shape parameter for complex functions (e.g., peak width)."};
-// END: ADDED FOR DYNAMIC HYBRID RATIO
+// START: ADDED FOR ODDS BOT HUMAN-LIKE SEARCH
+const OptionId SearchParams::kEnableDynamicScLimitId{
+    "enable-dynamic-sc-limit", "EnableDynamicScLimit",
+    "For odds bots, dynamically reduce the ScLimit based on search depth to "
+    "model faster human commitment in deep lines."};
+const OptionId SearchParams::kEnableDepthPolicyShrinkingId{
+    "enable-depth-policy-shrinking", "EnableDepthPolicyShrinking",
+    "For odds bots, after a node policy is frozen, shrink the number of moves "
+    "sampled by Thompson Sampling based on depth."};
+// END: ADDED FOR ODDS BOT HUMAN-LIKE SEARCH
 const OptionId SearchParams::kTempDecayMovesId{
     "tempdecay-moves", "TempDecayMoves",
     "Reduce temperature for every move after the first move, decreasing "
@@ -613,7 +619,6 @@ void SearchParams::Populate(OptionsParser* options) {
   options->Add<IntOption>(kScLimitId, 1, 1000000000) = 1000000000;
   options->Add<FloatOption>(kHybridSamplingRatioId, 0.0f, 1.0f) = 0.8f;
   
-  // START: ADDED FOR DYNAMIC HYBRID RATIO
   std::vector<std::string> hybrid_modes = {
       "static", "manual_schedule", "linear", "logarithmic", "power", "root",
       "sigmoid", "exponential", "step_decay", "inverse_sigmoid", "steps", "plateau",
@@ -626,7 +631,11 @@ void SearchParams::Populate(OptionsParser* options) {
   options->Add<IntOption>(kHybridScalingFactorId, 1, 100000000) = 10000;
   options->Add<FloatOption>(kHybridShapeParam1Id, -10000.0f, 10000.0f) = 0.5f;
   options->Add<FloatOption>(kHybridShapeParam2Id, -10000.0f, 10000.0f) = 0.1f;
-  // END: ADDED FOR DYNAMIC HYBRID RATIO
+
+  // START: ADDED FOR ODDS BOT HUMAN-LIKE SEARCH
+  options->Add<BoolOption>(kEnableDynamicScLimitId) = false;
+  options->Add<BoolOption>(kEnableDepthPolicyShrinkingId) = false;
+  // END: ADDED FOR ODDS BOT HUMAN-LIKE SEARCH
 
   options->Add<IntOption>(kTempDecayMovesId, 0, 640) = 0;
   options->Add<IntOption>(kTempDecayDelayMovesId, 0, 100) = 0;
@@ -825,13 +834,14 @@ SearchParams::SearchParams(const OptionsDict& options)
       kMaxCollisionVisitsScalingPower(
           options.Get<float>(kMaxCollisionVisitsScalingPowerId)),
       kSearchSpinBackoff(options_.Get<bool>(kSearchSpinBackoffId)),
-      // START: ADDED FOR DYNAMIC HYBRID RATIO
+      // START: ADDED FOR ODDS BOT HUMAN-LIKE SEARCH
+      kEnableDynamicScLimit(options.Get<bool>(kEnableDynamicScLimitId)),
+      kEnableDepthPolicyShrinking(options.Get<bool>(kEnableDepthPolicyShrinkingId)),
+      // END: ADDED FOR ODDS BOT HUMAN-LIKE SEARCH
       kHybridRatioMode(EncodeHybridRatioMode(options.Get<std::string>(kHybridRatioModeId))),
       kHybridRatioSchedule(ParseHybridRatioSchedule(options.Get<std::string>(kHybridRatioScheduleId)))
-      // END: ADDED FOR DYNAMIC HYBRID RATIO
       {}
 
-// START: ADDED FOR DYNAMIC HYBRID RATIO
 float SearchParams::GetDynamicHybridRatio(int node_count) const {
     const int sc_limit = GetScLimit();
 
@@ -970,6 +980,5 @@ float SearchParams::GetDynamicHybridRatio(int node_count) const {
 
     return std::clamp(ratio, 0.0f, 1.0f);
 }
-// END: ADDED FOR DYNAMIC HYBRID RATIO
 
 }  // namespace lczero
