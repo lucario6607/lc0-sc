@@ -1737,11 +1737,26 @@ void SearchWorker::PickNodesToExtendTask(
 
       const bool is_opponent_node = (current_depth % 2 == 1);
 
+      // --- NEW: Dynamic sc_limit for odds bot human-like search ---
+      // This feature models a human committing to a plan sooner in deeper lines.
+      // Controlled by the `EnableDynamicScLimit` parameter.
       int opponent_node_limit = params_.GetScLimit();
+      if (params_.GetEnableDynamicScLimit() && is_opponent_node) {
+        if (current_depth >= 9) {
+          opponent_node_limit = std::max(100, params_.GetScLimit() / 4);
+        } else if (current_depth >= 6) {
+          opponent_node_limit = params_.GetScLimit() / 2;
+        } else if (current_depth >= 3) {
+          opponent_node_limit = (3 * params_.GetScLimit()) / 4;
+        }
+      }
+      // --- END NEW ---
+
       int current_node_count = node->GetN();
       bool node_limit_frozen = node->GetNodeLimitFrozen();
       bool node_limit_frozen_lock = node->GetNodeLimitFrozenLock();
-
+      
+      // --- MODIFIED: Use the potentially dynamic opponent_node_limit ---
       if (is_opponent_node && current_node_count >= opponent_node_limit) {
         if (!(node_limit_frozen)) {
           if (!node_limit_frozen_lock) {
@@ -1779,19 +1794,49 @@ void SearchWorker::PickNodesToExtendTask(
             node_limit_frozen_lock = node->GetNodeLimitFrozenLock();
           }
 
-          node->CopyPolicy_frozen(max_needed,
-                                  current_cumulative_pol_frozen.data());
           int visited_num_nodes = int(node->GetVisitedNumberOfEdges());
+          node->CopyPolicy_frozen(visited_num_nodes,
+                                  current_cumulative_pol_frozen.data());
           std::array<int, 256> tmp_visit_array;
           for (int i = 0; i < visited_num_nodes; i++) {
             tmp_visit_array[i] = 0;
           }
-          for (int i = 0; i < ts_visits; i++) {
-            float search_value = Random::Get().GetFloat(1.0f);
-            int number = find_index(current_cumulative_pol_frozen,
-                                    visited_num_nodes, search_value);
-            tmp_visit_array[number]++;
+
+          // --- NEW: Depth-based policy shrinking for odds bot ---
+          // This models a human narrowing their focus deeper into a calculation.
+          // Controlled by the `EnableDepthPolicyShrinking` parameter.
+          if (params_.GetEnableDepthPolicyShrinking()) {
+            int effective_nodes = visited_num_nodes;
+            if (current_depth >= 9) {
+              effective_nodes = std::max(2, visited_num_nodes / 4);
+            } else if (current_depth >= 6) {
+              effective_nodes = std::max(3, visited_num_nodes / 2);
+            } else if (current_depth >= 3) {
+              effective_nodes = std::max(4, (3 * visited_num_nodes) / 4);
+            }
+
+            const float total_policy_mass = (effective_nodes > 0 && effective_nodes <= visited_num_nodes)
+                                                ? current_cumulative_pol_frozen[effective_nodes - 1]
+                                                : 0.0f;
+            
+            if (total_policy_mass > 0.0f) {
+                for (int i = 0; i < ts_visits; i++) {
+                float search_value = Random::Get().GetFloat(total_policy_mass);
+                int number = find_index(current_cumulative_pol_frozen,
+                                        effective_nodes, search_value);
+                tmp_visit_array[number]++;
+              }
+            }
+          } else {
+            // Original behavior: sample from the entire frozen policy.
+            for (int i = 0; i < ts_visits; i++) {
+              float search_value = Random::Get().GetFloat(1.0f);
+              int number = find_index(current_cumulative_pol_frozen,
+                                      visited_num_nodes, search_value);
+              tmp_visit_array[number]++;
+            }
           }
+          // --- END NEW ---
 
           int cache_filled_idx = -1;
           for (int i = 0; i < visited_num_nodes; i++) {
@@ -2775,6 +2820,3 @@ void SearchWorker::UpdateCounters() {
 }
 
 }  // namespace lczero
-
-
-
