@@ -84,10 +84,8 @@ class SearchParams {
   // Populates UciOptions with search parameters.
   static void Populate(OptionsParser* options);
 
-  // START: ADDED FOR DYNAMIC HYBRID RATIO
   // The main function to calculate the ratio based on the selected mode.
   float GetDynamicHybridRatio(int node_count) const;
-  // END: ADDED FOR DYNAMIC HYBRID RATIO
 
   // Parameter getters.
   int GetMiniBatchSize() const { return kMiniBatchSize; }
@@ -112,6 +110,11 @@ class SearchParams {
   int GetHybridScalingFactor() const { return options_.Get<int>(kHybridScalingFactorId); }
   float GetHybridShapeParam1() const { return options_.Get<float>(kHybridShapeParam1Id); }
   float GetHybridShapeParam2() const { return options_.Get<float>(kHybridShapeParam2Id); }
+  
+  // START: ADDED FOR ODDS BOT HUMAN-LIKE SEARCH
+  bool GetEnableDynamicScLimit() const { return kEnableDynamicScLimit; }
+  bool GetEnableDepthPolicyShrinking() const { return kEnableDepthPolicyShrinking; }
+  // END: ADDED FOR ODDS BOT HUMAN-LIKE SEARCH
 
   float GetTemperatureVisitOffset() const {
     return options_.Get<float>(kTemperatureVisitOffsetId);
@@ -225,7 +228,6 @@ class SearchParams {
   static const OptionId kTemperatureId;
   static const OptionId kScLimitId;
   static const OptionId kHybridSamplingRatioId;
-  // START: ADDED FOR DYNAMIC HYBRID RATIO
   static const OptionId kHybridRatioModeId;
   static const OptionId kHybridRatioScheduleId;
   static const OptionId kHybridMinRatioId;
@@ -233,7 +235,10 @@ class SearchParams {
   static const OptionId kHybridScalingFactorId;
   static const OptionId kHybridShapeParam1Id;
   static const OptionId kHybridShapeParam2Id;
-  // END: ADDED FOR DYNAMIC HYBRID RATIO
+  // START: ADDED FOR ODDS BOT HUMAN-LIKE SEARCH
+  static const OptionId kEnableDynamicScLimitId;
+  static const OptionId kEnableDepthPolicyShrinkingId;
+  // END: ADDED FOR ODDS BOT HUMAN-LIKE SEARCH
   static const OptionId kTempDecayMovesId;
   static const OptionId kTempDecayDelayMovesId;
   static const OptionId kTemperatureCutoffMoveId;
@@ -357,11 +362,14 @@ class SearchParams {
   const float kMaxCollisionVisitsScalingPower;
   const bool kSearchSpinBackoff;
 
-  // START: ADDED FOR DYNAMIC HYBRID RATIO
+  // START: ADDED FOR ODDS BOT HUMAN-LIKE SEARCH
+  const bool kEnableDynamicScLimit;
+  const bool kEnableDepthPolicyShrinking;
+  // END: ADDED FOR ODDS BOT HUMAN-LIKE SEARCH
+  
   const HybridRatioMode kHybridRatioMode;
   const std::vector<std::pair<int, float>> kHybridRatioSchedule;
   mutable float chaotic_state_{0.5f}; // Mutable for chaotic function state
-  // END: ADDED FOR DYNAMIC HYBRID RATIO
 };
 
 }  // namespace lczero
