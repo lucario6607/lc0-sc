@@ -98,7 +98,10 @@ class MEvaluator {
         a_linear_{0.0f},
         a_square_{0.0f},
         q_threshold_{0.0f},
-        parent_m_{0.0f} {}
+        parent_m_{0.0f},
+        // NEW: Initialize new member
+        aggressive_mlh_factor_{0.0f} {}
+        // END NEW
 
   MEvaluator(const SearchParams& params, const Node* parent = nullptr)
       : enabled_{true},
@@ -110,7 +113,10 @@ class MEvaluator {
         q_threshold_{params.GetMovesLeftThreshold()},
         parent_m_{parent ? parent->GetM() : 0.0f},
         parent_within_threshold_{parent ? WithinThreshold(parent, q_threshold_)
-                                        : false} {}
+                                        : false},
+        // NEW: Initialize new member from params
+        aggressive_mlh_factor_{params.GetAggressiveMlhFactor()} {}
+        // END NEW
 
   void SetParent(const Node* parent) {
     assert(parent);
@@ -131,7 +137,14 @@ class MEvaluator {
       // necessary for using MLH together with contempt.
       q = std::max(0.0f, (std::abs(q) - q_threshold_)) / (1.0f - q_threshold_);
     }
-    m *= a_constant_ + a_linear_ * std::abs(q) + a_square_ * q * q;
+    // NEW: Hyper-Aggressive Moves-Left (MLH) Utility
+    // If the aggressive factor is set ( > 0), use it instead of the default formula.
+    if (aggressive_mlh_factor_ > 0.0f) {
+        m *= aggressive_mlh_factor_;
+    } else {
+        m *= a_constant_ + a_linear_ * std::abs(q) + a_square_ * q * q;
+    }
+    // END NEW
     return m;
   }
 
@@ -158,6 +171,9 @@ class MEvaluator {
   const float q_threshold_;
   float parent_m_ = 0.0f;
   bool parent_within_threshold_ = false;
+  // NEW: Add member to store the aggressive factor
+  const float aggressive_mlh_factor_;
+  // END NEW
 };
 
 }  // namespace
@@ -1892,8 +1908,14 @@ void SearchWorker::PickNodesToExtendTask(
               int nstarted = current_nstarted[idx];
               const float util = current_util[idx];
               if (idx > cache_filled_idx) {
+                // NEW: PUCT "Attack Bonus"
+                float attack_bonus = 0.0f;
+                if (util > 0.0f) {
+                    attack_bonus = params_.GetAttackBonusFactor() * util;
+                }
                 current_score[idx] =
-                    current_pol[idx] * puct_mult / (1 + nstarted) + util;
+                    current_pol[idx] * puct_mult / (1 + nstarted) + util + attack_bonus;
+                // END NEW
                 cache_filled_idx++;
               }
               float score = current_score[idx];
@@ -1950,10 +1972,16 @@ void SearchWorker::PickNodesToExtendTask(
                 child_node->IncrementNInFlight(new_visits);
                 current_nstarted[best_idx] += new_visits;
               }
+              // NEW: PUCT "Attack Bonus" (recalculation after visit)
+              float attack_bonus = 0.0f;
+              if (current_util[best_idx] > 0.0f) {
+                  attack_bonus = params_.GetAttackBonusFactor() * current_util[best_idx];
+              }
               current_score[best_idx] =
                   current_pol[best_idx] * puct_mult /
                       (1 + current_nstarted[best_idx]) +
-                  current_util[best_idx];
+                  current_util[best_idx] + attack_bonus;
+              // END NEW
             }
             if ((decremented &&
                  (child_node->GetN() == 0 || child_node->IsTerminal()))) {
@@ -2013,8 +2041,14 @@ void SearchWorker::PickNodesToExtendTask(
             int nstarted = current_nstarted[idx];
             const float util = current_util[idx];
             if (idx > cache_filled_idx) {
+              // NEW: PUCT "Attack Bonus"
+              float attack_bonus = 0.0f;
+              if (util > 0.0f) {
+                  attack_bonus = params_.GetAttackBonusFactor() * util;
+              }
               current_score[idx] =
-                  current_pol[idx] * puct_mult / (1 + nstarted) + util;
+                  current_pol[idx] * puct_mult / (1 + nstarted) + util + attack_bonus;
+              // END NEW
               cache_filled_idx++;
             }
             if (is_root_node) {
@@ -2087,10 +2121,16 @@ void SearchWorker::PickNodesToExtendTask(
               child_node->IncrementNInFlight(new_visits);
               current_nstarted[best_idx] += new_visits;
             }
+            // NEW: PUCT "Attack Bonus" (recalculation after visit)
+            float attack_bonus = 0.0f;
+            if (current_util[best_idx] > 0.0f) {
+                attack_bonus = params_.GetAttackBonusFactor() * current_util[best_idx];
+            }
             current_score[best_idx] =
                 current_pol[best_idx] * puct_mult /
                     (1 + current_nstarted[best_idx]) +
-                current_util[best_idx];
+                current_util[best_idx] + attack_bonus;
+            // END NEW
           }
           if ((decremented &&
                (child_node->GetN() == 0 || child_node->IsTerminal()))) {
@@ -2775,6 +2815,3 @@ void SearchWorker::UpdateCounters() {
 }
 
 }  // namespace lczero
-
-
-
