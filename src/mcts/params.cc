@@ -596,6 +596,18 @@ const OptionId SearchParams::kSearchSpinBackoffId{
     "search-spin-backoff", "SearchSpinBackoff",
     "Enable backoff for the spin lock that acquires available searcher."};
 
+// START: New parameter definitions
+const OptionId SearchParams::kAttackBonusFactorId{
+    "attack-bonus-factor", "AttackBonusFactor",
+    "Bonus added to PUCT score for moves leading to advantageous positions. "
+    "Higher values encourage converting advantages more aggressively."};
+const OptionId SearchParams::kAggressiveMlhFactorId{
+    "aggressive-mlh-factor", "AggressiveMlhFactor",
+    "A large, constant multiplier for the Moves-Left utility, prioritizing "
+    "faster checkmates above all else. A value of 0 disables this and uses "
+    "the default MLH scaling."};
+// END: New parameter definitions
+
 void SearchParams::Populate(OptionsParser* options) {
   // Here the uci optimized defaults" are set.
   // Many of them are overridden with training specific values in tournament.cc.
@@ -678,6 +690,12 @@ void SearchParams::Populate(OptionsParser* options) {
   options->Add<FloatOption>(kMovesLeftScaledFactorId, -2.0f, 2.0f) = 1.6521f;
   options->Add<FloatOption>(kMovesLeftQuadraticFactorId, -1.0f, 1.0f) =
       -0.6521f;
+  
+  // START: Add new options to parser
+  options->Add<FloatOption>(kAttackBonusFactorId, 0.0f, 10.0f) = 0.0f;
+  options->Add<FloatOption>(kAggressiveMlhFactorId, 0.0f, 10.0f) = 0.0f;
+  // END: Add new options to parser
+
   options->Add<BoolOption>(kDisplayCacheUsageId) = false;
   options->Add<IntOption>(kMaxConcurrentSearchersId, 0, 128) = 1;
   options->Add<FloatOption>(kDrawScoreId, -1.0f, 1.0f) = 0.0f;
@@ -825,6 +843,10 @@ SearchParams::SearchParams(const OptionsDict& options)
       kMaxCollisionVisitsScalingPower(
           options.Get<float>(kMaxCollisionVisitsScalingPowerId)),
       kSearchSpinBackoff(options_.Get<bool>(kSearchSpinBackoffId)),
+      // START: Initialize new parameters
+      kAttackBonusFactor(options.Get<float>(kAttackBonusFactorId)),
+      kAggressiveMlhFactor(options.Get<float>(kAggressiveMlhFactorId)),
+      // END: Initialize new parameters
       // START: ADDED FOR DYNAMIC HYBRID RATIO
       kHybridRatioMode(EncodeHybridRatioMode(options.Get<std::string>(kHybridRatioModeId))),
       kHybridRatioSchedule(ParseHybridRatioSchedule(options.Get<std::string>(kHybridRatioScheduleId)))
