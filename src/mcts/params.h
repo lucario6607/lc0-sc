@@ -211,6 +211,11 @@ class SearchParams {
   }
   bool GetSearchSpinBackoff() const { return kSearchSpinBackoff; }
 
+  // START: New parameter getters
+  float GetAttackBonusFactor() const { return kAttackBonusFactor; }
+  float GetAggressiveMlhFactor() const { return kAggressiveMlhFactor; }
+  // END: New parameter getters
+
   // Search parameter IDs.
   static const OptionId kMiniBatchSizeId;
   static const OptionId kMaxPrefetchBatchId;
@@ -264,7 +269,6 @@ class SearchParams {
   static const OptionId kMovesLeftConstantFactorId;
   static const OptionId kMovesLeftScaledFactorId;
   static const OptionId kMovesLeftQuadraticFactorId;
-  static const OptionId kMovesLeftSlopeId;
   static const OptionId kDisplayCacheUsageId;
   static const OptionId kMaxConcurrentSearchersId;
   static const OptionId kDrawScoreId;
@@ -296,6 +300,11 @@ class SearchParams {
   static const OptionId kUCIOpponentId;
   static const OptionId kUCIRatingAdvId;
   static const OptionId kSearchSpinBackoffId;
+
+  // START: New parameter IDs
+  static const OptionId kAttackBonusFactorId;
+  static const OptionId kAggressiveMlhFactorId;
+  // END: New parameter IDs
 
  private:
   const OptionsDict& options_;
@@ -356,6 +365,11 @@ class SearchParams {
   const int kMaxCollisionVisitsScalingEnd;
   const float kMaxCollisionVisitsScalingPower;
   const bool kSearchSpinBackoff;
+
+  // START: New cached parameter values
+  const float kAttackBonusFactor;
+  const float kAggressiveMlhFactor;
+  // END: New cached parameter values
 
   // START: ADDED FOR DYNAMIC HYBRID RATIO
   const HybridRatioMode kHybridRatioMode;
