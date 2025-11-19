@@ -1209,7 +1209,7 @@ void SearchWorker::ExecuteOneIteration() {
   CollectCollisions();
 
   // 3. Prefetch into cache.
-  MaybePrefetchIntocache();
+  MaybePrefetchIntoCache();
 
   if (params_.GetMaxConcurrentSearchers() != 0) {
     search_->pending_searchers_.fetch_add(1, std::memory_order_acq_rel);
@@ -2340,7 +2340,7 @@ void SearchWorker::DoBackupUpdateSingleNode(
     // Set v for next iteration up the tree
     v = v_parent;
 
-    // Update deltas for standard tracking
+    // Update other stats
     v_delta = -v_delta;
     m++;
     // --- DR-MCTS Logic End ---
