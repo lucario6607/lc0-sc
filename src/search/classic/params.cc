@@ -534,6 +534,10 @@ const OptionId BaseSearchParams::kDoublyRobustBetaId{
     "Mixing factor for Doubly Robust MCTS. 1.0 = Standard MCTS, 0.0 = Pure "
     "Doubly Robust. Controls the balance between the standard rollout value "
     "and the corrected off-policy estimate."};
+const OptionId BaseSearchParams::kDoublyRobustTauId{
+    "doubly-robust-tau", "DoublyRobustTau",
+    "Temperature (Tau) for the Softmax Target Policy in Doubly Robust MCTS. "
+    "Calculates target policy based on current Q-values. Default 1.0."};
 
 const OptionId SearchParams::kMaxPrefetchBatchId{
     "max-prefetch", "MaxPrefetch",
@@ -637,6 +641,7 @@ void BaseSearchParams::Populate(OptionsParser* options) {
   options->Add<BoolOption>(kSearchSpinBackoffId) = false;
   options->Add<FloatOption>(kGarbageCollectionDelayId, 0.0f, 100.0f) = 10.0f;
   options->Add<FloatOption>(kDoublyRobustBetaId, 0.0f, 1.0f) = 0.5f;
+  options->Add<FloatOption>(kDoublyRobustTauId, 0.0f, 100.0f) = 1.0f;
 }
 
 void SearchParams::Populate(OptionsParser* options) {
@@ -732,7 +737,8 @@ BaseSearchParams::BaseSearchParams(const OptionsDict& options)
           options.Get<float>(kMaxCollisionVisitsScalingPowerId)),
       kSearchSpinBackoff(options_.Get<bool>(kSearchSpinBackoffId)),
       kGarbageCollectionDelay(options_.Get<float>(kGarbageCollectionDelayId)),
-      kDoublyRobustBeta(options_.Get<float>(kDoublyRobustBetaId)) {}
+      kDoublyRobustBeta(options_.Get<float>(kDoublyRobustBetaId)),
+      kDoublyRobustTau(options_.Get<float>(kDoublyRobustTauId)) {}
 
 SearchParams::SearchParams(const OptionsDict& options)
     : BaseSearchParams(options),
