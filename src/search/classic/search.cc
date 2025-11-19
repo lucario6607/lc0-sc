@@ -49,13 +49,6 @@ namespace {
 // Maximum delay between outputting "uci info" when nothing interesting happens.
 const int kUciInfoMinimumFrequencyMs = 5000;
 
-// DR-MCTS Parameter: Beta
-// Controls the mixing between the standard MCTS value and the Doubly Robust estimate.
-// V_hybrid = beta * V_MCTS + (1 - beta) * V_DR
-// 1.0 = Standard MCTS, 0.0 = Pure Doubly Robust.
-// The paper suggests tuning this; 0.5 is a robust starting point.
-const float kDRMctsBeta = 0.5f;
-
 MoveList MakeRootMoveFilter(const MoveList& searchmoves,
                             SyzygyTablebase* syzygy_tb,
                             const PositionHistory& history, bool fast_play,
@@ -2287,6 +2280,8 @@ void SearchWorker::DoBackupUpdateSingleNode(
     // Formula: V_hybrid = beta * V_MCTS + (1 - beta) * V_DR
     const Edge* edge = n->GetOwnEdge();
     if (edge) {
+      float beta = params_.GetDoublyRobustBeta();
+      
       // N_parent: Visits to parent. We include the current multivisit to represent
       // the posterior policy after this backup step.
       float N_parent = static_cast<float>(p->GetN() + node_to_process.multivisit);
@@ -2312,7 +2307,7 @@ void SearchWorker::DoBackupUpdateSingleNode(
       float v_dr = q_hat + rho * (v_parent - q_hat);
 
       // Blend into Hybrid Estimator
-      v_parent = kDRMctsBeta * v_parent + (1.0f - kDRMctsBeta) * v_dr;
+      v_parent = beta * v_parent + (1.0f - beta) * v_dr;
     }
 
     // Set v for the next iteration
@@ -2441,4 +2436,3 @@ void SearchWorker::UpdateCounters() {
 
 }  // namespace classic
 }  // namespace lczero
-
