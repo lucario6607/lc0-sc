@@ -1209,7 +1209,7 @@ void SearchWorker::ExecuteOneIteration() {
   CollectCollisions();
 
   // 3. Prefetch into cache.
-  MaybePrefetchInto cache();
+  MaybePrefetchIntocache();
 
   if (params_.GetMaxConcurrentSearchers() != 0) {
     search_->pending_searchers_.fetch_add(1, std::memory_order_acq_rel);
