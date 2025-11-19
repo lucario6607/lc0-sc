@@ -1209,7 +1209,7 @@ void SearchWorker::ExecuteOneIteration() {
   CollectCollisions();
 
   // 3. Prefetch into cache.
-  MaybePrefetchIntoCache();
+  MaybePrefetchInto cache();
 
   if (params_.GetMaxConcurrentSearchers() != 0) {
     search_->pending_searchers_.fetch_add(1, std::memory_order_acq_rel);
@@ -2220,19 +2220,18 @@ void SearchWorker::DoBackupUpdateSingleNode(
   float d = node_to_process.eval->d;
   float m = node_to_process.eval->m;
 
-  // --- DR-MCTS MODIFICATION ---
-  // We track a separate hybrid value that blends standard MCTS estimates
-  // with Doubly Robust estimates. Initially, it's the exact value of the leaf.
-  // Note: We use 'v' (Standard MCTS) as the variable propagated, but we
-  // modify it at each step to incorporate the DR correction.
-  // ----------------------------
-
   int n_to_fix = 0;
   float v_delta = 0.0f;
   float d_delta = 0.0f;
   float m_delta = 0.0f;
   uint32_t solid_threshold =
       static_cast<uint32_t>(params_.GetSolidTreeThreshold());
+
+  // --- DR-MCTS Setup ---
+  float dr_beta = params_.GetDoublyRobustBeta();
+  float dr_tau = params_.GetDoublyRobustTau();
+  if (dr_tau < 1e-3f) dr_tau = 1e-3f; // Avoid div by zero
+
   for (Node *n = node, *p; n != search_->root_node_->GetParent(); n = p) {
     p = n->GetParent();
 
@@ -2267,56 +2266,84 @@ void SearchWorker::DoBackupUpdateSingleNode(
         update_parent_bounds && p != search_->root_node_ && !p->IsTerminal() &&
         MaybeSetBounds(p, m, &n_to_fix, &v_delta, &d_delta, &m_delta);
 
-    // --- DR-MCTS LOGIC START ---
-    // Prepare 'v' for the parent 'p'.
-    // Standard MCTS would simply do: v = -v.
-    // DR-MCTS calculates a corrected value based on the edge p->n.
-
-    // 1. Flip to parent perspective (Standard MCTS Baseline)
+    // --- DR-MCTS Logic Start ---
+    // 1. Standard MCTS value flipping (Minimax)
     float v_parent = -v;
 
-    // 2. Apply Doubly Robust Correction
-    // Formula: V_DR = Q_hat + rho * (R - Q_hat)
-    // Formula: V_hybrid = beta * V_MCTS + (1 - beta) * V_DR
-    const Edge* edge = n->GetOwnEdge();
-    if (edge) {
-      float beta = params_.GetDoublyRobustBeta();
-      
-      // N_parent: Visits to parent. We include the current multivisit to represent
-      // the posterior policy after this backup step.
-      float N_parent = static_cast<float>(p->GetN() + node_to_process.multivisit);
-      // N_edge: Visits to this specific child node (already updated in FinalizeScoreUpdate).
-      float N_edge = static_cast<float>(n->GetN());
-      
-      // Behavior Policy: Empirical visit probability
-      float pi_b = (N_parent > 0.0f) ? (N_edge / N_parent) : 0.0f;
-      
-      // Target Policy: Neural Network Prior
-      float P_prior = edge->GetP();
+    // 2. Doubly Robust Correction using Softmax Target Policy
+    // We only apply this if beta < 1.0
+    if (dr_beta < 0.999f) {
+      const Edge* edge_taken = n->GetOwnEdge();
+      if (edge_taken) {
+        // Determine FPU for this node level. Used for Q-values of unvisited siblings.
+        // Note: p's depth isn't tracked explicitly here, but FPU doesn't strictly rely on accurate depth for small corrections.
+        // Assuming false/0.0f for is_root/draw_score as a reasonable approximation for internal calculation.
+        float fpu = GetFpu(params_, p, p == search_->root_node_, 0.0f);
 
-      // Importance Sampling Ratio (rho)
-      // Clipped at 1.0 to prevent variance explosion (V-trace style).
-      float rho = (pi_b > 1e-6f) ? std::min(1.0f, P_prior / pi_b) : 1.0f;
+        // Calculate Softmax Policy Target (Pi_e)
+        // Eq 7: P(a) = exp(Q(a)/tau) / Sum(exp(Q(b)/tau))
+        
+        // Pass 1: Find Max Q for numerical stability
+        float max_q = -1e9f;
+        for (const auto& sib : p->Edges()) {
+          // Q values are stored relative to the player moving at p.
+          float q = sib.GetQ(fpu, 0.0f);
+          if (q > max_q) max_q = q;
+        }
 
-      // Q_hat: The estimated value of taking this edge (Parent perspective).
-      // n->GetWL() returns win rate from n's perspective.
-      // So -n->GetWL() is the Q value from p's perspective.
-      float q_hat = -n->GetWL();
+        // Pass 2: Sum Exponentials and find Q of chosen edge
+        float sum_exp = 0.0f;
+        float chosen_edge_q = -1e9f;
+        bool found = false;
+        for (const auto& sib : p->Edges()) {
+          float q = sib.GetQ(fpu, 0.0f);
+          sum_exp += std::exp((q - max_q) / dr_tau);
+          if (sib.GetMove() == edge_taken->GetMove()) {
+            chosen_edge_q = q;
+            found = true;
+          }
+        }
 
-      // Calculate DR Estimate
-      float v_dr = q_hat + rho * (v_parent - q_hat);
+        if (found && sum_exp > 1e-9f) {
+          // Calculate Target Probability for the edge we just traversed
+          float pi_target = std::exp((chosen_edge_q - max_q) / dr_tau) / sum_exp;
 
-      // Blend into Hybrid Estimator
-      v_parent = beta * v_parent + (1.0f - beta) * v_dr;
+          // Calculate Behavior Probability (Empirical visit count)
+          // N(parent) includes the current visit we just added (multivisit).
+          float N_parent = static_cast<float>(p->GetN() + node_to_process.multivisit);
+          float N_edge = static_cast<float>(n->GetN());
+          
+          float pi_behavior = (N_parent > 0.0f) ? (N_edge / N_parent) : 0.0f;
+
+          // Importance Sampling Ratio (rho)
+          float rho = 1.0f;
+          if (pi_behavior > 1e-6f) {
+            rho = std::min(1.0f, pi_target / pi_behavior);
+          }
+
+          // Calculate DR Estimate
+          // Q_hat is current estimated value of the child (n) from p's perspective.
+          // n->GetWL() is value for player moving at n.
+          // So -n->GetWL() is value for player moving at p.
+          float q_hat = -n->GetWL();
+
+          // V_DR = Q_hat + rho * (R - Q_hat)
+          // R here is v_parent (the value returned from the rollout below)
+          float v_dr = q_hat + rho * (v_parent - q_hat);
+
+          // Blend Hybrid Estimator
+          v_parent = dr_beta * v_parent + (1.0f - dr_beta) * v_dr;
+        }
+      }
     }
 
-    // Set v for the next iteration
+    // Set v for next iteration up the tree
     v = v_parent;
 
-    // Update other stats
+    // Update deltas for standard tracking
     v_delta = -v_delta;
     m++;
-    // --- DR-MCTS LOGIC END ---
+    // --- DR-MCTS Logic End ---
 
     // Best move.
     // If update_parent_bounds was set, we just adjusted bounds on the
