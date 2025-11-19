@@ -49,6 +49,13 @@ namespace {
 // Maximum delay between outputting "uci info" when nothing interesting happens.
 const int kUciInfoMinimumFrequencyMs = 5000;
 
+// DR-MCTS Parameter: Beta
+// Controls the mixing between the standard MCTS value and the Doubly Robust estimate.
+// V_hybrid = beta * V_MCTS + (1 - beta) * V_DR
+// 1.0 = Standard MCTS, 0.0 = Pure Doubly Robust.
+// The paper suggests tuning this; 0.5 is a robust starting point.
+const float kDRMctsBeta = 0.5f;
+
 MoveList MakeRootMoveFilter(const MoveList& searchmoves,
                             SyzygyTablebase* syzygy_tb,
                             const PositionHistory& history, bool fast_play,
@@ -2219,6 +2226,14 @@ void SearchWorker::DoBackupUpdateSingleNode(
   float v = node_to_process.eval->q;
   float d = node_to_process.eval->d;
   float m = node_to_process.eval->m;
+
+  // --- DR-MCTS MODIFICATION ---
+  // We track a separate hybrid value that blends standard MCTS estimates
+  // with Doubly Robust estimates. Initially, it's the exact value of the leaf.
+  // Note: We use 'v' (Standard MCTS) as the variable propagated, but we
+  // modify it at each step to incorporate the DR correction.
+  // ----------------------------
+
   int n_to_fix = 0;
   float v_delta = 0.0f;
   float d_delta = 0.0f;
@@ -2259,12 +2274,55 @@ void SearchWorker::DoBackupUpdateSingleNode(
         update_parent_bounds && p != search_->root_node_ && !p->IsTerminal() &&
         MaybeSetBounds(p, m, &n_to_fix, &v_delta, &d_delta, &m_delta);
 
-    // Q will be flipped for opponent.
-    v = -v;
+    // --- DR-MCTS LOGIC START ---
+    // Prepare 'v' for the parent 'p'.
+    // Standard MCTS would simply do: v = -v.
+    // DR-MCTS calculates a corrected value based on the edge p->n.
+
+    // 1. Flip to parent perspective (Standard MCTS Baseline)
+    float v_parent = -v;
+
+    // 2. Apply Doubly Robust Correction
+    // Formula: V_DR = Q_hat + rho * (R - Q_hat)
+    // Formula: V_hybrid = beta * V_MCTS + (1 - beta) * V_DR
+    const Edge* edge = n->GetOwnEdge();
+    if (edge) {
+      // N_parent: Visits to parent. We include the current multivisit to represent
+      // the posterior policy after this backup step.
+      float N_parent = static_cast<float>(p->GetN() + node_to_process.multivisit);
+      // N_edge: Visits to this specific child node (already updated in FinalizeScoreUpdate).
+      float N_edge = static_cast<float>(n->GetN());
+      
+      // Behavior Policy: Empirical visit probability
+      float pi_b = (N_parent > 0.0f) ? (N_edge / N_parent) : 0.0f;
+      
+      // Target Policy: Neural Network Prior
+      float P_prior = edge->GetP();
+
+      // Importance Sampling Ratio (rho)
+      // Clipped at 1.0 to prevent variance explosion (V-trace style).
+      float rho = (pi_b > 1e-6f) ? std::min(1.0f, P_prior / pi_b) : 1.0f;
+
+      // Q_hat: The estimated value of taking this edge (Parent perspective).
+      // n->GetWL() returns win rate from n's perspective.
+      // So -n->GetWL() is the Q value from p's perspective.
+      float q_hat = -n->GetWL();
+
+      // Calculate DR Estimate
+      float v_dr = q_hat + rho * (v_parent - q_hat);
+
+      // Blend into Hybrid Estimator
+      v_parent = kDRMctsBeta * v_parent + (1.0f - kDRMctsBeta) * v_dr;
+    }
+
+    // Set v for the next iteration
+    v = v_parent;
+
+    // Update other stats
     v_delta = -v_delta;
     m++;
+    // --- DR-MCTS LOGIC END ---
 
-    // Update the stats.
     // Best move.
     // If update_parent_bounds was set, we just adjusted bounds on the
     // previous loop or there was no previous loop, so if n is a terminal, it
@@ -2383,3 +2441,4 @@ void SearchWorker::UpdateCounters() {
 
 }  // namespace classic
 }  // namespace lczero
+
