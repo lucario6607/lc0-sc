@@ -529,6 +529,11 @@ const OptionId BaseSearchParams::kGarbageCollectionDelayId{
     "garbage-collection-delay", "GarbageCollectionDelay",
     "The percentage of expected move time until garbage collection start. "
     "Delay lets search find transpositions to freed search tree branches."};
+const OptionId BaseSearchParams::kDoublyRobustBetaId{
+    "doubly-robust-beta", "DoublyRobustBeta",
+    "Mixing factor for Doubly Robust MCTS. 1.0 = Standard MCTS, 0.0 = Pure "
+    "Doubly Robust. Controls the balance between the standard rollout value "
+    "and the corrected off-policy estimate."};
 
 const OptionId SearchParams::kMaxPrefetchBatchId{
     "max-prefetch", "MaxPrefetch",
@@ -631,6 +636,7 @@ void BaseSearchParams::Populate(OptionsParser* options) {
   options->Add<FloatOption>(kUCIRatingAdvId, -10000.0f, 10000.0f) = 0.0f;
   options->Add<BoolOption>(kSearchSpinBackoffId) = false;
   options->Add<FloatOption>(kGarbageCollectionDelayId, 0.0f, 100.0f) = 10.0f;
+  options->Add<FloatOption>(kDoublyRobustBetaId, 0.0f, 1.0f) = 0.5f;
 }
 
 void SearchParams::Populate(OptionsParser* options) {
@@ -725,10 +731,12 @@ BaseSearchParams::BaseSearchParams(const OptionsDict& options)
       kMaxCollisionVisitsScalingPower(
           options.Get<float>(kMaxCollisionVisitsScalingPowerId)),
       kSearchSpinBackoff(options_.Get<bool>(kSearchSpinBackoffId)),
-      kGarbageCollectionDelay(options_.Get<float>(kGarbageCollectionDelayId)) {}
+      kGarbageCollectionDelay(options_.Get<float>(kGarbageCollectionDelayId)),
+      kDoublyRobustBeta(options_.Get<float>(kDoublyRobustBetaId)) {}
 
 SearchParams::SearchParams(const OptionsDict& options)
     : BaseSearchParams(options),
       kSolidTreeThreshold(options.Get<int>(kSolidTreeThresholdId)) {}
 }  // namespace classic
 }  // namespace lczero
+
