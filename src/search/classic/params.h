@@ -160,8 +160,9 @@ class BaseSearchParams {
   bool GetSearchSpinBackoff() const { return kSearchSpinBackoff; }
   float GetGarbageCollectionDelay() const { return kGarbageCollectionDelay; }
   
-  // DR-MCTS
+  // DR-MCTS Parameters
   float GetDoublyRobustBeta() const { return kDoublyRobustBeta; }
+  float GetDoublyRobustTau() const { return kDoublyRobustTau; }
 
   // Search parameter IDs.
   static const OptionId kMiniBatchSizeId;
@@ -231,7 +232,10 @@ class BaseSearchParams {
   static const OptionId kUCIRatingAdvId;
   static const OptionId kSearchSpinBackoffId;
   static const OptionId kGarbageCollectionDelayId;
+  
+  // DR-MCTS Option IDs
   static const OptionId kDoublyRobustBetaId;
+  static const OptionId kDoublyRobustTauId;
 
  protected:
   const OptionsDict& options_;
@@ -291,7 +295,10 @@ class BaseSearchParams {
   const float kMaxCollisionVisitsScalingPower;
   const bool kSearchSpinBackoff;
   const float kGarbageCollectionDelay;
+  
+  // DR-MCTS
   const float kDoublyRobustBeta;
+  const float kDoublyRobustTau;
 };
 
 class SearchParams : public BaseSearchParams {
