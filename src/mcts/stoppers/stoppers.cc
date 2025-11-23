@@ -61,7 +61,7 @@ bool VisitsStopper::ShouldStop(const IterationStats& stats,
   if (populate_remaining_playouts_) {
     hints->UpdateEstimatedRemainingPlayouts(nodes_limit_ - stats.total_nodes);
   }
-  int64_t estimate = (.25f + (stats.wl - 0.9f) / 0.09f * .75f) * nodes_limit_;
+  int64_t estimate = (.25f + (stats.wl - 0.75f) / 0.24f * .75f) * nodes_limit_;
   auto nodes_limit =
       std::max(nodes_limit_ / 4, std::min(nodes_limit_, estimate));
   if (stats.total_nodes >= nodes_limit) {
