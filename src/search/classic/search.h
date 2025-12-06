@@ -49,7 +49,8 @@ namespace classic {
 
 class Search {
  public:
-  Search(const NodeTree& tree, Backend* network,
+  // Updated constructor to accept backend_opp
+  Search(const NodeTree& tree, Backend* backend, Backend* backend_opp,
          std::unique_ptr<UciResponder> uci_responder,
          const MoveList& searchmoves,
          std::chrono::steady_clock::time_point start_time,
@@ -165,6 +166,7 @@ class Search {
   const PositionHistory& played_history_;
 
   Backend* const backend_;
+  Backend* const backend_opp_; // Added: Opponent/Victim network
   BackendAttributes backend_attributes_;
   const SearchParams params_;
   const MoveList searchmoves_;
@@ -425,6 +427,8 @@ class SearchWorker {
   // List of nodes to process.
   std::vector<NodeToProcess> minibatch_;
   std::unique_ptr<BackendComputation> computation_;
+  std::unique_ptr<BackendComputation> computation_opp_; // Added: Opponent computation
+  std::vector<std::unique_ptr<EvalResult>> victim_eval_buffer_; // Added: Buffer for AMCTS-S merge
   int task_workers_;
   int target_minibatch_size_;
   int max_out_of_order_;
