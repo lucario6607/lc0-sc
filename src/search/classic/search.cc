@@ -1369,6 +1369,12 @@ void SearchWorker::GatherMinibatch() {
         std::min({collisions_left, target_minibatch_size_ - minibatch_size,
                   max_out_of_order_ - number_out_of_order_}));
 
+    // Ensure victim_eval_buffer_ is large enough for the current minibatch.
+    // minibatch_ can grow due to collisions, so we must check.
+    if (search_->adversarial_mode_ && victim_eval_buffer_.size() < minibatch_.size()) {
+        victim_eval_buffer_.resize(minibatch_.size());
+    }
+
     // Count the non-collisions.
     int non_collisions = 0;
     for (int i = new_start; i < static_cast<int>(minibatch_.size()); i++) {
