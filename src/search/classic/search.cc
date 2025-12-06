@@ -1444,9 +1444,15 @@ void SearchWorker::GatherMinibatch() {
             node->CancelScoreUpdate(minibatch_[i].multivisit);
           }
           minibatch_.erase(minibatch_.begin() + i);
+          if (search_->adversarial_mode_ && i < static_cast<int>(victim_eval_buffer_.size())) {
+            victim_eval_buffer_.erase(victim_eval_buffer_.begin() + i);
+          }
         } else if (minibatch_[i].ooo_completed) {
           DoBackupUpdateSingleNode(minibatch_[i]);
           minibatch_.erase(minibatch_.begin() + i);
+          if (search_->adversarial_mode_ && i < static_cast<int>(victim_eval_buffer_.size())) {
+            victim_eval_buffer_.erase(victim_eval_buffer_.begin() + i);
+          }
           --minibatch_size;
           ++number_out_of_order_;
         }
@@ -1516,7 +1522,8 @@ void SearchWorker::ProcessPickedTask(int start_idx, int end_idx,
 
         // If Adversarial Mode is ON and it's the Opponent's turn (odd depth):
         // Query the Opponent backend for Policy (P).
-        if (search_->adversarial_mode_ && (picked_node.depth % 2 != 0)) {
+        // Note: depth=1 is Root (Us/Adversary), depth=2 is Child (Them/Victim).
+        if (search_->adversarial_mode_ && (picked_node.depth % 2 == 0)) {
           // Ensure buffer object exists for the secondary result
           if (!victim_eval_buffer_[i]) {
             victim_eval_buffer_[i] = std::make_unique<EvalResult>();
@@ -2247,7 +2254,8 @@ void SearchWorker::FetchSingleNodeResult(NodeToProcess* node_to_process) {
   // We need to overwrite P in the result struct with Victim's P.
 
   if (search_->adversarial_mode_) {
-      bool is_victim_turn = (node_to_process->depth % 2 != 0);
+      // Note: depth=1 is Root (Us/Adversary), depth=2 is Child (Them/Victim).
+      bool is_victim_turn = (node_to_process->depth % 2 == 0);
       if (is_victim_turn) {
         size_t idx = node_to_process - &minibatch_[0];
         if (victim_eval_buffer_[idx]) {
