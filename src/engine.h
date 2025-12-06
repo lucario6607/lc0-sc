@@ -69,6 +69,13 @@ class Engine : public EngineControllerBase {
   std::string backend_name_;  // Remember the backend name to track changes.
   std::unique_ptr<CachingBackend> backend_;  // absl_nullable
 
+  // --- Adversarial Search Members ---
+  // The opponent (Victim) backend.
+  std::unique_ptr<CachingBackend> backend_opp_; // absl_nullable
+  // Remember the path to detect changes in the VictimWeights option.
+  std::string victim_weights_path_;
+  // ----------------------------------
+
   // Remember previous tablebase paths to detect when to reload them.
   std::string previous_tb_paths_;
   std::unique_ptr<SyzygyTablebase> syzygy_tb_;  // absl_nullable
