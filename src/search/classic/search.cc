@@ -149,7 +149,8 @@ class MEvaluator {
 
 }  // namespace
 
-Search::Search(const NodeTree& tree, Backend* backend,
+// Modified Constructor to accept backend_opp
+Search::Search(const NodeTree& tree, Backend* backend, Backend* backend_opp,
                std::unique_ptr<UciResponder> uci_responder,
                const MoveList& searchmoves,
                std::chrono::steady_clock::time_point start_time,
@@ -162,6 +163,8 @@ Search::Search(const NodeTree& tree, Backend* backend,
       syzygy_tb_(syzygy_tb),
       played_history_(tree.GetPositionHistory()),
       backend_(backend),
+      // Fallback to primary backend if opponent backend is not provided
+      backend_opp_(backend_opp ? backend_opp : backend),
       backend_attributes_(backend->GetAttributes()),
       params_(options),
       searchmoves_(searchmoves),
@@ -1257,9 +1260,18 @@ void SearchWorker::InitializeIteration() {
   // Free the old computation before allocating a new one. This works better
   // when backend caches buffer allocations between computations.
   computation_.reset();
+  computation_opp_.reset();
+
   computation_ = search_->backend_->CreateComputation();
+  computation_opp_ = search_->backend_opp_->CreateComputation();
+
   minibatch_.clear();
   minibatch_.reserve(2 * target_minibatch_size_);
+
+  // Resize buffer for opponent evaluations if necessary
+  if (victim_eval_buffer_.size() < 2 * target_minibatch_size_) {
+    victim_eval_buffer_.resize(2 * target_minibatch_size_);
+  }
 }
 
 // 2. Gather minibatch.
@@ -1314,7 +1326,10 @@ void SearchWorker::GatherMinibatch() {
   while (minibatch_size < target_minibatch_size_ &&
          number_out_of_order_ < max_out_of_order_) {
     // If there's something to process without touching slow neural net, do it.
-    if (minibatch_size > 0 && computation_->UsedBatchSize() == 0) return;
+    // Check both computations for work
+    if (minibatch_size > 0 && computation_->UsedBatchSize() == 0 &&
+        computation_opp_->UsedBatchSize() == 0)
+      return;
 
     // If there is backend work to be done, and the backend is idle - exit
     // immediately.
@@ -1322,9 +1337,10 @@ void SearchWorker::GatherMinibatch() {
     // early exit from every batch since there is never another search thread to
     // be keeping the backend busy. Which would mean that threads=1 has a
     // massive nps drop.
+    int total_work =
+        computation_->UsedBatchSize() + computation_opp_->UsedBatchSize();
     if (thread_count > 1 && minibatch_size > 0 &&
-        static_cast<int>(computation_->UsedBatchSize()) >
-            params_.GetIdlingMinimumWork() &&
+        total_work > params_.GetIdlingMinimumWork() &&
         thread_count - search_->backend_waiting_counter_.load(
                            std::memory_order_relaxed) >
             params_.GetThreadIdlingThreshold()) {
@@ -1466,13 +1482,41 @@ void SearchWorker::ProcessPickedTask(int start_idx, int end_idx,
                        std::back_inserter(legal_moves),
                        [](const auto& edge) { return edge.GetMove(); });
         picked_node.eval->p.resize(legal_moves.size());
-        picked_node.is_cache_hit = computation_->AddInput(
-                                       EvalPosition{
-                                           .pos = history.GetPositions(),
-                                           .legal_moves = legal_moves,
-                                       },
-                                       picked_node.eval->AsPtr()) ==
-                                   BackendComputation::FETCHED_IMMEDIATELY;
+
+        // --- AMCTS-S Logic ---
+        // 1. Always query Adversary (computation_) for Value (Q) and default P
+        bool adv_cached = computation_->AddInput(
+                              EvalPosition{
+                                  .pos = history.GetPositions(),
+                                  .legal_moves = legal_moves,
+                              },
+                              picked_node.eval->AsPtr()) ==
+                          BackendComputation::FETCHED_IMMEDIATELY;
+
+        // 2. If it's the opponent's turn (odd depth, assuming root is even),
+        //    query the Victim (computation_opp_) for Policy (P).
+        //    Strict AMCTS-S uses Victim P + Adversary Q on opponent nodes.
+        bool is_victim_turn = (picked_node.depth % 2 != 0);
+
+        if (is_victim_turn) {
+          // Ensure buffer object exists for the secondary result
+          if (!victim_eval_buffer_[i]) {
+            victim_eval_buffer_[i] = std::make_unique<EvalResult>();
+          }
+          victim_eval_buffer_[i]->p.resize(legal_moves.size());
+
+          // Query Victim Network
+          computation_opp_->AddInput(EvalPosition{
+                                         .pos = history.GetPositions(),
+                                         .legal_moves = legal_moves,
+                                     },
+                                     victim_eval_buffer_[i]->AsPtr());
+          // We set cache hit based on Adversary result because main loop
+          // readiness depends on picked_node.eval being ready.
+          picked_node.is_cache_hit = adv_cached;
+        } else {
+          picked_node.is_cache_hit = adv_cached;
+        }
       }
     }
     if (params_.GetOutOfOrderEval() && picked_node.CanEvalOutOfOrder()) {
@@ -2036,14 +2080,15 @@ void SearchWorker::MaybePrefetchIntoCache() {
   // If there are requests to NN, but the batch is not full, try to prefetch
   // nodes which are likely useful in future.
   if (search_->stop_.load(std::memory_order_acquire)) return;
-  if (computation_->UsedBatchSize() > 0 &&
-      static_cast<int>(computation_->UsedBatchSize()) <
+  int used = computation_->UsedBatchSize() + computation_opp_->UsedBatchSize();
+  if (used > 0 &&
+      static_cast<int>(used) <
           params_.GetMaxPrefetchBatch()) {
     history_.Trim(search_->played_history_.GetLength());
     SharedMutex::SharedLock lock(search_->nodes_mutex_);
     PrefetchIntoCache(
         search_->root_node_,
-        params_.GetMaxPrefetchBatch() - computation_->UsedBatchSize(), false);
+        params_.GetMaxPrefetchBatch() - used, false);
   }
 }
 
@@ -2144,6 +2189,8 @@ int SearchWorker::PrefetchIntoCache(Node* node, int budget, bool is_odd_depth) {
 // ~~~~~~~~~~~~~~~~~~~~~~
 void SearchWorker::RunNNComputation() {
   if (computation_->UsedBatchSize() > 0) computation_->ComputeBlocking();
+  if (computation_opp_->UsedBatchSize() > 0)
+    computation_opp_->ComputeBlocking();
 }
 
 // 5. Retrieve NN computations (and terminal values) into nodes.
@@ -2167,6 +2214,21 @@ void SearchWorker::FetchSingleNodeResult(NodeToProcess* node_to_process) {
     node_to_process->eval->m = node->GetM();
     return;
   }
+
+  // --- Strict AMCTS-S Logic ---
+  // If this was an opponent turn, we have two results:
+  // 1. Value (Q) from Adversary (in node_to_process->eval)
+  // 2. Policy (P) from Victim (in victim_eval_buffer_)
+  // We need to overwrite P in the result struct with Victim's P.
+
+  bool is_victim_turn = (node_to_process->depth % 2 != 0);
+  if (is_victim_turn) {
+    size_t idx = node_to_process - &minibatch_[0];
+    if (victim_eval_buffer_[idx]) {
+      node_to_process->eval->p = victim_eval_buffer_[idx]->p;
+    }
+  }
+
   node_to_process->eval->q = -node_to_process->eval->q;
   // For NN results, we need to populate policy as well as value.
   // First the value...
