@@ -216,7 +216,7 @@ void Engine::UpdateBackendConfig() {
         // Create a separate options dict for the opponent
         OptionsDict opp_options = options_;
         // Override the "WeightsFile" option to point to the victim's file
-        opp_options.Set(SharedBackendParams::kWeightsFileId, victim_path);
+        opp_options.Set(SharedBackendParams::kWeightsId, victim_path);
         
         // We typically use the same backend implementation (e.g. cuda-fp16) for both
         backend_opp_ = CreateMemCache(
