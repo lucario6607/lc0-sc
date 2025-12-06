@@ -129,8 +129,13 @@ void ClassicSearch::StartSearch(const GoParams& params) {
   auto stopper = time_manager_->GetStopper(
       params, tree_.get()->HeadPosition(), total_memory, kAvgNodeSize,
       tree_.get()->GetCurrentHead()->GetN());
+
+  // MODIFIED: Pass backend_opp_ (inherited from SearchBase) to the constructor.
   search_ = std::make_unique<Search>(
-      *tree_, backend_, std::move(forwarder),
+      *tree_, 
+      backend_, 
+      backend_opp_,  // <--- Added Opponent Backend
+      std::move(forwarder),
       StringsToMovelist(params.searchmoves, tree_->HeadPosition().GetBoard()),
       *move_start_time_, std::move(stopper), params.infinite, params.ponder,
       *options_, syzygy_tb_);
