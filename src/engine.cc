@@ -62,6 +62,20 @@ const OptionId kPonderId{
 
 const OptionId kPreload{"preload", "",
                         "Initialize backend and load net on engine startup."};
+
+// --- NEW OPTIONS FOR ADVERSARIAL SEARCH ---
+const OptionId kVictimWeightsId{
+    {.long_flag = "victim-weights",
+     .uci_option = "VictimWeights",
+     .help_text = "Path to the neural network weights for the victim (opponent) in adversarial search.",
+     .visibility = OptionId::kAlwaysVisible}};
+
+const OptionId kAdversarialSearchId{
+    {.long_flag = "adversarial-search",
+     .uci_option = "AdversarialSearch",
+     .help_text = "Enable strict AMCTS-S adversarial search (requires VictimWeights).",
+     .visibility = OptionId::kAlwaysVisible}};
+
 }  // namespace
 
 void Engine::PopulateOptions(OptionsParser* options) {
@@ -69,6 +83,10 @@ void Engine::PopulateOptions(OptionsParser* options) {
   options->Add<StringOption>(kSyzygyTablebaseId);
   options->Add<BoolOption>(kStrictUciTiming) = false;
   options->Add<BoolOption>(kPreload) = false;
+  
+  // Register Adversarial Options
+  options->Add<StringOption>(kVictimWeightsId) = "";
+  options->Add<BoolOption>(kAdversarialSearchId) = false;
 }
 
 namespace {
@@ -163,6 +181,8 @@ void Engine::EnsureSearchStopped() {
 
 void Engine::UpdateBackendConfig() {
   LOGFILE << "Update backend configuration.";
+  
+  // 1. Configure the Main Backend (The Adversary / Us)
   const std::string backend_name =
       options_.Get<std::string>(SharedBackendParams::kBackendId);
   if (!backend_ || backend_name != backend_name_ ||
@@ -174,6 +194,39 @@ void Engine::UpdateBackendConfig() {
   } else {
     backend_->SetCacheSize(
         options_.Get<int>(SharedBackendParams::kNNCacheSizeId));
+  }
+
+  // 2. Configure the Opponent Backend (The Victim) if option is set
+  const std::string victim_path = options_.Get<std::string>(kVictimWeightsId);
+  
+  // Check if path changed, or if main backend was reset (which might imply we should rebuild opp too),
+  // or if we have a path but no backend object yet.
+  bool need_opp_reload = (victim_path != victim_weights_path_) || 
+                         (!backend_opp_ && !victim_path.empty());
+
+  if (need_opp_reload) {
+    victim_weights_path_ = victim_path;
+    
+    if (victim_path.empty()) {
+        // Option cleared, remove the backend
+        backend_opp_.reset();
+    } else {
+        LOGFILE << "Loading Victim/Opponent network from: " << victim_path;
+        
+        // Create a separate options dict for the opponent
+        OptionsDict opp_options = options_;
+        // Override the "WeightsFile" option to point to the victim's file
+        opp_options.Set(SharedBackendParams::kWeightsFileId, victim_path);
+        
+        // We typically use the same backend implementation (e.g. cuda-fp16) for both
+        backend_opp_ = CreateMemCache(
+            BackendManager::Get()->CreateFromParams(opp_options), 
+            opp_options
+        );
+    }
+    
+    // IMPORTANT: This method must exist on your Search interface (SearchHandler/Adapter)
+    search_->SetOpponentBackend(backend_opp_.get());
   }
 }
 
@@ -230,6 +283,8 @@ void Engine::SetPosition(const std::string& fen,
 
 void Engine::NewGame() {
   if (backend_) backend_->ClearCache();
+  // Clear opponent cache as well if it exists
+  if (backend_opp_) backend_opp_->ClearCache();
   search_->NewGame();
   SetPosition(ChessBoard::kStartposFen, {});
 }
