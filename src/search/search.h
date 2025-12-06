@@ -52,6 +52,10 @@ class SearchBase {
   // They are guarnteed to be set before any other function is called, and after
   // that, only can be changed while the search is stopped.
   virtual void SetBackend(Backend* backend) { backend_ = backend; }
+  
+  // Sets the opponent backend for adversarial search (AMCTS-S).
+  virtual void SetOpponentBackend(Backend* backend) { backend_opp_ = backend; }
+
   virtual void SetSyzygyTablebase(SyzygyTablebase* tb) { syzygy_tb_ = tb; }
 
   // Resets search tree, and whatever else is needed to start a new game.
@@ -83,6 +87,7 @@ class SearchBase {
  protected:
   UciResponder* uci_responder_ = nullptr;
   Backend* backend_ = nullptr;
+  Backend* backend_opp_ = nullptr; // Added for adversarial search
   SyzygyTablebase* syzygy_tb_ = nullptr;
 };
 
