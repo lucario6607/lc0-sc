@@ -149,7 +149,7 @@ class MEvaluator {
 
 }  // namespace
 
-// Modified Constructor to accept backend_opp
+// Modified Constructor: Reads AdversarialSearch option and accepts backend_opp
 Search::Search(const NodeTree& tree, Backend* backend, Backend* backend_opp,
                std::unique_ptr<UciResponder> uci_responder,
                const MoveList& searchmoves,
@@ -163,7 +163,8 @@ Search::Search(const NodeTree& tree, Backend* backend, Backend* backend_opp,
       syzygy_tb_(syzygy_tb),
       played_history_(tree.GetPositionHistory()),
       backend_(backend),
-      // Fallback to primary backend if opponent backend is not provided
+      // If adversarial mode is off, backend_opp_ falls back to backend_ just to be safe,
+      // though it won't be used.
       backend_opp_(backend_opp ? backend_opp : backend),
       backend_attributes_(backend->GetAttributes()),
       params_(options),
@@ -173,6 +174,11 @@ Search::Search(const NodeTree& tree, Backend* backend, Backend* backend_opp,
       root_move_filter_(MakeRootMoveFilter(
           searchmoves_, syzygy_tb_, played_history_,
           params_.GetSyzygyFastPlay(), &tb_hits_, &root_is_in_dtz_)),
+      // Read UCI option to enable/disable Adversarial AMCTS-S mode.
+      adversarial_mode_(
+          options.find("AdversarialSearch") != options.end()
+              ? (options.at("AdversarialSearch") == "true")
+              : false),
       uci_responder_(std::move(uci_responder)) {
   if (params_.GetMaxConcurrentSearchers() != 0) {
     pending_searchers_.store(params_.GetMaxConcurrentSearchers(),
@@ -1263,14 +1269,19 @@ void SearchWorker::InitializeIteration() {
   computation_opp_.reset();
 
   computation_ = search_->backend_->CreateComputation();
-  computation_opp_ = search_->backend_opp_->CreateComputation();
+  // Only create opponent computation if mode is enabled
+  if (search_->adversarial_mode_) {
+      computation_opp_ = search_->backend_opp_->CreateComputation();
+  }
 
   minibatch_.clear();
   minibatch_.reserve(2 * target_minibatch_size_);
 
-  // Resize buffer for opponent evaluations if necessary
-  if (victim_eval_buffer_.size() < 2 * target_minibatch_size_) {
-    victim_eval_buffer_.resize(2 * target_minibatch_size_);
+  // Resize buffer for opponent evaluations if necessary and enabled
+  if (search_->adversarial_mode_) {
+      if (victim_eval_buffer_.size() < 2 * target_minibatch_size_) {
+        victim_eval_buffer_.resize(2 * target_minibatch_size_);
+      }
   }
 }
 
@@ -1326,10 +1337,12 @@ void SearchWorker::GatherMinibatch() {
   while (minibatch_size < target_minibatch_size_ &&
          number_out_of_order_ < max_out_of_order_) {
     // If there's something to process without touching slow neural net, do it.
-    // Check both computations for work
+    // Check both computations if adversarial mode is active
     if (minibatch_size > 0 && computation_->UsedBatchSize() == 0 &&
-        computation_opp_->UsedBatchSize() == 0)
+        (!search_->adversarial_mode_ ||
+         computation_opp_->UsedBatchSize() == 0)) {
       return;
+    }
 
     // If there is backend work to be done, and the backend is idle - exit
     // immediately.
@@ -1337,8 +1350,11 @@ void SearchWorker::GatherMinibatch() {
     // early exit from every batch since there is never another search thread to
     // be keeping the backend busy. Which would mean that threads=1 has a
     // massive nps drop.
-    int total_work =
-        computation_->UsedBatchSize() + computation_opp_->UsedBatchSize();
+    int total_work = computation_->UsedBatchSize();
+    if (search_->adversarial_mode_) {
+        total_work += computation_opp_->UsedBatchSize();
+    }
+
     if (thread_count > 1 && minibatch_size > 0 &&
         total_work > params_.GetIdlingMinimumWork() &&
         thread_count - search_->backend_waiting_counter_.load(
@@ -1483,8 +1499,7 @@ void SearchWorker::ProcessPickedTask(int start_idx, int end_idx,
                        [](const auto& edge) { return edge.GetMove(); });
         picked_node.eval->p.resize(legal_moves.size());
 
-        // --- AMCTS-S Logic ---
-        // 1. Always query Adversary (computation_) for Value (Q) and default P
+        // Always query the primary backend (Adversary/Self) for Value (Q) and default P
         bool adv_cached = computation_->AddInput(
                               EvalPosition{
                                   .pos = history.GetPositions(),
@@ -1493,12 +1508,9 @@ void SearchWorker::ProcessPickedTask(int start_idx, int end_idx,
                               picked_node.eval->AsPtr()) ==
                           BackendComputation::FETCHED_IMMEDIATELY;
 
-        // 2. If it's the opponent's turn (odd depth, assuming root is even),
-        //    query the Victim (computation_opp_) for Policy (P).
-        //    Strict AMCTS-S uses Victim P + Adversary Q on opponent nodes.
-        bool is_victim_turn = (picked_node.depth % 2 != 0);
-
-        if (is_victim_turn) {
+        // If Adversarial Mode is ON and it's the Opponent's turn (odd depth):
+        // Query the Opponent backend for Policy (P).
+        if (search_->adversarial_mode_ && (picked_node.depth % 2 != 0)) {
           // Ensure buffer object exists for the secondary result
           if (!victim_eval_buffer_[i]) {
             victim_eval_buffer_[i] = std::make_unique<EvalResult>();
@@ -1506,14 +1518,16 @@ void SearchWorker::ProcessPickedTask(int start_idx, int end_idx,
           victim_eval_buffer_[i]->p.resize(legal_moves.size());
 
           // Query Victim Network
-          computation_opp_->AddInput(EvalPosition{
+          bool victim_cached = computation_opp_->AddInput(EvalPosition{
                                          .pos = history.GetPositions(),
                                          .legal_moves = legal_moves,
                                      },
-                                     victim_eval_buffer_[i]->AsPtr());
-          // We set cache hit based on Adversary result because main loop
-          // readiness depends on picked_node.eval being ready.
-          picked_node.is_cache_hit = adv_cached;
+                                     victim_eval_buffer_[i]->AsPtr()) ==
+                               BackendComputation::FETCHED_IMMEDIATELY;
+
+          // We only consider it a full cache hit if BOTH are cached.
+          // Otherwise, we must wait for RunNNComputation to clear the batches.
+          picked_node.is_cache_hit = adv_cached && victim_cached;
         } else {
           picked_node.is_cache_hit = adv_cached;
         }
@@ -2080,7 +2094,11 @@ void SearchWorker::MaybePrefetchIntoCache() {
   // If there are requests to NN, but the batch is not full, try to prefetch
   // nodes which are likely useful in future.
   if (search_->stop_.load(std::memory_order_acquire)) return;
-  int used = computation_->UsedBatchSize() + computation_opp_->UsedBatchSize();
+  int used = computation_->UsedBatchSize();
+  if (search_->adversarial_mode_) {
+      used += computation_opp_->UsedBatchSize();
+  }
+
   if (used > 0 &&
       static_cast<int>(used) <
           params_.GetMaxPrefetchBatch()) {
@@ -2189,7 +2207,8 @@ int SearchWorker::PrefetchIntoCache(Node* node, int budget, bool is_odd_depth) {
 // ~~~~~~~~~~~~~~~~~~~~~~
 void SearchWorker::RunNNComputation() {
   if (computation_->UsedBatchSize() > 0) computation_->ComputeBlocking();
-  if (computation_opp_->UsedBatchSize() > 0)
+  // Only execute opponent computation if enabled and has work
+  if (search_->adversarial_mode_ && computation_opp_->UsedBatchSize() > 0)
     computation_opp_->ComputeBlocking();
 }
 
@@ -2221,12 +2240,14 @@ void SearchWorker::FetchSingleNodeResult(NodeToProcess* node_to_process) {
   // 2. Policy (P) from Victim (in victim_eval_buffer_)
   // We need to overwrite P in the result struct with Victim's P.
 
-  bool is_victim_turn = (node_to_process->depth % 2 != 0);
-  if (is_victim_turn) {
-    size_t idx = node_to_process - &minibatch_[0];
-    if (victim_eval_buffer_[idx]) {
-      node_to_process->eval->p = victim_eval_buffer_[idx]->p;
-    }
+  if (search_->adversarial_mode_) {
+      bool is_victim_turn = (node_to_process->depth % 2 != 0);
+      if (is_victim_turn) {
+        size_t idx = node_to_process - &minibatch_[0];
+        if (victim_eval_buffer_[idx]) {
+          node_to_process->eval->p = victim_eval_buffer_[idx]->p;
+        }
+      }
   }
 
   node_to_process->eval->q = -node_to_process->eval->q;
