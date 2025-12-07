@@ -202,6 +202,7 @@ class Search {
 
   std::unique_ptr<UciResponder> uci_responder_;
   ContemptMode contempt_mode_;
+  bool adversarial_mode_;  // Added: Adversarial AMCTS-S mode
   friend class SearchWorker;
 };
 
