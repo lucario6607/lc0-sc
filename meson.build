@@ -18,6 +18,8 @@ project('lc0', 'cpp',
         default_options : ['cpp_std=c++17', 'b_ndebug=if-release', 'warning_level=3', 'b_lto=true', 'b_vscrt=mt'],
         meson_version: '>=0.55')
 
+fs = import('fs')
+
 cc = meson.get_compiler('cpp')
 
 if not cc.has_header('optional') or not cc.has_header('string_view')
@@ -454,43 +456,34 @@ if get_option('build_backends')
   cu_dart = cc.find_library('cudart', dirs: cudnn_libdirs, required: false)
   nvcc = find_program('nvcc', '/usr/local/cuda/bin/nvcc', '/opt/cuda/bin/nvcc',
                       required: false)
-
-  if (get_option('cudnn') or get_option('plain_cuda')) and cu_blas.found() and cu_dart.found() and nvcc.found()
-    deps += [cu_blas, cu_dart]
-    cuda_files = ['src/neural/cuda/layers.cc']
-    if get_option('cudnn') and cu_dnn.found()
-      deps += cu_dnn
-      cuda_files += 'src/neural/cuda/network_cudnn.cc'
-      cuda_files += 'src/neural/cuda/network_cuda.cc' # To support newer nets.
-      add_project_arguments('-DUSE_CUDNN', language : 'cpp')
-    elif get_option('plain_cuda')
-      cuda_files += 'src/neural/cuda/network_cuda.cc'
-    endif
+  nvcc_ok = false
+  if get_option('nvcc') and nvcc.found()
     foreach d : get_option('cudnn_include')
       if run_command('scripts/checkdir.py', d, check : false).returncode() == 0
         includes += include_directories(d, is_system: true)
       endif
     endforeach
-    includes += include_directories('src/neural/cuda/')
-
-    cuda_arguments = ['-c', '@INPUT@', '-o', '@OUTPUT@',
+    nvcc_arguments = ['-c', '@INPUT@', '-o', '@OUTPUT@',
                       '-I', meson.current_source_dir() + '/src']
     nvcc_help = run_command(nvcc, '-h', check : false).stdout()
     if host_machine.system() == 'windows'
       if get_option('b_vscrt') == 'mt'
-        cuda_arguments += ['-Xcompiler', '-MT']
+        nvcc_arguments += ['-Xcompiler', '-MT']
       elif get_option('b_vscrt') == 'mtd'
-        cuda_arguments += ['-Xcompiler', '-MTd']
+        nvcc_arguments += ['-Xcompiler', '-MTd']
       elif get_option('b_vscrt') == 'mdd' or (get_option('b_vscrt') == 'from_buildtype' and get_option('buildtype') == 'debug')
-        cuda_arguments += ['-Xcompiler', '-MDd']
+        nvcc_arguments += ['-Xcompiler', '-MDd']
       elif get_option('b_vscrt') != 'none'
-        cuda_arguments += ['-Xcompiler', '-MD']
+        nvcc_arguments += ['-Xcompiler', '-MD']
       endif
     else
-      cuda_arguments += ['--std=c++14', '-Xcompiler', '-fPIC']
+      nvcc_arguments += ['--std=c++17', '-Xcompiler', '-fPIC']
+      if get_option('debug')
+        nvcc_arguments += ['-g']
+      endif
     endif
     if get_option('nvcc_ccbin') != ''
-      cuda_arguments += ['-ccbin=' + get_option('nvcc_ccbin')]
+      nvcc_arguments += ['-ccbin=' + get_option('nvcc_ccbin')]
     endif
     cuda_cc = get_option('cc_cuda') # Unfortunately option cuda_cc is reserved.
     nvcc_extra_args = []
@@ -516,27 +509,40 @@ if get_option('build_backends')
       endif
     endif
     foreach x : get_option('cudnn_include')
-      cuda_arguments += ['-I', x]
+      nvcc_arguments += ['-I', x]
     endforeach
     if host_machine.system() == 'windows'
       outputname = '@BASENAME@.obj'
     else
       outputname = '@BASENAME@.o'
     endif
-
+    nvcc_ok = true
+  endif
+  if (get_option('cudnn') or get_option('plain_cuda')) and cu_dart.found() and cu_blas.found() and nvcc_ok
+    deps += [cu_blas, cu_dart]
+    cuda_files = ['src/neural/cuda/layers.cc']
+    if get_option('cudnn') and cu_dnn.found()
+      deps += cu_dnn
+      cuda_files += 'src/neural/cuda/network_cudnn.cc'
+      cuda_files += 'src/neural/cuda/network_cuda.cc' # To support newer nets.
+      add_project_arguments('-DUSE_CUDNN', language : 'cpp')
+    elif get_option('plain_cuda')
+      cuda_files += 'src/neural/cuda/network_cuda.cc'
+    endif
+    includes += include_directories('src/neural/cuda/')
 	 files += cuda_files
     files += custom_target('cuda fp32 code',
       input : 'src/neural/cuda/common_kernels.cu',
       output : outputname,
       depend_files: 'src/neural/cuda/winograd_helper.inc',
-      command : [nvcc, nvcc_extra_args, cuda_arguments]
+      command : [nvcc, nvcc_extra_args, nvcc_arguments]
     )
 
     files += custom_target('cuda fp16 code',
       input : 'src/neural/cuda/fp16_kernels.cu',
       output : outputname,
       depend_files: 'src/neural/cuda/winograd_helper.inc',
-      command : [nvcc, nvcc_extra_args, cuda_arguments]
+      command : [nvcc, nvcc_extra_args, nvcc_arguments]
     )
     has_backends = true
   endif
@@ -576,40 +582,43 @@ if get_option('build_backends')
   ## ~~~~~~~~~~
   ## ONNX
   ## ~~~~~~~~~~
-  if get_option('onnx_libdir') != '' and get_option('onnx_include') != ''
-    deps += cc.find_library('onnxruntime', dirs: get_option('onnx_libdir'),
-                            required: true)
-    includes += include_directories(get_option('onnx_include'), is_system: true)
-    cc.has_header('onnxruntime_cxx_api.h', required: true,
-                  args: '-I' + get_option('onnx_include'))
-    if not cc.has_header('cpu_provider_factory.h',
-                         args: '-I' + get_option('onnx_include'))
-      cc.has_header('../providers/cpu/cpu_provider_factory.h', required: true,
-                    args: '-I' + get_option('onnx_include'))
-      includes += include_directories(get_option('onnx_include') + '/../providers/cpu',
-                                      is_system: true)
+  onnxruntime = cc.find_library('onnxruntime', dirs: get_option('onnx_libdir'),
+                                required: false)
+  if get_option('onnx') and onnxruntime.found()
+    deps += onnxruntime
+    onnx_inc_dir = get_option('onnx_include')
+    if fs.is_dir(onnx_inc_dir + '/onnxruntime/core/session')
+      # Top level of source dir.
+      onnx_inc_dir += '/onnxruntime/core/session'
+    elif fs.is_dir(onnx_inc_dir + '/onnxruntime')
+      onnx_inc_dir += '/onnxruntime'
     endif
+    includes += include_directories(onnx_inc_dir, is_system: true)
+    cc.has_header('onnxruntime_cxx_api.h', required: true,
+                  include_directories: includes)
     files += 'src/neural/onnx/network_onnx.cc'
+    onnx_conf = configuration_data()
+    if cc.has_header('dml_provider_factory.h', required: false,
+                     include_directories: includes)
+      # The header is not actually needed, used here to detect DML onnxruntime.
+      onnx_conf.set('USE_DML', true)
+    endif
     if cc.find_library('onnxruntime_providers_rocm',
                        dirs: get_option('onnx_libdir'), required: false).found()
-      add_project_arguments('-DUSE_ROCM', language : 'cpp')
+      onnx_conf.set('USE_ROCM', true)
     endif
-    if get_option('cudnn') or get_option('plain_cuda') and cu_dart.found() and nvcc.found()
-      add_project_arguments('-DUSE_ONNX_CUDART=1', language : 'cpp')
+    if cu_dart.found() and nvcc_ok
+      onnx_conf.set('USE_ONNX_CUDART', true)
       deps += cu_dart
-      foreach d : get_option('cudnn_include')
-        if run_command('scripts/checkdir.py', d, check : false).returncode() == 0
-          includes += include_directories(d, is_system: true)
-        endif
-      endforeach
       files += custom_target('cuda onnx code',
         input : 'src/neural/cuda/onnx.cu',
         output : outputname,
-        command : [nvcc, nvcc_extra_args, cuda_arguments]
+        command : [nvcc, nvcc_extra_args, nvcc_arguments]
         )
     else
-      warning('No CUDA support build. Using compatibility implementation for onnx-trt and onnx-cuda. Enable plain_cuda to use CUDA optimizations.')
+      warning('No CUDA support available. Using compatibility implementation for onnx-trt and onnx-cuda.')
     endif
+    configure_file(output : 'onnx_conf.h', configuration : onnx_conf)
     has_backends = true
   endif
 

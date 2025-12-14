@@ -178,14 +178,19 @@ option('cc_cuda',
        value: '',
        description: 'Build for a specific cuda CC, e.g. -Dcc_cuda=35 for CC 3.5')
 
+option('onnx',
+       type: 'boolean',
+       value: true,
+       description: 'Enable ONNX backends')
+
 option('onnx_libdir',
        type: 'string',
-       value: '',
+       value: '/usr/lib/',
        description: 'Paths to ONNX runtime libraries')
 
 option('onnx_include',
        type: 'string',
-       value: '',
+       value: '/usr/include/onnxruntime/',
        description: 'Paths to ONNX runtime includes')
 
 option('xla',
@@ -202,3 +207,8 @@ option('rescorer',
        type: 'boolean',
        value: false,
        description: 'Build rescorer')
+
+option('nvcc',
+       type: 'boolean',
+       value: true,
+       description: 'Use nvcc: required for cuda, optional for onnx')
