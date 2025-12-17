@@ -6,10 +6,6 @@ image:
 environment:
   matrix:
   - NAME: cpu-dnnl
-  - NAME: gpu-nvidia-cudnn
-  - NAME: gpu-nvidia-cuda12
-#  - NAME: gpu-dx12
-#  - NAME: gpu-opencl
   - NAME: cpu-openblas
 #  - NAME: onednn
   - NAME: onnx
