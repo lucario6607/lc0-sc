@@ -594,9 +594,9 @@ void BaseSearchParams::Populate(OptionsParser* options) {
                                          "WDL_mu"};
   options->Add<ChoiceOption>(kScoreTypeId, score_type) = "WDL_mu";
   std::vector<std::string> history_fill_opt{"no", "fen_only", "always"};
-  options->Add<FloatOption>(kMovesLeftMaxEffectId, 0.0f, 1.0f) = 0.0345f;
-  options->Add<FloatOption>(kMovesLeftThresholdId, 0.0f, 1.0f) = 0.8f;
-  options->Add<FloatOption>(kMovesLeftSlopeId, 0.0f, 1.0f) = 0.0027f;
+  options->Add<FloatOption>(kMovesLeftMaxEffectId, 0.0f, 1.0f) = 0.8f; // EAS: High max effect
+  options->Add<FloatOption>(kMovesLeftThresholdId, 0.0f, 1.0f) = 0.2f; // EAS: Low threshold
+  options->Add<FloatOption>(kMovesLeftSlopeId, 0.0f, 1.0f) = 0.02f; // EAS: Steep slope
   options->Add<FloatOption>(kMovesLeftConstantFactorId, -1.0f, 1.0f) = 0.0f;
   options->Add<FloatOption>(kMovesLeftScaledFactorId, -2.0f, 2.0f) = 1.6521f;
   options->Add<FloatOption>(kMovesLeftQuadraticFactorId, -1.0f, 1.0f) =
@@ -732,3 +732,4 @@ SearchParams::SearchParams(const OptionsDict& options)
       kSolidTreeThreshold(options.Get<int>(kSolidTreeThresholdId)) {}
 }  // namespace classic
 }  // namespace lczero
+
