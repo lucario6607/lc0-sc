@@ -109,7 +109,18 @@ class MEvaluator {
 
   // Calculates the utility for favoring shorter wins and longer losses.
   float GetMUtility(Node* child, float q) const {
-    if (!enabled_ || !parent_within_threshold_) return 0.0f;
+    float bonus = 0.0f;
+    // Material sacrifice bonus:
+    // If we are down material (child->GetMaterialBalance() > 0)
+    // AND we are not completely lost (q > -0.5), give a bonus.
+    // We check q > -0.5 because we want to find *winning* sacs, or at least draws, not just lose pieces.
+    if (child->GetMaterialBalance() > 0 && q > -0.5f) {
+        // Bonus: 0.05 per pawn unit. 2 pawns = 0.1. Queen = 0.45.
+        // This is added directly to Q (range -1 to 1), so it's significant.
+        bonus += 0.05f * child->GetMaterialBalance();
+    }
+
+    if (!enabled_ || !parent_within_threshold_) return bonus;
     const float child_m = child->GetM();
     float m = std::clamp(m_slope_ * (child_m - parent_m_), -m_cap_, m_cap_);
     m *= FastSign(-q);
@@ -119,7 +130,7 @@ class MEvaluator {
       q = std::max(0.0f, (std::abs(q) - q_threshold_)) / (1.0f - q_threshold_);
     }
     m *= a_constant_ + a_linear_ * std::abs(q) + a_square_ * q * q;
-    return m;
+    return m + bonus;
   }
 
   float GetMUtility(const EdgeAndNode& child, float q) const {
@@ -762,6 +773,7 @@ std::vector<EdgeAndNode> Search::GetBestChildrenNoTemperature(Node* parent,
           kNonTerminal,  // Non terminal or terminal draw.
           kTablebaseWin,
           kTerminalWin,
+          kSacrificeWin,
         };
 
         auto GetEdgeRank = [](const EdgeAndNode& edge) {
@@ -769,19 +781,40 @@ std::vector<EdgeAndNode> Search::GetBestChildrenNoTemperature(Node* parent,
           // terminal.
           const auto wl = edge.GetWL(0.0f);
           // Not safe to access IsTerminal if GetN is 0.
-          if (edge.GetN() == 0 || !edge.IsTerminal() || !wl) {
-            return kNonTerminal;
+          if (edge.GetN() == 0) {
+             return kNonTerminal;
           }
-          if (edge.IsTbTerminal()) {
-            return wl < 0.0 ? kTablebaseLoss : kTablebaseWin;
+          
+          if (edge.IsTerminal() && wl != 0.0f) {
+             if (edge.IsTbTerminal()) {
+               return wl < 0.0 ? kTablebaseLoss : kTablebaseWin;
+             }
+             return wl < 0.0 ? kTerminalLoss : kTerminalWin;
           }
-          return wl < 0.0 ? kTerminalLoss : kTerminalWin;
+          
+          // Check for sacrifice win.
+          // Condition: We are winning (WL > 0.5) AND we are down material (Material > 0 in child perspective).
+          // We use a safe threshold for "winning" to avoid rewarding losing blunders.
+          if (edge.HasNode() && edge.GetWL(0.0f) > 0.5f && edge.node()->GetMaterialBalance() > 0) {
+             return kSacrificeWin;
+          }
+
+          return kNonTerminal;
         };
 
         // If moves have different outcomes, prefer better outcome.
         const auto a_rank = GetEdgeRank(a);
         const auto b_rank = GetEdgeRank(b);
         if (a_rank != b_rank) return a_rank > b_rank;
+
+        // If both are sacrifice wins, prefer the biggest sacrifice (highest material deficit).
+        if (a_rank == kSacrificeWin) {
+           if (a.node()->GetMaterialBalance() != b.node()->GetMaterialBalance()) {
+              return a.node()->GetMaterialBalance() > b.node()->GetMaterialBalance();
+           }
+           // If equal sac, prefer shortest win (M).
+           return a.GetM(0.0f) < b.GetM(0.0f);
+        }
 
         // If both are terminal draws, try to make it shorter.
         // Not safe to access IsTerminal if GetN is 0.
@@ -1930,6 +1963,7 @@ void SearchWorker::ExtendNode(Node* node, int depth,
   // We don't need the mutex because other threads will see that N=0 and
   // N-in-flight=1 and will not touch this node.
   const auto& board = history->Last().GetBoard();
+  node->SetMaterialBalance(board.GetMaterialBalance());
   auto legal_moves = board.GenerateLegalMoves();
 
   // Check whether it's a draw/lose by position. Importantly, we must check
@@ -2395,3 +2429,4 @@ void SearchWorker::UpdateCounters() {
 
 }  // namespace classic
 }  // namespace lczero
+
