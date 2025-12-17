@@ -259,6 +259,13 @@ class Node {
   // Index in parent edges - useful for correlated ordering.
   uint16_t Index() const { return index_; }
 
+  int8_t GetMaterialBalance() const { return material_balance_; }
+  void SetMaterialBalance(int balance) {
+    if (balance > 127) balance = 127;
+    if (balance < -127) balance = -127;
+    material_balance_ = static_cast<int8_t>(balance);
+  }
+
   ~Node() {
     if (solid_children_ && child_) {
       // As a hack, solid_children is actually storing an array in here, release
@@ -319,6 +326,7 @@ class Node {
   // 1 byte fields.
   // Number of edges in @edges_.
   uint8_t num_edges_ = 0;
+  int8_t material_balance_ = 0;
 
   // Bit fields using parts of uint8_t fields initialized in the constructor.
   // Whether or not this node end game (with a winning of either sides or draw).
@@ -668,3 +676,4 @@ class NodeTree {
 
 }  // namespace classic
 }  // namespace lczero
+
