@@ -111,6 +111,10 @@ class ChessBoard {
   // soon.
   Move ParseMove(std::string_view move_str) const;
 
+  // Returns material balance from the perspective of the side to move.
+  // P=1, N=3, B=3, R=5, Q=9.
+  int GetMaterialBalance() const;
+
   uint64_t Hash() const {
     return HashCat({our_pieces_.as_int(), their_pieces_.as_int(),
                     rooks_.as_int(), bishops_.as_int(), pawns_.as_int(),
@@ -258,3 +262,4 @@ class ChessBoard {
 std::string BoardToFen(const ChessBoard& board);
 
 }  // namespace lczero
+
