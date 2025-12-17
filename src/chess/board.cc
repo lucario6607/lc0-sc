@@ -1198,6 +1198,38 @@ Move ChessBoard::ParseMove(std::string_view move_str) const {
   return Move::White(from, to);
 }
 
+int ChessBoard::GetMaterialBalance() const {
+  const int p_val = 1;
+  const int n_val = 3;
+  const int b_val = 3;
+  const int r_val = 5;
+  const int q_val = 9;
+
+  int balance = 0;
+  
+  // Pawns
+  balance += (our_pieces_ & pawns()).count() * p_val;
+  balance -= (their_pieces_ & pawns()).count() * p_val;
+  
+  // Knights
+  balance += (our_pieces_ & knights()).count() * n_val;
+  balance -= (their_pieces_ & knights()).count() * n_val;
+
+  // Bishops
+  balance += (our_pieces_ & bishops()).count() * b_val;
+  balance -= (their_pieces_ & bishops()).count() * b_val;
+
+  // Rooks
+  balance += (our_pieces_ & rooks()).count() * r_val;
+  balance -= (their_pieces_ & rooks()).count() * r_val;
+
+  // Queens
+  balance += (our_pieces_ & queens()).count() * q_val;
+  balance -= (their_pieces_ & queens()).count() * q_val;
+
+  return balance;
+}
+
 namespace {
 char GetPieceAt(const lczero::ChessBoard& board, Square square) {
   char c = '\0';
@@ -1257,3 +1289,4 @@ std::string BoardToFen(const ChessBoard& in_board) {
 }
 
 }  // namespace lczero
+
