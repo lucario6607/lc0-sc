@@ -26,6 +26,7 @@
 */
 #pragma once
 
+#include "neural/encoder.h"
 #include "neural/network.h"
 #include "utils/cache.h"
 #include "utils/smallarray.h"
@@ -69,6 +70,9 @@ class CachingComputation {
   // @probabilities_to_cache is which indices of policy head to store.
   void AddInput(uint64_t hash, InputPlanes&& input,
                 std::vector<uint16_t>&& probabilities_to_cache);
+  void AddInput(uint64_t hash, const PositionHistory& history,
+                std::vector<uint16_t>&& probabilities_to_cache,
+                unsigned fill_empty_history, bool swap_colors);
   // Undos last AddInput. If it was a cache miss, the it's actually not removed
   // from parent's batch.
   void PopLastInputHit();

@@ -85,7 +85,7 @@ class OnnxNetwork : public Network {
  public:
   OnnxNetwork(const WeightsFile& file, const OptionsDict& options,
               OnnxProvider provider);
-  std::unique_ptr<NetworkComputation> NewComputation() override {
+  std::unique_ptr<NetworkComputation> NewComputation(size_t) override {
     if (fp16_) {
       return std::make_unique<OnnxComputation<Ort::Float16_t>>(this);
     } else if (bf16_) {

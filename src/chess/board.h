@@ -31,6 +31,7 @@
 #include <string>
 
 #include "chess/bitboard.h"
+#include "neural/backends/client/archive.h"
 #include "utils/hashcat.h"
 
 namespace lczero {
@@ -207,6 +208,29 @@ class ChessBoard {
       their_kingside_rook_ = their_right;
     }
 
+    // Serialization support for out of process backends.
+    template <typename Archive>
+    typename Archive::ResultType Serialize(
+        Archive& ar, [[maybe_unused]] const unsigned version) {
+      uint16_t value = data_;
+      if (Archive::is_saving) {
+        value |= (our_queenside_rook_ << 4);
+        value |= (their_queenside_rook_ << 7);
+        value |= (our_kingside_rook_ << 10);
+        value |= (their_kingside_rook_ << 13);
+      }
+      auto r = ar & client::FixedInteger(value);
+      if (Archive::is_loading && r) {
+        our_queenside_rook_ = (value >> 4) & 0x7;
+        their_queenside_rook_ = (value >> 7) & 0x7;
+        our_kingside_rook_ = (value >> 10) & 0x7;
+        their_kingside_rook_ = (value >> 13) & 0x7;
+        data_ = value & 0xf;
+      }
+
+      return r;
+    }
+
    private:
     // Position of "left" (queenside) rook in starting game position.
     uint8_t our_queenside_rook_;
@@ -276,6 +300,27 @@ class ChessBoard {
     RANK_1 = 0, RANK_2, RANK_3, RANK_4, RANK_5, RANK_6, RANK_7, RANK_8
     // clang-format on
   };
+
+  // Serialization support for out of process backends.
+  // The data could be compressed efficiently using pdep/pext instructions,
+  // but many CPUs don't have required hardware support. Software fallback could
+  // be used. The size of uncompressed data is small enough for the first
+  // version.
+  // https://github.com/zwegner/zp7
+  template <typename Archive>
+  typename Archive::ResultType Serialize(
+      Archive& ar, [[maybe_unused]] const unsigned version) {
+    auto r = ar & our_pieces_;
+    r = r.and_then([this](Archive& ar) { return ar & their_pieces_; });
+    r = r.and_then([this](Archive& ar) { return ar & rooks_; });
+    r = r.and_then([this](Archive& ar) { return ar & bishops_; });
+    r = r.and_then([this](Archive& ar) { return ar & pawns_; });
+    r = r.and_then([this](Archive& ar) { return ar & our_king_; });
+    r = r.and_then([this](Archive& ar) { return ar & their_king_; });
+    r = r.and_then([this](Archive& ar) { return ar & castlings_; });
+    r = r.and_then([this](Archive& ar) { return ar & flipped_; });
+    return r;
+  }
 
  private:
   // All white pieces.

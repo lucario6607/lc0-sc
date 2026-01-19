@@ -213,7 +213,7 @@ class RecordReplayNetwork : public Network {
     }
   }
 
-  std::unique_ptr<NetworkComputation> NewComputation() override {
+  std::unique_ptr<NetworkComputation> NewComputation(size_t) override {
     if (!lookup_) {
       const long long val = ++counter_;
       return std::make_unique<RecordComputation>(

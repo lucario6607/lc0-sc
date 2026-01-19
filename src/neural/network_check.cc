@@ -348,7 +348,7 @@ class CheckNetwork : public Network {
          << 100 * check_frequency_ << "%.";
   }
 
-  std::unique_ptr<NetworkComputation> NewComputation() override {
+  std::unique_ptr<NetworkComputation> NewComputation(size_t) override {
     const double draw = Random::Get().GetDouble(1.0);
     const bool check = draw < check_frequency_;
     if (check) {

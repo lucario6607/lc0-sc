@@ -184,6 +184,7 @@ files += [
   'src/benchmark/backendbench.cc',
   'src/benchmark/benchmark.cc',
   'src/engine.cc',
+  'src/lc0ctl/backendserver.cc',
   'src/lc0ctl/describenet.cc',
   'src/lc0ctl/leela2onnx.cc',
   'src/lc0ctl/onnx2leela.cc',
@@ -202,6 +203,9 @@ files += [
   'src/neural/loader.cc',
   'src/neural/network_check.cc',
   'src/neural/network_demux.cc',
+  'src/neural/backends/client/proto.cc',
+  'src/neural/backends/client/archive.cc',
+  'src/neural/backends/client/backend_client.cc',
   'src/neural/network_legacy.cc',
   'src/neural/network_mux.cc',
   'src/neural/network_random.cc',
@@ -668,6 +672,16 @@ endif
   deps += cc.find_library('libatomic', required: false)
 
   deps += dependency('eigen3', fallback: ['eigen', 'eigen_dep']).as_system()
+
+  ## ~~~~
+  ## asio
+  ## ~~~~
+  deps += dependency('asio', required: true,
+                     fallback: ['asio', 'asio_dep'])
+  if host_machine.system() == 'windows'
+    mswsock = cc.find_library('mswsock', required: true)
+    deps += mswsock
+  endif
 
 #############################################################################
 ## Main Executable

@@ -895,7 +895,7 @@ class CudaNetwork : public Network {
 
   int GetThreads() const override { return 1 + multi_stream_; }
 
-  std::unique_ptr<NetworkComputation> NewComputation() override {
+  std::unique_ptr<NetworkComputation> NewComputation(size_t) override {
     // Set correct gpu id for this computation (as it might have been called
     // from a different thread).
     ReportCUDAErrors(cudaSetDevice(gpu_id_));

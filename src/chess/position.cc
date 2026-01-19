@@ -26,11 +26,9 @@
 */
 
 #include "chess/position.h"
+#include "utils/exception.h"
 
 #include <cassert>
-#include <cctype>
-#include <cstdlib>
-#include <cstring>
 
 namespace {
 // GetPieceAt returns the piece found at row, col on board or the null-char '\0'
@@ -77,6 +75,20 @@ Position::Position(const ChessBoard& board, int rule50_ply, int game_ply)
   them_board_.Mirror();
 }
 
+Move Position::GetNextMove(const Position& next) const {
+  // A simple implementation to convert a position history to moves. It uses a
+  // naive implementation. If it becomes a bottleneck, we need to check if we
+  // can do the same using bitboard differences.
+  auto legal_moves = us_board_.GenerateLegalMoves();
+  for (Move m : legal_moves) {
+    ChessBoard test_board = us_board_;
+    test_board.ApplyMove(m);
+    test_board.Mirror();
+    if (test_board == next.us_board_) return m;
+  }
+  throw Exception("GetNextMove: No matching move found");
+}
+
 uint64_t Position::Hash() const {
   return HashCat({us_board_.Hash(), static_cast<unsigned long>(repetitions_)});
 }
@@ -114,6 +126,11 @@ void PositionHistory::Reset(const ChessBoard& board, int rule50_ply,
   positions_.emplace_back(board, rule50_ply, game_ply);
 }
 
+void PositionHistory::Reset(const Position& pos) {
+  positions_.clear();
+  positions_.push_back(pos);
+}
+
 void PositionHistory::Append(Move m) {
   // TODO(mooskagh) That should be emplace_back(Last(), m), but MSVS STL
   //                has a bug in implementation of emplace_back, when
@@ -148,6 +165,13 @@ bool PositionHistory::DidRepeatSinceLastZeroingMove() const {
     if (iter->GetRule50Ply() == 0) return false;
   }
   return false;
+}
+
+PositionHistory PositionHistory::Slice(unsigned begin, unsigned end) const {
+  PositionHistory rv;
+  rv.positions_.assign(positions_.begin() + begin,
+                       positions_.begin() + end);
+  return rv;
 }
 
 uint64_t PositionHistory::HashLast(int positions) const {

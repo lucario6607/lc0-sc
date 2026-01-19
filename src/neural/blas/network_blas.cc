@@ -159,7 +159,7 @@ class BlasNetwork : public Network {
   BlasNetwork(const WeightsFile& weights, const OptionsDict& options);
   virtual ~BlasNetwork(){};
 
-  std::unique_ptr<NetworkComputation> NewComputation() override {
+  std::unique_ptr<NetworkComputation> NewComputation(size_t) override {
     return std::make_unique<BlasComputation<use_eigen>>(
         this, weights_, policy_head_, value_head_, max_batch_size_, wdl_,
         moves_left_, conv_policy_, default_activation_, smolgen_activation_,

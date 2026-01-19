@@ -27,13 +27,17 @@
 
 #pragma once
 
+#include <filesystem>
+#include <optional>
 #include <string>
 #include <vector>
 
-#include "neural/network.h"
 #include "proto/net.pb.h"
 
 namespace lczero {
+
+extern const char* kAutoDiscover;
+extern const char* kEmbed;
 
 using FloatVector = std::vector<float>;
 using FloatVectors = std::vector<FloatVector>;
@@ -42,6 +46,16 @@ using WeightsFile = pblczero::Net;
 
 // Read weights file and fill the weights structure.
 WeightsFile LoadWeightsFromFile(const std::string& filename);
+
+// Read weights from the "locations", which is one of:
+// * "<autodiscover>" -- tries to find a file which looks like a weights file.
+// * "<embed>" -- weights are embedded in the binary.
+// * filename -- reads weights from the file.
+// Returns std::nullopt if no weights file was found in <autodiscover> mode.
+std::optional<WeightsFile> LoadWeights(std::string_view location);
+
+// Check if given directory entry looks like a weights file.
+bool IsPathWeightsFile(const std::filesystem::directory_entry& entry);
 
 // Tries to find a file which looks like a weights file, and located in
 // directory of binary_name or one of subdirectories. If there are several such

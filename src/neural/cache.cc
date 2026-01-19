@@ -25,6 +25,7 @@
   Program grant you additional permission to convey the resulting work.
 */
 #include "neural/cache.h"
+
 #include <cassert>
 #include <iostream>
 
@@ -69,6 +70,17 @@ void CachingComputation::AddInput(
   batch_.back().idx_in_parent = parent_->GetBatchSize();
   batch_.back().probabilities_to_cache = probabilities_to_cache;
   parent_->AddInput(std::move(input));
+}
+
+void CachingComputation::AddInput(uint64_t hash, const PositionHistory& history,
+                                 std::vector<uint16_t>&& probabilities_to_cache,
+                                 unsigned fill_empty_history, bool swap_colors) {
+  if (AddInputByHash(hash)) return;
+  batch_.emplace_back();
+  batch_.back().hash = hash;
+  batch_.back().idx_in_parent = parent_->GetBatchSize();
+  batch_.back().probabilities_to_cache = probabilities_to_cache;
+  parent_->AddInput(history, probabilities_to_cache.size(), fill_empty_history, swap_colors);
 }
 
 void CachingComputation::PopLastInputHit() {

@@ -29,6 +29,7 @@
 #include "benchmark/benchmark.h"
 #include "chess/board.h"
 #include "engine.h"
+#include "lc0ctl/backendserver.h"
 #include "lc0ctl/describenet.h"
 #include "lc0ctl/leela2onnx.h"
 #include "lc0ctl/onnx2leela.h"
@@ -61,6 +62,8 @@ int main(int argc, const char** argv) {
                               "Convert ONNX network to Leela net.");
     CommandLine::RegisterMode("describenet",
                               "Shows details about the Leela network.");
+    CommandLine::RegisterMode("backendserver",
+                              "Run a backend server for multiple local instances.");
 
     if (CommandLine::ConsumeCommand("selfplay")) {
       // Selfplay mode.
@@ -80,6 +83,8 @@ int main(int argc, const char** argv) {
       lczero::ConvertOnnxToLeela();
     } else if (CommandLine::ConsumeCommand("describenet")) {
       lczero::DescribeNetworkCmd();
+    } else if (CommandLine::ConsumeCommand("backendserver")) {
+      lczero::RunBackendServer();
     } else {
       // Consuming optional "uci" mode.
       CommandLine::ConsumeCommand("uci");

@@ -146,7 +146,7 @@ class DemuxingNetwork : public Network {
     }
   }
 
-  std::unique_ptr<NetworkComputation> NewComputation() override {
+  std::unique_ptr<NetworkComputation> NewComputation(size_t) override {
     return std::make_unique<DemuxingComputation>(this);
   }
 

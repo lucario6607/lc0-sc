@@ -35,6 +35,7 @@ namespace lczero {
 
 class Position {
  public:
+  Position() {};
   // From parent position and move.
   Position(const Position& parent, Move m);
   // From particular position.
@@ -59,6 +60,9 @@ class Position {
     cycle_length_ = cycle_length;
   }
 
+  // Convert a position history to moves.
+  Move GetNextMove(const Position& next_position) const;
+
   // Number of ply with no captures and pawn moves.
   int GetRule50Ply() const { return rule50_ply_; }
 
@@ -72,6 +76,20 @@ class Position {
   };
 
   std::string DebugString() const;
+
+  // Serialization support for out of process backends.
+  template <typename Archive>
+  typename Archive::ResultType Serialize(
+      Archive& ar, [[maybe_unused]] const unsigned version) {
+    auto r = ar & us_board_;
+    // TODO: It could be better to use unsigned integers if following cannot be
+    // ever nagative.
+    r = r.and_then([this](Archive& ar) { return ar & rule50_ply_; });
+    r = r.and_then([this](Archive& ar) { return ar & repetitions_; });
+    r = r.and_then([this](Archive& ar) { return ar & cycle_length_; });
+    r = r.and_then([this](Archive& ar) { return ar & ply_count_; });
+    return r;
+  }
 
  private:
   // The board from the point of view of the player to move.
@@ -128,6 +146,7 @@ class PositionHistory {
 
   // Resets the position to a given state.
   void Reset(const ChessBoard& board, int rule50_ply, int game_ply);
+  void Reset(const Position& pos);
 
   // Appends a position to history.
   void Append(Move m);
@@ -146,6 +165,8 @@ class PositionHistory {
 
   // Checks for any repetitions since the last time 50 move rule was reset.
   bool DidRepeatSinceLastZeroingMove() const;
+
+  PositionHistory Slice(unsigned begin, unsigned end) const;
 
  private:
   int ComputeLastMoveRepetitions(int* cycle_length) const;

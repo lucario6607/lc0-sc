@@ -32,6 +32,7 @@
 #include <string>
 #include <vector>
 
+#include "neural/backends/client/archive.h"
 #include "utils/bititer.h"
 
 namespace lczero {
@@ -80,6 +81,13 @@ class BoardSquare {
   std::string as_string() const {
     return std::string(1, 'a' + col()) + std::string(1, '1' + row());
   }
+  // Serialization support for out of process backends.
+  template <typename Archive>
+  typename Archive::ResultType Serialize(
+      Archive& ar, [[maybe_unused]] const unsigned version) {
+    return ar & client::FixedInteger{square_};
+  }
+
 
  private:
   std::uint8_t square_ = 0;  // Only lower six bits should be set.
@@ -224,6 +232,13 @@ class BitBoard {
     return {a.board_ & ~b.board_};
   }
 
+  // Serialization support for out of process backends.
+  template <typename Archive>
+  typename Archive::ResultType Serialize(
+      Archive& ar, [[maybe_unused]] const unsigned version) {
+    return ar & client::FixedInteger{board_};
+  }
+
  private:
   std::uint64_t board_ = 0;
 };
@@ -280,6 +295,13 @@ class Move {
     }
     assert(false);
     return "Error!";
+  }
+
+  // Serialization support for out of process backends.
+  template <typename Archive>
+  typename Archive::ResultType Serialize(
+      Archive& ar, [[maybe_unused]] const unsigned version) {
+    return ar & client::FixedInteger{data_};
   }
 
  private:

@@ -114,7 +114,7 @@ class RandomNetwork : public Network {
                     pblczero::NetworkFormat::INPUT_CLASSICAL_112_PLANE)),
             pblczero::NetworkFormat::OUTPUT_WDL,
             pblczero::NetworkFormat::MOVES_LEFT_NONE} {}
-  std::unique_ptr<NetworkComputation> NewComputation() override {
+  std::unique_ptr<NetworkComputation> NewComputation(size_t) override {
     return std::make_unique<RandomNetworkComputation>(delay_ms_, seed_,
                                                       uniform_mode_);
   }

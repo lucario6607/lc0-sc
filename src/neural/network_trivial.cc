@@ -464,7 +464,7 @@ class TrivialNetwork : public Network {
                     pblczero::NetworkFormat::INPUT_CLASSICAL_112_PLANE)),
             pblczero::NetworkFormat::OUTPUT_CLASSICAL,
             pblczero::NetworkFormat::MOVES_LEFT_NONE} {}
-  std::unique_ptr<NetworkComputation> NewComputation() override {
+  std::unique_ptr<NetworkComputation> NewComputation(size_t) override {
     return std::make_unique<TrivialNetworkComputation>();
   }
   const NetworkCapabilities& GetCapabilities() const override {

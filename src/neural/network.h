@@ -30,6 +30,8 @@
 #include <memory>
 #include <vector>
 
+#include "chess/bitboard.h"
+#include "chess/position.h"
 #include "proto/net.pb.h"
 #include "utils/exception.h"
 
@@ -57,6 +59,9 @@ class NetworkComputation {
  public:
   // Adds a sample to the batch.
   virtual void AddInput(InputPlanes&& input) = 0;
+  virtual void AddInput(const PositionHistory& history,
+                        unsigned num_legal_moves, unsigned fill_empty_history,
+                        bool swap_colors);
   // Do the computation.
   virtual void ComputeBlocking() = 0;
   // Returns how many times AddInput() was called.
@@ -69,6 +74,11 @@ class NetworkComputation {
   virtual float GetMVal(int sample) const = 0;
   virtual ~NetworkComputation() = default;
 };
+
+inline void NetworkComputation::AddInput(const PositionHistory&, unsigned,
+                                         unsigned, bool) {
+  throw Exception("Not implemented");
+}
 
 // The plan:
 // 1. Search must not look directly into any fields of NetworkFormat anymore.
@@ -86,6 +96,7 @@ struct NetworkCapabilities {
   pblczero::NetworkFormat::InputFormat input_format;
   pblczero::NetworkFormat::OutputFormat output_format;
   pblczero::NetworkFormat::MovesLeftFormat moves_left;
+  bool use_history_input = false;
   // TODO expose information of whether GetDVal() is usable or always zero.
 
   // Combines capabilities by setting the most restrictive ones. May throw
@@ -102,6 +113,11 @@ struct NetworkCapabilities {
                       std::to_string(other.output_format));
     }
     if (!other.has_mlh()) moves_left = pblczero::NetworkFormat::MOVES_LEFT_NONE;
+    if (use_history_input != other.use_history_input) {
+      throw Exception("Incompatible use_history_input settings, " +
+                      std::to_string(use_history_input) + " vs " +
+                      std::to_string(other.use_history_input));
+    }
   }
 
   bool has_mlh() const {
@@ -116,7 +132,8 @@ struct NetworkCapabilities {
 class Network {
  public:
   virtual const NetworkCapabilities& GetCapabilities() const = 0;
-  virtual std::unique_ptr<NetworkComputation> NewComputation() = 0;
+  virtual std::unique_ptr<NetworkComputation> NewComputation(
+      size_t time_remaining = 0) = 0;
   virtual int GetThreads() const { return 1; }
   virtual void InitThread(int /*id*/) {}
   virtual bool IsCpu() const { return false; }

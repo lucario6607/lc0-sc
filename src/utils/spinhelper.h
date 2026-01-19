@@ -53,7 +53,7 @@ class ExponentialBackoffSpinHelper : public SpinHelper {
     thread_local std::minstd_rand generator(std::random_device{}());
     const size_t spin_count = distribution(generator, decltype(distribution)::param_type{0, backoff_iters_});
 
-    for (volatile size_t i=0; i<spin_count; i++) {
+    for (size_t i=0; i<spin_count; i++) {
       SpinloopPause();
     }
 
