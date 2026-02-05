@@ -161,7 +161,7 @@ class BackendHandler {
         .runs_on_cpu = backend_->IsCpu(),
         .suggested_num_search_threads = backend_->GetThreads(),
         .recommended_batch_size = backend_->GetMiniBatchSize(),
-        .maximum_batch_size = 1024,
+        .maximum_batch_size = backend_->GetMaxBatchSize(),
         .input_format = static_cast<unsigned>(capabilities.input_format),
     };
     int minibatch_size = params_.Get<int>(kMinibatchSizeOptionId);

@@ -374,6 +374,10 @@ class BackendClient final : public Network {
     return GetAttributes().recommended_batch_size;
   }
 
+  int GetMaxBatchSize() const override {
+    return GetAttributes().maximum_batch_size;
+  }
+
  private:
   mutable SpinMutex mutex_;
   const std::string network_;

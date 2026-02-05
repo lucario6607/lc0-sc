@@ -158,8 +158,11 @@ class OnnxNetwork final : public Network {
     return capabilities_;
   }
   int GetMiniBatchSize() const override {
-    return batch_size_ == -1 ? Network::GetMiniBatchSize()
+    return batch_size_ == -1 ? opt_batch_size_
                              : batch_size_ * steps_;
+  }
+  int GetMaxBatchSize() const override {
+    return max_batch_size_;
   }
   bool IsCpu() const override { return provider_ == OnnxProvider::CPU; }
 
@@ -202,7 +205,8 @@ class OnnxNetwork final : public Network {
   // The lower limit for variable batch size.
   int min_batch_size_;
   int gpu_;
-  static constexpr int max_batch_size_ = 1024;
+  unsigned max_batch_size_ = 1024;
+  unsigned opt_batch_size_ = 256;
   // For conditional locking if running the DML/ROCM/TRT provider.
   OnnxProvider provider_;
   std::mutex lock_;
@@ -354,10 +358,6 @@ void OnnxComputation<DataType>::AddInput(InputPlanes&& input) {
       values[i] = value;
     }
     input_size_++;
-    if (input_size_ > network_->max_batch_size_) {
-      throw Exception("NN input exceeds max batch size of " +
-                      std::to_string(network_->max_batch_size_) + ".");
-    }
     return;
   }
 #endif
@@ -657,7 +657,7 @@ Ort::SessionOptions OnnxNetwork::GetOptions(int threads, int batch_size,
       hs << std::hex << hash;
       trt_options["trt_engine_cache_prefix"] =
           "Lc0_ONNX_TRT_ORT_" + Ort::GetVersionString() + "_batch_" +
-          (batch_size < 0 ? std::to_string(batch_size)
+          (batch_size < 0 ? std::to_string(opt_batch_size_) + "-" + std::to_string(max_batch_size_)
                           : std::to_string(batch_size - batch_size_ + 1) + "-" +
                                 std::to_string(batch_size)) +
           "_" + hs.str() + "_";
@@ -677,7 +677,7 @@ Ort::SessionOptions OnnxNetwork::GetOptions(int threads, int batch_size,
         trt_options["trt_profile_max_shapes"] =
             inputs_[0] + ":" + std::to_string(max_batch_size_) + "x112x8x8";
         trt_options["trt_profile_opt_shapes"] =
-            inputs_[0] + ":" + std::to_string(max_batch_size_ / 4) + "x112x8x8";
+            inputs_[0] + ":" + std::to_string(opt_batch_size_) + "x112x8x8";
       } else {
         trt_options["trt_profile_min_shapes"] =
             inputs_[0] + ":" + std::to_string(batch_size - batch_size_ + 1) +
@@ -755,6 +755,8 @@ OnnxNetwork::OnnxNetwork(const WeightsFile& file, const OptionsDict& opts,
       ReportCUDAErrors(
           cudaDeviceGetAttribute(&clockRate, cudaDevAttrClockRate, gpu_));
       CERR << "GPU clock frequency: " << clockRate / 1e3f << " MHz";
+      CERR << "GPU SM count: " << deviceProp.multiProcessorCount;
+      max_batch_size_ = opt_batch_size_ = deviceProp.multiProcessorCount;
     }
 #if CUDART_VERSION >= 12080
     int runtime_version;
@@ -785,6 +787,13 @@ OnnxNetwork::OnnxNetwork(const WeightsFile& file, const OptionsDict& opts,
       opts.GetOrDefault<int>("steps", provider == OnnxProvider::DML ? 4 : 1);
   min_batch_size_ = opts.GetOrDefault<int>(
       "min_batch", provider == OnnxProvider::TRT ? 4 : 1);
+
+  max_batch_size_ = opts.GetOrDefault<int>("max_batch", max_batch_size_);
+  opt_batch_size_ = opts.GetOrDefault<int>("opt_batch", opt_batch_size_);
+  if (opt_batch_size_ > max_batch_size_) {
+    CERR << "opt_batch cannot be greater than max_batch, adjusting.";
+    opt_batch_size_ = max_batch_size_;
+  }
 
   // Sanity checks.
   if (batch_size_ <= 0) {
