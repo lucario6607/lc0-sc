@@ -200,6 +200,7 @@ class OnnxNetwork final : public Network {
   bool fp16_;
   bool bf16_;
   bool cpu_wdl_;
+  bool blocking_event_wait_ = true;
   // The batch size to use, or -1 for variable.
   int batch_size_;
   // The lower limit for variable batch size.
@@ -258,7 +259,8 @@ InputsOutputs::InputsOutputs(OnnxNetwork* network)
       ReportCUDAErrors(
           cudaEventCreate(&inputs_uploaded_event_, cudaEventDisableTiming));
       ReportCUDAErrors(
-          cudaEventCreate(&evaluation_done_event_, cudaEventDisableTiming));
+          cudaEventCreate(&evaluation_done_event_,
+                          cudaEventDisableTiming | cudaEventBlockingSync));
       ReportCUDAErrors(
           cudaEventCreate(&outputs_download_event_, cudaEventDisableTiming));
       ReportCUDAErrors(
@@ -590,6 +592,10 @@ void OnnxComputation<DataType>::ComputeBlocking() {
 #ifdef USE_ONNX_CUDART
   if (network_->provider_ == OnnxProvider::TRT ||
       network_->provider_ == OnnxProvider::CUDA) {
+    if (network_->blocking_event_wait_) {
+      ReportCUDAErrors(
+          cudaEventSynchronize(inputs_outputs_->evaluation_done_event_));
+    }
     ReportCUDAErrors(
         cudaEventSynchronize(inputs_outputs_->outputs_download_event_));
   }
@@ -794,6 +800,8 @@ OnnxNetwork::OnnxNetwork(const WeightsFile& file, const OptionsDict& opts,
     CERR << "opt_batch cannot be greater than max_batch, adjusting.";
     opt_batch_size_ = max_batch_size_;
   }
+
+  blocking_event_wait_ = opts.GetOrDefault<bool>("blocking_event_wait", true);
 
   // Sanity checks.
   if (batch_size_ <= 0) {
