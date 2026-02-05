@@ -27,8 +27,6 @@
 
 #include "lc0ctl/backendserver.h"
 
-#include <absl/cleanup/cleanup.h>
-
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
@@ -1255,7 +1253,9 @@ void RunBackendServer() {
     CERR << "Using network directory: "
          << options.Get<std::string>(kNetworkDirectoryOptionId);
     BackendMap& backends = SharedQueue::Get().GetBackendMap(options);
-    absl::Cleanup cleanup = [] { SharedQueue::Get().Close(); };
+    struct Cleanup {
+      ~Cleanup() { SharedQueue::Get().Close(); }
+    } cleanup;
     std::filesystem::path network_dir(
         options.Get<std::string>(kNetworkDirectoryOptionId));
     if (!std::filesystem::exists(network_dir)) {
