@@ -182,10 +182,10 @@ class ClientConnection final : public Context,
     client::ComputeBlocking message;
     int adjusted_priority = priority;
     adjusted_priority = std::max(
-        0,
-        adjusted_priority + 1 -
-            std::bit_width((attrs_.recommended_batch_size + inputs.size() / 2) /
-                           inputs.size()));
+        0, adjusted_priority + 1 -
+               static_cast<int>(std::bit_width(
+                   (attrs_.recommended_batch_size + inputs.size() / 2) /
+                   inputs.size())));
     message.computation_id_ = computation_id;
     message.priority_ = priority;
     message.inputs_ = std::move(inputs);
