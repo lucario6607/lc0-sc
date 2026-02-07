@@ -1191,8 +1191,18 @@ class BackendserverEngine final : public UciLoop {
   BackendserverEngine(OptionsParser& options) : options_(options) {}
   ~BackendserverEngine() override = default;
 
-  void CmdIsReady() override { SharedQueue::Get().EnsureReady(); }
+  void CmdIsReady() override {
+    SharedQueue::Get().EnsureReady();
+    SendResponse("readyok");
+  }
   void CmdUciNewGame() override {}
+  void CmdUci() override {
+    SendId();
+    for (const auto& option : options_.ListOptionsUci()) {
+      SendResponse(option);
+    }
+    SendResponse("uciok");
+  }
   void CmdPosition(const std::string&,
                    const std::vector<std::string>&) override {}
   void CmdGo(const GoParams&) override {}
