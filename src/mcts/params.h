@@ -91,6 +91,7 @@ class SearchParams {
 
   // Parameter getters.
   int GetMiniBatchSize() const { return kMiniBatchSize; }
+  bool GetAdjustMiniBatchSize() const { return kAdjustMiniBatchSize; }
   int GetMaxPrefetchBatch() const {
     return options_.Get<int>(kMaxPrefetchBatchId);
   }
@@ -213,6 +214,7 @@ class SearchParams {
 
   // Search parameter IDs.
   static const OptionId kMiniBatchSizeId;
+  static const OptionId kAdjustMiniBatchSizeId;
   static const OptionId kMaxPrefetchBatchId;
   static const OptionId kCpuctId;
   static const OptionId kCpuctAtRootId;
@@ -327,6 +329,7 @@ class SearchParams {
   const bool kSyzygyFastPlay;
   const FillEmptyHistory kHistoryFill;
   const int kMiniBatchSize;
+  const bool kAdjustMiniBatchSize;
   const float kMovesLeftMaxEffect;
   const float kMovesLeftThreshold;
   const float kMovesLeftSlope;

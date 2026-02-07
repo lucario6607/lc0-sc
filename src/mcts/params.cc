@@ -240,6 +240,9 @@ const OptionId SearchParams::kMiniBatchSizeId{
     "How many positions the engine tries to batch together for parallel NN "
     "computation. Larger batches may reduce strength a bit, especially with a "
     "small number of playouts. Set to 0 to use a backend suggested value."};
+const OptionId SearchParams::kAdjustMiniBatchSizeId{
+    "adjust-minibatch", "AdjustMinibatch",
+    "Reduce minibatch size when remaining calculation time is long."};
 const OptionId SearchParams::kMaxPrefetchBatchId{
     "max-prefetch", "MaxPrefetch",
     "When the engine cannot gather a large enough batch for immediate use, try "
@@ -600,6 +603,7 @@ void SearchParams::Populate(OptionsParser* options) {
   // Here the uci optimized defaults" are set.
   // Many of them are overridden with training specific values in tournament.cc.
   options->Add<IntOption>(kMiniBatchSizeId, 0, 1024) = 0;
+  options->Add<BoolOption>(kAdjustMiniBatchSizeId) = true;
   options->Add<IntOption>(kMaxPrefetchBatchId, 0, 1024) = DEFAULT_MAX_PREFETCH;
   options->Add<FloatOption>(kCpuctId, 0.0f, 100.0f) = 1.745f;
   options->Add<FloatOption>(kCpuctAtRootId, 0.0f, 100.0f) = 1.745f;
@@ -772,6 +776,7 @@ SearchParams::SearchParams(const OptionsDict& options)
       kSyzygyFastPlay(options.Get<bool>(kSyzygyFastPlayId)),
       kHistoryFill(EncodeHistoryFill(options.Get<std::string>(kHistoryFillId))),
       kMiniBatchSize(options.Get<int>(kMiniBatchSizeId)),
+      kAdjustMiniBatchSize(options.Get<bool>(kAdjustMiniBatchSizeId)),
       kMovesLeftMaxEffect(options.Get<float>(kMovesLeftMaxEffectId)),
       kMovesLeftThreshold(options.Get<float>(kMovesLeftThresholdId)),
       kMovesLeftSlope(options.Get<float>(kMovesLeftSlopeId)),

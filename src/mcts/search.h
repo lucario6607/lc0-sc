@@ -286,7 +286,7 @@ class SearchWorker {
   void InitializeIteration(std::unique_ptr<NetworkComputation> computation);
 
   // 2. Gather minibatch.
-  void GatherMinibatch();
+  void GatherMinibatch(int minibatch_adjustment);
 
   // 2b. Copy collisions into shared_collisions_.
   void CollectCollisions();

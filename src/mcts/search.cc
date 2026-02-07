@@ -1222,6 +1222,10 @@ void SearchWorker::ExecuteOneIteration() {
     // only after the first batch. Default to no time left for the first batch.
     time_remaining = 0;
   }
+  size_t minibatch_adjustment = 1;
+  if (params_.GetAdjustMiniBatchSize()) {
+    minibatch_adjustment = std::bit_width(time_remaining / 1024) / 2 + 1;
+  }
   InitializeIteration(search_->network_->NewComputation(time_remaining));
 
   if (params_.GetMaxConcurrentSearchers() != 0) {
@@ -1261,7 +1265,7 @@ void SearchWorker::ExecuteOneIteration() {
   }
 
   // 2. Gather minibatch.
-  GatherMinibatch();
+  GatherMinibatch(minibatch_adjustment);
   task_count_.store(-1, std::memory_order_release);
   search_->backend_waiting_counter_.fetch_add(1, std::memory_order_relaxed);
 
@@ -1345,10 +1349,12 @@ int CalculateCollisionsLeft(int64_t nodes, const SearchParams& params) {
 }
 }  // namespace
 
-void SearchWorker::GatherMinibatch() {
+void SearchWorker::GatherMinibatch(int minibatch_adjustment) {
   // Total number of nodes to process.
   int minibatch_size = 0;
   int cur_n = 0;
+  int target_minibatch_size =
+      std::max(1, target_minibatch_size_ / minibatch_adjustment);
   {
     SharedMutex::Lock lock(search_->nodes_mutex_);
     cur_n = search_->root_node_->GetN();
@@ -1368,7 +1374,7 @@ void SearchWorker::GatherMinibatch() {
   // Gather nodes to process in the current batch.
   // If we had too many nodes out of order, also interrupt the iteration so
   // that search can exit.
-  while (minibatch_size < target_minibatch_size_ &&
+  while (minibatch_size < target_minibatch_size &&
          number_out_of_order_ < max_out_of_order_) {
     // If there's something to process without touching slow neural net, do it.
     if (minibatch_size > 0 && computation_->GetCacheMisses() == 0) return;
@@ -1390,7 +1396,7 @@ void SearchWorker::GatherMinibatch() {
     int new_start = static_cast<int>(minibatch_.size());
 
     PickNodesToExtend(
-        std::min({collisions_left, target_minibatch_size_ - minibatch_size,
+        std::min({collisions_left, target_minibatch_size - minibatch_size,
                   max_out_of_order_ - number_out_of_order_}));
 
     // Count the non-collisions.
