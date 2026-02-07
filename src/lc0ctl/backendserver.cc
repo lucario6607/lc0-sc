@@ -1050,8 +1050,11 @@ void BackendHandler::EnsureLoaded(const std::string& net, Callback&& callback) {
       try {
         const std::string name =
             params_.Get<std::string>(NetworkFactory::kBackendId);
-        auto backend =
-            NetworkFactory::Get()->Create(name, LoadWeights(net), params_);
+        std::filesystem::path path =
+            params_.Get<std::string>(kNetworkDirectoryOptionId);
+        path /= net;
+        auto backend = NetworkFactory::Get()->Create(
+            name, LoadWeights(path.generic_string()), params_);
         {
           SpinMutex::Lock lock(mutex_);
           backend_ = std::move(backend);
