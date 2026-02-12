@@ -58,12 +58,14 @@ void ChainedSearchStopper::OnSearchDone(const IterationStats& stats) {
 
 bool VisitsStopper::ShouldStop(const IterationStats& stats,
                                StoppersHints* hints) {
-  if (populate_remaining_playouts_) {
-    hints->UpdateEstimatedRemainingPlayouts(nodes_limit_ - stats.total_nodes);
-  }
-  int64_t estimate = (.25f + (stats.wl - 0.75f) / 0.24f * .75f) * nodes_limit_;
+  float lim = node_limit_boost_threshold_;
+  float div = 0.99f - node_limit_boost_threshold_;
+  int64_t estimate = div <= 0.0f ? nodes_limit_ : (.25f + (stats.wl - lim) / div * .75f) * nodes_limit_;
   auto nodes_limit =
       std::max(nodes_limit_ / 4, std::min(nodes_limit_, estimate));
+  if (populate_remaining_playouts_) {
+    hints->UpdateEstimatedRemainingPlayouts(nodes_limit - stats.total_nodes);
+  }
   if (stats.total_nodes >= nodes_limit) {
     LOGFILE << "Stopped search: Reached visits limit: " << stats.total_nodes
             << ">=" << nodes_limit;

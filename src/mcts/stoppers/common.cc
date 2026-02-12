@@ -67,6 +67,10 @@ const OptionId kMinimumSmartPruningBatchesId{
 const OptionId kNodesAsPlayoutsId{
     "nodes-as-playouts", "NodesAsPlayouts",
     "Treat UCI `go nodes` command as referring to playouts instead of visits."};
+const OptionId kNodeLimitBoostThresholdId{
+  "node-limit-boost-threshold", "NodeLimitBoostThreshold",
+  "The threshold win rate to start boosting node limit. Setting the limit to 0.99 or higher disables boosting."
+};
 
 }  // namespace
 
@@ -77,6 +81,7 @@ void PopulateCommonStopperOptions(RunType for_what, OptionsParser* options) {
       (for_what == RunType::kUci ? 1.33f : 0.00f);
   options->Add<IntOption>(kMinimumSmartPruningBatchesId, 0, 10000) = 0;
   options->Add<BoolOption>(kNodesAsPlayoutsId) = false;
+  options->Add<FloatOption>(kNodeLimitBoostThresholdId, 0.0f, 1.0f) = 0.75f;
 
   if (for_what == RunType::kUci || for_what == RunType::kSimpleUci) {
     options->Add<IntOption>(kRamLimitMbId, 0, 100000000) = 0;
@@ -137,7 +142,7 @@ void PopulateCommonUciStoppers(ChainedSearchStopper* stopper,
   // always limit nodes to avoid exceeding the limit 4000000000. That number is
   // default when node_limit = 0.
   stopper->AddStopper(std::make_unique<VisitsStopper>(
-      node_limit, options.Get<float>(kSmartPruningFactorId) > 0.0f));
+      node_limit, options.Get<float>(kSmartPruningFactorId) > 0.0f, options.Get<float>(kNodeLimitBoostThresholdId)));
 
   // "go movetime" stopper.
   if (params.movetime && !infinite) {
