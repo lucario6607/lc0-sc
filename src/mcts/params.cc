@@ -280,15 +280,16 @@ const OptionId SearchParams::kTwoFoldDrawsId{
     "Evaluates twofold repetitions in the search tree as draws. Visits to "
     "these positions are reverted when the first occurrence is played "
     "and not in the search tree anymore."};
-const OptionId SearchParams::kTempUtilityVarianceId{
-    "temp-utility-variance", "TempUtilityVariance",
+const OptionId SearchParams::kTempUtilityDeviationId{
+    "temp-utility-deviation", "TempUtilityDeviation",
     "When picking a move with temperature, add an offset to the utility of "
     "each move, sampled from a normal distribution with mean 0 and this "
-    "variance. This is an alternative way to add noise to the move selection."};
-const OptionId SearchParams::kTempEndgameUtilityVarianceId{
-    "temp-endgame-utility-variance", "TempEndgameUtilityVariance",
-    "Temeperature utility offset variance used during endgame (starting from "
-    "cutoff move). There is no decay."};
+    "standard deviation. This is an alternative way to add noise to the move "
+    "selection."};
+const OptionId SearchParams::kTempEndgameUtilityDeviationId{
+    "temp-endgame-utility-deviation", "TempEndgameUtilityDeviation",
+    "Temperature utility offset standard deviation used during endgame "
+    "(starting from cutoff move). There is no decay."};
 const OptionId SearchParams::kTemperatureId{
     "temperature", "Temperature",
     "Tau value from softmax formula for the first move. If equal to 0, the "
@@ -622,8 +623,8 @@ void SearchParams::Populate(OptionsParser* options) {
   options->Add<FloatOption>(kCpuctFactorAtRootId, 0.0f, 1000.0f) = 3.894f;
   options->Add<BoolOption>(kRootHasOwnCpuctParamsId) = false;
   options->Add<BoolOption>(kTwoFoldDrawsId) = true;
-  options->Add<FloatOption>(kTempUtilityVarianceId, 0.0f, 1.0f) = 0.0f;
-  options->Add<FloatOption>(kTempEndgameUtilityVarianceId, 0.0f, 1.0f) = 0.0f;
+  options->Add<FloatOption>(kTempUtilityDeviationId, 0.0f, 1.0f) = 0.0f;
+  options->Add<FloatOption>(kTempEndgameUtilityDeviationId, 0.0f, 1.0f) = 0.0f;
   options->Add<FloatOption>(kTemperatureId, 0.0f, 100.0f) = 0.0f;
   options->Add<IntOption>(kScLimitId, 1, 1000000000) = 1000000000;
   options->Add<FloatOption>(kHybridSamplingRatioId, 0.0f, 1.0f) = 0.8f;
