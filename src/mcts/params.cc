@@ -282,10 +282,10 @@ const OptionId SearchParams::kTwoFoldDrawsId{
     "and not in the search tree anymore."};
 const OptionId SearchParams::kTempUtilityDeviationId{
     "temp-utility-deviation", "TempUtilityDeviation",
-    "When picking a move with temperature, add an offset to the utility of "
-    "each move, sampled from a normal distribution with mean 0 and this "
-    "standard deviation. This is an alternative way to add noise to the move "
-    "selection."};
+    "Add a random offset to the winning probability. It uses a normal "
+    "distribution with mean 0 and the specified standard deviation. The "
+    "maximum evaluation difference is capped at 5 times the standard "
+    "deviation."};
 const OptionId SearchParams::kTempEndgameUtilityDeviationId{
     "temp-endgame-utility-deviation", "TempEndgameUtilityDeviation",
     "Temperature utility offset standard deviation used during endgame "
@@ -623,8 +623,9 @@ void SearchParams::Populate(OptionsParser* options) {
   options->Add<FloatOption>(kCpuctFactorAtRootId, 0.0f, 1000.0f) = 3.894f;
   options->Add<BoolOption>(kRootHasOwnCpuctParamsId) = false;
   options->Add<BoolOption>(kTwoFoldDrawsId) = true;
-  options->Add<FloatOption>(kTempUtilityDeviationId, 0.0f, 1.0f) = 0.0f;
-  options->Add<FloatOption>(kTempEndgameUtilityDeviationId, 0.0f, 1.0f) = 0.0f;
+  options->Add<FloatOption>(kTempUtilityDeviationId, 0.0f, 100.0f) = 0.0f;
+  options->Add<FloatOption>(kTempEndgameUtilityDeviationId, 0.0f, 100.0f) =
+      0.0f;
   options->Add<FloatOption>(kTemperatureId, 0.0f, 100.0f) = 0.0f;
   options->Add<IntOption>(kScLimitId, 1, 1000000000) = 1000000000;
   options->Add<FloatOption>(kHybridSamplingRatioId, 0.0f, 1.0f) = 0.8f;
