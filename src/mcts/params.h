@@ -103,6 +103,12 @@ class SearchParams {
     return at_root ? kCpuctFactorAtRoot : kCpuctFactor;
   }
   bool GetTwoFoldDraws() const { return kTwoFoldDraws; }
+  float GetTemperatureUtilityVariance() const {
+    return options_.Get<float>(kTempUtilityVarianceId);
+  }
+  float GetTemperatureEndgameUtilityVariance() const {
+    return options_.Get<float>(kTempEndgameUtilityVarianceId);
+  }
   float GetTemperature() const { return options_.Get<float>(kTemperatureId); }
   int GetScLimit() const { return options_.Get<int>(kScLimitId); }
   float GetHybridSamplingRatio() const { return options_.Get<float>(kHybridSamplingRatioId); }
@@ -224,6 +230,8 @@ class SearchParams {
   static const OptionId kCpuctFactorAtRootId;
   static const OptionId kRootHasOwnCpuctParamsId;
   static const OptionId kTwoFoldDrawsId;
+  static const OptionId kTempUtilityVarianceId;
+  static const OptionId kTempEndgameUtilityVarianceId;
   static const OptionId kTemperatureId;
   static const OptionId kScLimitId;
   static const OptionId kHybridSamplingRatioId;
