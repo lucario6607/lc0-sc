@@ -293,6 +293,16 @@ std::string OnnxBuilder::Gather(const std::string& name,
   return out;
 }
 
+std::string OnnxBuilder::GatherElements(const std::string& name,
+                                        const std::string& input1,
+                                        const std::string& input2, int axis) {
+  auto* node = model_.mutable_graph()->add_node();
+  auto out = PopulateStdNodeFields(node, name, input1, "GatherElements");
+  node->add_input(input2);
+  AddIntAttribute(node, "axis", axis);
+  return out;
+}
+
 std::string OnnxBuilder::Softplus(const std::string& name,
                                   const std::string& input) {
   auto* node = model_.mutable_graph()->add_node();
