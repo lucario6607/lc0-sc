@@ -391,7 +391,7 @@ void EngineController::Go(const GoParams& params) {
 
   auto stopper = time_manager_->GetStopper(params, *tree_.get());
   search_ = std::make_unique<Search>(
-      *tree_, network_.get(), std::move(responder),
+      search_cached_state_, *tree_, network_.get(), std::move(responder),
       StringsToMovelist(params.searchmoves, tree_->HeadPosition().GetBoard()),
       *move_start_time_, std::move(stopper), params.infinite, params.ponder,
       options_, &cache_, syzygy_tb_.get());

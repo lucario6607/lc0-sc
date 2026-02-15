@@ -81,6 +81,7 @@ void Benchmark::Run() {
     }
     std::vector<std::string> testing_positions(
         positions.cbegin(), positions.cbegin() + num_positions);
+    SearchCachedState cached_state;
 
     for (std::string position : testing_positions) {
       std::cout << "\nPosition: " << cnt++ << "/" << testing_positions.size()
@@ -102,7 +103,7 @@ void Benchmark::Run() {
 
       const auto start = std::chrono::steady_clock::now();
       auto search = std::make_unique<Search>(
-          tree, network.get(),
+          cached_state, tree, network.get(),
           std::make_unique<CallbackUciResponder>(
               std::bind(&Benchmark::OnBestMove, this, std::placeholders::_1),
               std::bind(&Benchmark::OnInfo, this, std::placeholders::_1)),

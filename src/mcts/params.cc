@@ -284,7 +284,7 @@ const OptionId SearchParams::kTempUtilityDeviationId{
     "temp-utility-deviation", "TempUtilityDeviation",
     "Add a random offset to the winning probability. It uses a normal "
     "distribution with mean 0 and the specified standard deviation. The "
-    "maximum evaluation difference is capped at 5 times the standard "
+    "maximum evaluation difference is capped at 6 times the standard "
     "deviation."};
 const OptionId SearchParams::kTempEndgameUtilityDeviationId{
     "temp-endgame-utility-deviation", "TempEndgameUtilityDeviation",
