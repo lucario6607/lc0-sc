@@ -562,6 +562,10 @@ std::string Converter::RPEWeightsInit(OnnxBuilder* builder,
   rpe = builder->AddInitializer(
       name, FloatOnnxWeightsAdapter(weights, {heads, depth, 15 * 15}, {1, 0}));
 
+  if (GetDataType() != pblczero::TensorProto::FLOAT) {
+    rpe = builder->Cast(name + "/to_data_type", rpe, GetDataType());
+  }
+
   return rpe;
 }
 
@@ -1403,3 +1407,4 @@ pblczero::Net ConvertWeightsToOnnx(
 }
 
 }  // namespace lczero
+
