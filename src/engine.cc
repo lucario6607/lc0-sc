@@ -188,6 +188,7 @@ void EngineController::NewGame() {
   cache_.Clear();
   search_.reset();
   tree_.reset();
+  search_cached_state_.UciNewGame();
   CreateFreshTimeManager();
   current_position_ = {ChessBoard::kStartposFen, {}};
   UpdateFromUciOptions();
