@@ -489,6 +489,7 @@ std::unique_ptr<Network> MakeOnnxNetwork(const std::optional<WeightsFile>& w,
         "alt_layernorm", kProvider == OnnxProvider::DML ? true : false);
     converter_options.no_shape = opts.GetOrDefault<bool>("no_shape", false);
     converter_options.use_einsum = opts.GetOrDefault<bool>("use_einsum", false);
+    converter_options.fold_matmul = true;
     converter_options.policy_head =
         opts.GetOrDefault<std::string>("policy_head", "vanilla");
     converter_options.value_head =
