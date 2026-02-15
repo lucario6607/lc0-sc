@@ -93,6 +93,8 @@ class OnnxBuilder {
   std::string Sigmoid(const std::string& name, const std::string& input);
   std::string Gather(const std::string& name, const std::string& input1,
                      const std::string& input2, int axis);
+  std::string GatherElements(const std::string& name, const std::string& input1,
+                             const std::string& input2, int axis);
   std::string Softplus(const std::string& name, const std::string& input);
   std::string Identity(const std::string& name, const std::string& input);
   std::string Transpose(const std::string& name, const std::string& input,
@@ -144,3 +146,4 @@ class OnnxBuilder {
 };
 
 }  // namespace lczero
+
