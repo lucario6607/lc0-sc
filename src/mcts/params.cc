@@ -282,6 +282,16 @@ const OptionId SearchParams::kTwoFoldDrawsId{
     "Evaluates twofold repetitions in the search tree as draws. Visits to "
     "these positions are reverted when the first occurrence is played "
     "and not in the search tree anymore."};
+const OptionId SearchParams::kTempUtilityDeviationId{
+    "temp-utility-deviation", "TempUtilityDeviation",
+    "Add a random offset to the winning probability. It uses a normal "
+    "distribution with mean 0 and the specified standard deviation. The "
+    "maximum evaluation difference is capped at 6 times the standard "
+    "deviation."};
+const OptionId SearchParams::kTempEndgameUtilityDeviationId{
+    "temp-endgame-utility-deviation", "TempEndgameUtilityDeviation",
+    "Temperature utility offset standard deviation used during endgame "
+    "(starting from cutoff move). There is no decay."};
 const OptionId SearchParams::kTemperatureId{
     "temperature", "Temperature",
     "Tau value from softmax formula for the first move. If equal to 0, the "
@@ -617,6 +627,9 @@ void SearchParams::Populate(OptionsParser* options) {
   options->Add<FloatOption>(kCpuctFactorAtRootId, 0.0f, 1000.0f) = 3.894f;
   options->Add<BoolOption>(kRootHasOwnCpuctParamsId) = false;
   options->Add<BoolOption>(kTwoFoldDrawsId) = true;
+  options->Add<FloatOption>(kTempUtilityDeviationId, 0.0f, 100.0f) = 0.0f;
+  options->Add<FloatOption>(kTempEndgameUtilityDeviationId, 0.0f, 100.0f) =
+      0.0f;
   options->Add<FloatOption>(kTemperatureId, 0.0f, 100.0f) = 0.0f;
   options->Add<IntOption>(kScLimitId, 1, 1000000000) = 1000000000;
   options->Add<FloatOption>(kScWlThresholdId, 0.0f, 1.0f) = 0.75f;
