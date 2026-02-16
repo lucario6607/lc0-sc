@@ -1768,19 +1768,18 @@ void SearchWorker::PickNodesToExtendTask(
 
       const bool is_opponent_node = (current_depth % 2 == 1);
 
-      // Compute same 1x-4x WL multiplier as VisitsStopper uses for max nodes.
-      // Apply to sc_limit so it stays the same percentage of max nodes.
+      // Compute 1x-4x WL multiplier (same formula as VisitsStopper for max
+      // nodes). At WL = threshold: 1x. At WL = 0.99: 4x.
       const float root_wl = -search_->root_node_->GetWL();
-      const int base_sc_limit = params_.GetScLimit();
-      const float lim = 0.75f;
-      const float div = 0.99f - lim;
+      const float sc_wl_threshold = params_.GetScWlThreshold();
+      const float div = 0.99f - sc_wl_threshold;
       float multiplier = 1.0f;
-      if (div > 0.0f && root_wl > lim) {
-        multiplier = (.25f + (root_wl - lim) / div * .75f) * 4.0f;
+      if (div > 0.0f && root_wl > sc_wl_threshold) {
+        multiplier = (.25f + (root_wl - sc_wl_threshold) / div * .75f) * 4.0f;
         multiplier = std::clamp(multiplier, 1.0f, 4.0f);
       }
       const int opponent_node_limit =
-          static_cast<int>(base_sc_limit * multiplier);
+          static_cast<int>(params_.GetScLimit() * multiplier);
       int current_node_count = node->GetN();
       bool node_limit_frozen = node->GetNodeLimitFrozen();
       bool node_limit_frozen_lock = node->GetNodeLimitFrozenLock();
@@ -1812,7 +1811,7 @@ void SearchWorker::PickNodesToExtendTask(
 
       if (is_opponent_node && node_limit_frozen) {
         const float hybrid_ratio =
-            params_.GetDynamicHybridRatio(node->GetN(), root_wl);
+            params_.GetDynamicHybridRatio(node->GetN(), multiplier);
 
         int ts_visits = static_cast<int>(
             std::round(static_cast<float>(cur_limit) * hybrid_ratio));
@@ -2822,4 +2821,5 @@ void SearchWorker::UpdateCounters() {
 }
 
 }  // namespace lczero
+
 
