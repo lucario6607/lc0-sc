@@ -29,6 +29,7 @@
 
 #include <cmath>
 #include <vector>
+
 #include "neural/encoder.h"
 #include "utils/optionsdict.h"
 #include "utils/optionsparser.h"
@@ -86,7 +87,7 @@ class SearchParams {
 
   // START: ADDED FOR DYNAMIC HYBRID RATIO
   // The main function to calculate the ratio based on the selected mode.
-  float GetDynamicHybridRatio(int node_count, float root_wl = 0.0f) const;
+  float GetDynamicHybridRatio(int node_count, float multiplier = 1.0f) const;
   // END: ADDED FOR DYNAMIC HYBRID RATIO
 
   // Parameter getters.
@@ -105,14 +106,31 @@ class SearchParams {
   bool GetTwoFoldDraws() const { return kTwoFoldDraws; }
   float GetTemperature() const { return options_.Get<float>(kTemperatureId); }
   int GetScLimit() const { return options_.Get<int>(kScLimitId); }
-  float GetHybridSamplingRatio() const { return options_.Get<float>(kHybridSamplingRatioId); }
+  float GetScWlThreshold() const {
+    return options_.Get<float>(kScWlThresholdId);
+  }
+  float GetHybridSamplingRatio() const {
+    return options_.Get<float>(kHybridSamplingRatioId);
+  }
   HybridRatioMode GetHybridRatioMode() const { return kHybridRatioMode; }
-  const std::vector<std::pair<int, float>>& GetHybridRatioSchedule() const { return kHybridRatioSchedule; }
-  float GetHybridMinRatio() const { return options_.Get<float>(kHybridMinRatioId); }
-  float GetHybridMaxRatio() const { return options_.Get<float>(kHybridMaxRatioId); }
-  int GetHybridScalingFactor() const { return options_.Get<int>(kHybridScalingFactorId); }
-  float GetHybridShapeParam1() const { return options_.Get<float>(kHybridShapeParam1Id); }
-  float GetHybridShapeParam2() const { return options_.Get<float>(kHybridShapeParam2Id); }
+  const std::vector<std::pair<int, float>>& GetHybridRatioSchedule() const {
+    return kHybridRatioSchedule;
+  }
+  float GetHybridMinRatio() const {
+    return options_.Get<float>(kHybridMinRatioId);
+  }
+  float GetHybridMaxRatio() const {
+    return options_.Get<float>(kHybridMaxRatioId);
+  }
+  int GetHybridScalingFactor() const {
+    return options_.Get<int>(kHybridScalingFactorId);
+  }
+  float GetHybridShapeParam1() const {
+    return options_.Get<float>(kHybridShapeParam1Id);
+  }
+  float GetHybridShapeParam2() const {
+    return options_.Get<float>(kHybridShapeParam2Id);
+  }
 
   float GetTemperatureVisitOffset() const {
     return options_.Get<float>(kTemperatureVisitOffsetId);
@@ -226,6 +244,7 @@ class SearchParams {
   static const OptionId kTwoFoldDrawsId;
   static const OptionId kTemperatureId;
   static const OptionId kScLimitId;
+  static const OptionId kScWlThresholdId;
   static const OptionId kHybridSamplingRatioId;
   // START: ADDED FOR DYNAMIC HYBRID RATIO
   static const OptionId kHybridRatioModeId;
@@ -363,8 +382,9 @@ class SearchParams {
   // START: ADDED FOR DYNAMIC HYBRID RATIO
   const HybridRatioMode kHybridRatioMode;
   const std::vector<std::pair<int, float>> kHybridRatioSchedule;
-  mutable float chaotic_state_{0.5f}; // Mutable for chaotic function state
+  mutable float chaotic_state_{0.5f};  // Mutable for chaotic function state
   // END: ADDED FOR DYNAMIC HYBRID RATIO
 };
 
 }  // namespace lczero
+
