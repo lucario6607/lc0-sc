@@ -86,7 +86,7 @@ class SearchParams {
 
   // START: ADDED FOR DYNAMIC HYBRID RATIO
   // The main function to calculate the ratio based on the selected mode.
-  float GetDynamicHybridRatio(int node_count) const;
+  float GetDynamicHybridRatio(int node_count, float root_wl = 0.0f) const;
   // END: ADDED FOR DYNAMIC HYBRID RATIO
 
   // Parameter getters.
@@ -345,7 +345,7 @@ class SearchParams {
   const float kWDLMaxS;
   const float kWDLEvalObjectivity;
   const bool kSwapColors;
-  const float kMaxOutOfOrderEvalsFactor;
+  const float kMaxOutOfOrderEvasFactor;
   const float kNpsLimit;
   const int kSolidTreeThreshold;
   const int kTaskWorkersPerSearchWorker;
