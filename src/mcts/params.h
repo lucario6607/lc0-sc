@@ -345,7 +345,7 @@ class SearchParams {
   const float kWDLMaxS;
   const float kWDLEvalObjectivity;
   const bool kSwapColors;
-  const float kMaxOutOfOrderEvasFactor;
+  const float kMaxOutOfOrderEvalsFactor;
   const float kNpsLimit;
   const int kSolidTreeThreshold;
   const int kTaskWorkersPerSearchWorker;
