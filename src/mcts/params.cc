@@ -290,6 +290,10 @@ const OptionId SearchParams::kTemperatureId{
 const OptionId SearchParams::kScLimitId{"search-contempt-node-limit", "ScLimit",
                                         "UCT until this number of nodes"
                                         "thompson sampling beyond this limit."};
+const OptionId SearchParams::kScWlThresholdId{
+    "sc-wl-threshold", "ScWlThreshold",
+    "Win rate threshold at which the sc_limit and scaling factor start being "
+    "multiplied (1x at threshold, 4x at 0.99). Set to 1.0 to disable."};
 const OptionId SearchParams::kHybridSamplingRatioId{
     "hybrid-sampling-ratio", "HybridSamplingRatio",
     "The ratio of Thompson Sampling to use in hybrid search-contempt mode. "
@@ -615,6 +619,7 @@ void SearchParams::Populate(OptionsParser* options) {
   options->Add<BoolOption>(kTwoFoldDrawsId) = true;
   options->Add<FloatOption>(kTemperatureId, 0.0f, 100.0f) = 0.0f;
   options->Add<IntOption>(kScLimitId, 1, 1000000000) = 1000000000;
+  options->Add<FloatOption>(kScWlThresholdId, 0.0f, 1.0f) = 0.75f;
   options->Add<FloatOption>(kHybridSamplingRatioId, 0.0f, 1.0f) = 0.8f;
 
   // START: ADDED FOR DYNAMIC HYBRID RATIO
@@ -855,27 +860,10 @@ SearchParams::SearchParams(const OptionsDict& options)
 {}
 
 // START: ADDED FOR DYNAMIC HYBRID RATIO
-float SearchParams::GetDynamicHybridRatio(int node_count, float root_wl) const {
-  const int base_sc_limit = GetScLimit();
-  const float base_scale = static_cast<float>(GetHybridScalingFactor());
-
-  // Compute the same 1x-4x WL multiplier used by VisitsStopper for max nodes.
-  // VisitsStopper stores nodes_limit_ = 4 * limit, then:
-  //   estimate = (.25 + (wl - lim) / div * .75) * 4 * limit
-  //   multiplier = clamp((.25 + (wl - lim) / div * .75) * 4, 1.0, 4.0)
-  // At WL = threshold: 1x. At WL = 0.99: 4x.
-  const float lim = 0.75f;
-  const float div = 0.99f - lim;
-  float multiplier = 1.0f;
-  if (div > 0.0f && root_wl > lim) {
-    multiplier = (.25f + (root_wl - lim) / div * .75f) * 4.0f;
-    multiplier = std::clamp(multiplier, 1.0f, 4.0f);
-  }
-
-  // Apply same multiplier to both sc_limit and scale so they remain the
-  // same percentage of max nodes.
-  const int sc_limit = static_cast<int>(base_sc_limit * multiplier);
-  const float scale = base_scale * multiplier;
+float SearchParams::GetDynamicHybridRatio(int node_count,
+                                          float multiplier) const {
+  const int sc_limit = static_cast<int>(GetScLimit() * multiplier);
+  const float scale = static_cast<float>(GetHybridScalingFactor()) * multiplier;
 
   // Core Rule: Ratio is 0.0 before the search contempt limit is reached.
   if (node_count < sc_limit) {
@@ -1046,4 +1034,5 @@ float SearchParams::GetDynamicHybridRatio(int node_count, float root_wl) const {
 // END: ADDED FOR DYNAMIC HYBRID RATIO
 
 }  // namespace lczero
+
 
