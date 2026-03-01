@@ -61,8 +61,14 @@ bool IsCanonicalArmageddonFormat(
     pblczero::NetworkFormat::InputFormat input_format);
 bool IsHectopliesFormat(pblczero::NetworkFormat::InputFormat input_format);
 bool Is960CastlingFormat(pblczero::NetworkFormat::InputFormat input_format);
+bool IsCeresTPGFormat(pblczero::NetworkFormat::InputFormat input_format);
 
 uint16_t MoveToNNIndex(Move move, int transform);
 Move MoveFromNNIndex(int idx, int transform);
+
+// Encodes the position for Ceres TPG format as raw bytes [64 * 137].
+std::vector<uint8_t> EncodePositionForCeresTPG(
+    const PositionHistory& history, int history_planes,
+    FillEmptyHistory fill_empty_history);
 
 }  // namespace lczero
