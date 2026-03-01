@@ -335,6 +335,208 @@ InputPlanes EncodePositionForNN(
                              history_planes, fill_empty_history, transform_out);
 }
 
+bool IsCeresTPGFormat(pblczero::NetworkFormat::InputFormat input_format) {
+  return input_format == pblczero::NetworkFormat::INPUT_CERES_TPG;
+}
+
+namespace {
+
+// ByteScaled encoding: value * 100, clamped to [0, 255].
+uint8_t ByteScaled(float value) {
+  int v = static_cast<int>(value * 100.0f + 0.5f);
+  if (v < 0) v = 0;
+  if (v > 255) v = 255;
+  return static_cast<uint8_t>(v);
+}
+
+// Ceres TPG square record layout (137 bytes per square):
+// [0..103]   8 history positions × 13 bytes piece one-hot
+//            (empty, our_pawn..our_king, opp_pawn..opp_king)
+// [104..111] 8 repetition counts (one per history position)
+// [112]      CanOO (our kingside)
+// [113]      CanOOO (our queenside)
+// [114]      OpponentCanOO
+// [115]      OpponentCanOOO
+// [116]      Move50Count (encoded)
+// [117]      PlySinceLastMove (encoded)
+// [118]      IsEnPassant
+// [119]      QPositiveBlunders (inference default)
+// [120]      QNegativeBlunders (inference default)
+// [121..128] Rank one-hot (8 bytes)
+// [129..136] File one-hot (8 bytes)
+constexpr int kTPGPieceOneHotSize = 13;
+constexpr int kTPGHistoryPositions = 8;
+constexpr int kTPGPieceHistoryBytes =
+    kTPGHistoryPositions * kTPGPieceOneHotSize;                   // 104
+constexpr int kTPGRepetitionOffset = kTPGPieceHistoryBytes;       // 104
+constexpr int kTPGCastlingOffset = kTPGRepetitionOffset + 8;      // 112
+constexpr int kTPGMove50Offset = kTPGCastlingOffset + 4;          // 116
+constexpr int kTPGPlySinceOffset = kTPGMove50Offset + 1;          // 117
+constexpr int kTPGEnPassantOffset = kTPGPlySinceOffset + 1;       // 118
+constexpr int kTPGQPosBlunderOffset = kTPGEnPassantOffset + 1;    // 119
+constexpr int kTPGQNegBlunderOffset = kTPGQPosBlunderOffset + 1;  // 120
+constexpr int kTPGRankOffset = kTPGQNegBlunderOffset + 1;         // 121
+constexpr int kTPGFileOffset = kTPGRankOffset + 8;                // 129
+// Total = 129 + 8 = 137
+
+// Ceres default inference values (from NNEvaluatorOptionsCeres.cs).
+constexpr float kDefaultQBlunder = 0.03f;  // DEFAULT_Q_BLUNDER
+constexpr int kDefaultPliesSinceLastMove = 30;
+
+// Move50CountEncoded: min(move50, 100) / 50.0
+float Move50CountEncoded(int move50) { return std::min(move50, 100) / 50.0f; }
+
+// PliesSinceLastMoveEncoded: 2 / sqrt(numPlies + 1)
+float PliesSinceLastMoveEncoded(int numPlies) {
+  numPlies = std::min(numPlies, 255);
+  return 2.0f / std::sqrt(static_cast<float>(numPlies + 1));
+}
+
+// Write piece one-hot encoding for a given square and board.
+// Index 0 = empty, 1-6 = our pieces (P,N,B,R,Q,K), 7-12 = opponent pieces.
+void WritePieceOneHot(const ChessBoard& board, int square_idx,
+                      bool invert_colors, uint8_t* out) {
+  std::memset(out, 0, kTPGPieceOneHotSize);
+  BitBoard sq_bb = BitBoard::FromSquare(Square::FromIdx(square_idx));
+
+  bool board_ours = (board.ours() & sq_bb).as_int() != 0;
+  bool board_theirs = (board.theirs() & sq_bb).as_int() != 0;
+
+  bool is_ours = invert_colors ? board_theirs : board_ours;
+  bool is_theirs = invert_colors ? board_ours : board_theirs;
+
+  if (!is_ours && !is_theirs) {
+    out[0] = ByteScaled(1.0f);  // Empty square
+    return;
+  }
+
+  int piece_offset = is_ours ? 0 : 6;
+  if ((board.pawns() & sq_bb).as_int() != 0) {
+    out[piece_offset + 1] = ByteScaled(1.0f);
+  } else if ((board.knights() & sq_bb).as_int() != 0) {
+    out[piece_offset + 2] = ByteScaled(1.0f);
+  } else if ((board.bishops() & sq_bb).as_int() != 0) {
+    out[piece_offset + 3] = ByteScaled(1.0f);
+  } else if ((board.rooks() & sq_bb).as_int() != 0) {
+    out[piece_offset + 4] = ByteScaled(1.0f);
+  } else if ((board.queens() & sq_bb).as_int() != 0) {
+    out[piece_offset + 5] = ByteScaled(1.0f);
+  } else if ((board.kings() & sq_bb).as_int() != 0) {
+    out[piece_offset + 6] = ByteScaled(1.0f);
+  }
+}
+
+}  // namespace
+
+std::vector<uint8_t> EncodePositionForCeresTPG(
+
+    const PositionHistory& history, int history_planes,
+    FillEmptyHistory fill_empty_history) {
+  const int num_squares = kCeresTPGSquares;
+  const int bytes_per_square = kCeresTPGBytesPerSquare;
+  std::vector<uint8_t> result(num_squares * bytes_per_square, 0);
+
+  auto positions = history.GetPositions();
+  const Position& current_pos = positions.back();
+  const ChessBoard& current_board = current_pos.GetBoard();
+  const bool we_are_black = current_board.flipped();
+
+  // Castling rights (same for all squares).
+  uint8_t can_oo =
+      ByteScaled(current_board.castlings().we_can_00() ? 1.0f : 0.0f);
+  uint8_t can_ooo =
+      ByteScaled(current_board.castlings().we_can_000() ? 1.0f : 0.0f);
+  uint8_t opp_can_oo =
+      ByteScaled(current_board.castlings().they_can_00() ? 1.0f : 0.0f);
+  uint8_t opp_can_ooo =
+      ByteScaled(current_board.castlings().they_can_000() ? 1.0f : 0.0f);
+
+  // Move 50 count (same for all squares).
+  uint8_t move50 = ByteScaled(Move50CountEncoded(current_pos.GetRule50Ply()));
+
+  // Default blunder and ply-since-last-move values for inference.
+  uint8_t q_pos_blunder = ByteScaled(kDefaultQBlunder);
+  uint8_t q_neg_blunder = ByteScaled(kDefaultQBlunder);
+  uint8_t ply_since =
+      ByteScaled(PliesSinceLastMoveEncoded(kDefaultPliesSinceLastMove));
+
+  // En passant detection.
+  BitBoard en_passant_bb = current_board.en_passant();
+  bool has_en_passant = !en_passant_bb.empty();
+
+  int history_start = static_cast<int>(positions.size()) - 1;
+
+  for (int sq = 0; sq < 64; sq++) {
+    // Mirror file for black (lc0 already mirrors rank).
+    int out_sq = we_are_black ? (sq ^ 7) : sq;
+    uint8_t* rec = &result[out_sq * bytes_per_square];
+
+    // Write piece one-hot for each history position.
+    for (int h = 0; h < std::min(history_planes, kTPGHistoryPositions); h++) {
+      int hist_idx = history_start - h;
+      if (hist_idx < 0) {
+        if (fill_empty_history == FillEmptyHistory::NO) break;
+        // Cascade fill: copy from previous history slot.
+        if (h > 0) {
+          std::memcpy(&rec[h * kTPGPieceOneHotSize],
+                      &rec[(h - 1) * kTPGPieceOneHotSize],
+                      kTPGPieceOneHotSize);
+          rec[kTPGRepetitionOffset + h] = rec[kTPGRepetitionOffset + h - 1];
+        }
+        continue;
+      }
+      const ChessBoard& hist_board = positions[hist_idx].GetBoard();
+
+      bool invert_colors = false;
+      int query_sq = sq;
+
+      if (h % 2 == 1) {
+        // Odd history positions correspond to the opponent's turn.
+        // In lc0, boards are stored relative to the side to move.
+        // Thus, the opponent's board is vertically mirrored relative to ours.
+        invert_colors = true;
+        query_sq = sq ^ 56;  // Flip the rank to mirror vertically
+      }
+      WritePieceOneHot(hist_board, query_sq, invert_colors,
+                       &rec[h * kTPGPieceOneHotSize]);
+
+      // Repetition count for this history position.
+      int reps = positions[hist_idx].GetRepetitions();
+      rec[kTPGRepetitionOffset + h] = ByteScaled(std::min(reps, 1) * 1.0f);
+    }
+
+    // Shared per-square metadata.
+    rec[kTPGCastlingOffset + 0] = can_oo;
+    rec[kTPGCastlingOffset + 1] = can_ooo;
+    rec[kTPGCastlingOffset + 2] = opp_can_oo;
+    rec[kTPGCastlingOffset + 3] = opp_can_ooo;
+
+    rec[kTPGMove50Offset] = move50;
+    rec[kTPGPlySinceOffset] = ply_since;
+
+    // En passant: mark the opponent pawn that can be captured.
+    if (has_en_passant) {
+      BitBoard sq_bb = BitBoard::FromSquare(Square::FromIdx(sq));
+      if ((en_passant_bb & sq_bb).as_int() != 0) {
+        rec[kTPGEnPassantOffset] = ByteScaled(1.0f);
+      }
+    }
+
+    rec[kTPGQPosBlunderOffset] = q_pos_blunder;
+    rec[kTPGQNegBlunderOffset] = q_neg_blunder;
+
+    // Rank and file one-hot (mirror file for black).
+    Square square = Square::FromIdx(sq);
+    int enc_rank = square.rank().idx;
+    int enc_file = we_are_black ? (7 - square.file().idx) : square.file().idx;
+
+    rec[kTPGRankOffset + enc_rank] = ByteScaled(1.0f);
+    rec[kTPGFileOffset + enc_file] = ByteScaled(1.0f);
+  }
+
+  return result;
+}
+
 namespace {
 const char* kMoveStrs[] = {
     "a1b1",  "a1c1",  "a1d1",  "a1e1",  "a1f1",  "a1g1",  "a1h1",  "a1a2",

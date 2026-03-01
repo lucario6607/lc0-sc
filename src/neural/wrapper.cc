@@ -108,10 +108,26 @@ class NetworkAsBackendComputation : public BackendComputation {
 
   AddInputResult AddInput(const EvalPosition& pos,
                           EvalResultPtr result) override {
+    if (IsCeresTPGFormat(backend_->input_format_)) {
+      // Ceres TPG path: encode as raw bytes, apply file-flip for black.
+      const PositionHistory history(pos.pos);
+      auto byte_input =
+          EncodePositionForCeresTPG(history, 8, backend_->fill_empty_history_);
+      int tpg_transform = history.IsBlackToMove() ? FlipTransform : 0;
+      const size_t idx = entries_.emplace_back(
+          Entry{.input = {},
+                .byte_input = std::move(byte_input),
+                .legal_moves =
+                    MoveList(pos.legal_moves.begin(), pos.legal_moves.end()),
+                .result = result,
+                .transform = tpg_transform});
+      return ENQUEUED_FOR_EVAL;
+    }
     int transform;
     const size_t idx = entries_.emplace_back(Entry{
         .input = EncodePositionForNN(backend_->input_format_, pos.pos, 8,
                                      backend_->fill_empty_history_, &transform),
+        .byte_input = {},
         .legal_moves = MoveList(pos.legal_moves.begin(), pos.legal_moves.end()),
         .result = result,
         .transform = 0});
@@ -120,7 +136,14 @@ class NetworkAsBackendComputation : public BackendComputation {
   }
 
   void ComputeBlocking() override {
-    for (auto& entry : entries_) computation_->AddInput(std::move(entry.input));
+    bool is_ceres_tpg = IsCeresTPGFormat(backend_->input_format_);
+    for (auto& entry : entries_) {
+      if (is_ceres_tpg) {
+        computation_->AddInputBytes(std::move(entry.byte_input));
+      } else {
+        computation_->AddInput(std::move(entry.input));
+      }
+    }
     computation_->ComputeBlocking();
     LCTRACE_FUNCTION_SCOPE;
     for (size_t i = 0; i < entries_.size(); ++i) {
@@ -137,6 +160,7 @@ class NetworkAsBackendComputation : public BackendComputation {
     LCTRACE_FUNCTION_SCOPE;
     const std::vector<Move>& moves = entries_[idx].legal_moves;
     const int transform = entries_[idx].transform;
+    const bool is_ceres = IsCeresTPGFormat(backend_->input_format_);
     // Copy the values to the destination array and compute the maximum.
     const float max_p = std::accumulate(
         moves.begin(), moves.end(), -std::numeric_limits<float>::infinity(),
@@ -144,20 +168,44 @@ class NetworkAsBackendComputation : public BackendComputation {
           return std::max(max_p, dst[counter++] = computation->GetPVal(
                                      idx, MoveToNNIndex(move, transform)));
         });
-    // Compute the softmax and compute the total.
-    const float temperature = backend_->softmax_policy_temperature_;
-    float total = std::accumulate(
-        dst.begin(), dst.end(), 0.0f, [&](float total, float& val) {
-          return total + (val = FastExp((val - max_p) * temperature));
+    if (is_ceres) {
+      // Ceres TPG: softmax then power-law flattening prob^(1/PolicySoftmax).
+      float total = std::accumulate(
+          dst.begin(), dst.end(), 0.0f, [&](float total, float& val) {
+            return total + (val = FastExp(val - max_p));
+          });
+      const float scale = total > 0.0f ? 1.0f / total : 1.0f;
+      std::for_each(dst.begin(), dst.end(),
+                    [&](float& val) { val *= scale; });
+      // Apply power-law flattening.
+      const float exponent = backend_->softmax_policy_temperature_;
+      if (exponent != 1.0f) {
+        float power_total = 0.0f;
+        std::for_each(dst.begin(), dst.end(), [&](float& val) {
+          val = std::pow(val, exponent);
+          power_total += val;
         });
-    const float scale = total > 0.0f ? 1.0f / total : 1.0f;
-    // Scale the values to sum to 1.0.
-    std::for_each(dst.begin(), dst.end(), [&](float& val) { val *= scale; });
+        const float pscale = power_total > 0.0f ? 1.0f / power_total : 1.0f;
+        std::for_each(dst.begin(), dst.end(),
+                      [&](float& val) { val *= pscale; });
+      }
+    } else {
+      // Standard lc0: logit-space temperature before softmax.
+      const float temperature = backend_->softmax_policy_temperature_;
+      float total = std::accumulate(
+          dst.begin(), dst.end(), 0.0f, [&](float total, float& val) {
+            return total + (val = FastExp((val - max_p) * temperature));
+          });
+      const float scale = total > 0.0f ? 1.0f / total : 1.0f;
+      std::for_each(dst.begin(), dst.end(),
+                    [&](float& val) { val *= scale; });
+    }
   }
 
  private:
   struct Entry {
     InputPlanes input;
+    std::vector<uint8_t> byte_input;  // For Ceres TPG format.
     MoveList legal_moves;
     EvalResultPtr result;
     int transform;
