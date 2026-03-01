@@ -37,6 +37,11 @@ namespace lczero {
 
 const int kInputPlanes = 112;
 
+// Ceres TPG format constants.
+const int kCeresTPGSquares = 64;
+const int kCeresTPGBytesPerSquare = 137;
+const int kCeresTPGTotalBytes = kCeresTPGSquares * kCeresTPGBytesPerSquare;
+
 // All input planes are 64 value vectors, every element of which is either
 // 0 or some value, unique for the plane. Therefore, input is defined as
 // a bitmask showing where to set the value, and the value itself.
@@ -57,6 +62,11 @@ class NetworkComputation {
  public:
   // Adds a sample to the batch.
   virtual void AddInput(InputPlanes&& input) = 0;
+  // Adds a raw byte input sample (for Ceres TPG format).
+  virtual void AddInputBytes(std::vector<uint8_t>&& input) {
+    (void)input;
+    throw Exception("AddInputBytes not supported by this backend.");
+  }
   // Do the computation.
   virtual void ComputeBlocking() = 0;
   // Returns how many times AddInput() was called.
