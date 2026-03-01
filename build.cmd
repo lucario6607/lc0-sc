@@ -41,7 +41,7 @@ set CXX_LD=link
 
 if exist "C:\Program Files\Microsoft Visual Studio\2022" (
   where /q cl
-  if errorlevel 1 call "C:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Auxiliary\Build\vcvarsall.bat" amd64
+  if errorlevel 1 call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat" amd64
   set backend=vs2022
 ) else if exist "C:\Program Files (x86)\Microsoft Visual Studio\2019" (
   where /q cl
@@ -73,7 +73,6 @@ meson setup build --backend %backend% --buildtype release -Ddx=%DX12% -Dcudnn=%C
 -Dopencl_libdirs="%OPENCL_LIB_PATH%" -Dopencl_include="%OPENCL_INCLUDE_PATH%" ^
 -Dopenblas_include="%OPENBLAS_PATH%\include" -Dopenblas_libdirs="%OPENBLAS_PATH%\lib" ^
 -Dcutlass="%CUTLASS%" ^
--Donnx=true -Donnx_include="C:\onnxruntime\include" -Donnx_libdir="C:\onnxruntime\lib" ^
 -Ddefault_library=static
 
 if errorlevel 1 exit /b
