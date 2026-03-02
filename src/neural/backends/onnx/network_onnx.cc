@@ -953,21 +953,25 @@ Ort::SessionOptions OnnxNetwork::GetOptions(int threads, int batch_size,
 #ifdef USE_ONNX_CUDART
       trt_options["has_user_compute_stream"] = "1";
 #endif
+      std::string shape_suffix = ceres_tpg_
+          ? "x" + std::to_string(kCeresTPGSquares) + "x" +
+                std::to_string(kCeresTPGBytesPerSquare)
+          : "x112x8x8";
       if (batch_size < 0) {
         trt_options["trt_profile_min_shapes"] =
-            inputs_[0] + ":" + std::to_string(min_batch_size_) + "x112x8x8";
+            inputs_[0] + ":" + std::to_string(min_batch_size_) + shape_suffix;
         trt_options["trt_profile_max_shapes"] =
-            inputs_[0] + ":" + std::to_string(max_batch_size_) + "x112x8x8";
+            inputs_[0] + ":" + std::to_string(max_batch_size_) + shape_suffix;
         trt_options["trt_profile_opt_shapes"] =
-            inputs_[0] + ":" + std::to_string(max_batch_size_ / 4) + "x112x8x8";
+            inputs_[0] + ":" + std::to_string(max_batch_size_ / 4) + shape_suffix;
       } else {
         trt_options["trt_profile_min_shapes"] =
             inputs_[0] + ":" + std::to_string(batch_size - batch_size_ + 1) +
-            "x112x8x8";
+            shape_suffix;
         trt_options["trt_profile_max_shapes"] =
-            inputs_[0] + ":" + std::to_string(batch_size) + "x112x8x8";
+            inputs_[0] + ":" + std::to_string(batch_size) + shape_suffix;
         trt_options["trt_profile_opt_shapes"] =
-            inputs_[0] + ":" + std::to_string(batch_size) + "x112x8x8";
+            inputs_[0] + ":" + std::to_string(batch_size) + shape_suffix;
       }
       std::vector<const char*> keys;
       std::vector<const char*> values;
