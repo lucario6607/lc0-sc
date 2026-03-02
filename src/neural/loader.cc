@@ -192,7 +192,60 @@ WeightsFile ParseWeightsProto(const std::string& buffer) {
 
 }  // namespace
 
+bool IsOnnxFile(const std::string& filename) {
+  if (filename.size() >= 5) {
+    std::string ext = filename.substr(filename.size() - 5);
+    for (auto& c : ext) c = std::tolower(c);
+    if (ext == ".onnx") return true;
+  }
+  return false;
+}
+
+WeightsFile LoadRawOnnxFile(const std::string& filename) {
+  std::ifstream file(filename, std::ios::binary | std::ios::ate);
+  if (!file) {
+    throw Exception("Cannot read ONNX file: " + filename);
+  }
+  auto size = file.tellg();
+  file.seekg(0, std::ios::beg);
+  std::string buffer(size, '\0');
+  if (!file.read(&buffer[0], size)) {
+    throw Exception("Failed to read ONNX file: " + filename);
+  }
+
+  WeightsFile net;
+  net.set_magic(kWeightMagic);
+
+  auto* format = net.mutable_format();
+  auto* nf = format->mutable_network_format();
+  nf->set_input(pblczero::NetworkFormat::INPUT_CERES_TPG);
+  nf->set_output(pblczero::NetworkFormat::OUTPUT_WDL);
+  nf->set_network(pblczero::NetworkFormat::NETWORK_ONNX);
+  nf->set_moves_left(pblczero::NetworkFormat::MOVES_LEFT_V1);
+
+  auto* onnx = net.mutable_onnx_model();
+  onnx->set_model(buffer);
+  onnx->set_data_type(pblczero::OnnxModel::FLOAT16);
+
+  if (buffer.find("squares_byte") != std::string::npos) {
+    onnx->set_input_planes("squares_byte");
+  } else {
+    onnx->set_input_planes("squares");
+  }
+
+  onnx->set_output_policy("policy");
+  onnx->set_output_wdl("value");
+  onnx->set_output_mlh("mlh");
+
+  return net;
+}
+
 WeightsFile LoadWeightsFromFile(const std::string& filename) {
+  // Check if it's a raw ONNX file (e.g. Ceres nets).
+  if (IsOnnxFile(filename)) {
+    return LoadRawOnnxFile(filename);
+  }
+
   FloatVectors vecs;
   auto buffer = DecompressGzip(filename);
 
