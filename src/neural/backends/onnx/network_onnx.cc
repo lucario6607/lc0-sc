@@ -447,16 +447,6 @@ void OnnxComputation<DataType>::AddInputBytes(std::vector<uint8_t>&& input) {
                     std::to_string(input.size()) + ".");
   }
 
-#ifdef USE_ONNX_CUDART
-  if (network_->provider_ == OnnxProvider::CUDA ||
-      network_->provider_ == OnnxProvider::TRT) {
-    uint8_t* dest = static_cast<uint8_t*>(inputs_outputs_->input_tensor_data_) +
-                    input_size_ * kCeresTPGTotalBytes;
-    std::memcpy(dest, input.data(), kCeresTPGTotalBytes);
-    input_size_++;
-    return;
-  }
-#endif
   raw_byte_input_.emplace_back(std::move(input));
   input_size_++;
 }
@@ -663,7 +653,6 @@ void OnnxComputation<DataType>::ComputeBlocking() {
     if (network_->provider_ == OnnxProvider::TRT && network_->batch_size_ > 0) {
       batch = std::min((int)input_size_ - (int)i, batch);
     }
-
     auto binding = PrepareInputs(i, batch, step);
 
     Ort::RunOptions options = {};
@@ -695,6 +684,11 @@ void OnnxComputation<DataType>::ComputeBlocking() {
         ReportCUDAErrors(cudaMemcpyAsync(dst, src, byte_count,
                                          cudaMemcpyHostToDevice,
                                          network_->upload_stream_));
+        ReportCUDAErrors(cudaEventRecord(
+            inputs_outputs_->inputs_uploaded_event_, network_->upload_stream_));
+        ReportCUDAErrors(
+            cudaStreamWaitEvent(network_->compute_stream_,
+                                inputs_outputs_->inputs_uploaded_event_));
       } else {
         const char* src_masks =
             static_cast<char*>(inputs_outputs_->input_tensor_data_);
