@@ -109,11 +109,16 @@ class NetworkAsBackendComputation : public BackendComputation {
   AddInputResult AddInput(const EvalPosition& pos,
                           EvalResultPtr result) override {
     if (IsCeresTPGFormat(backend_->input_format_)) {
-      // Ceres TPG path: encode as raw bytes, apply file-flip for black.
+      // Ceres TPG path: encode as raw bytes.
       const PositionHistory history(pos.pos);
       auto byte_input =
           EncodePositionForCeresTPG(history, 8, backend_->fill_empty_history_);
-      int tpg_transform = history.IsBlackToMove() ? FlipTransform : 0;
+      // Ceres TPG uses 180° rotation (63-i) for black.  lc0's internal
+      // coordinates are already rank-flipped, so we need an additional
+      // file-flip (FlipTransform) to go from lc0 coords → model coords
+      // when mapping policy indices.
+      int tpg_transform =
+          history.IsBlackToMove() ? FlipTransform : 0;
       const size_t idx = entries_.emplace_back(
           Entry{.input = {},
                 .byte_input = std::move(byte_input),

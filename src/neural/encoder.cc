@@ -482,6 +482,24 @@ std::vector<uint8_t> EncodePositionForCeresTPG(
                       &rec[(h - 1) * kTPGPieceOneHotSize],
                       kTPGPieceOneHotSize);
           rec[kTPGRepetitionOffset + h] = rec[kTPGRepetitionOffset + h - 1];
+
+          // For the first cascade fill after real history ends, undo the EP
+          // pawn's double-push to match Ceres's PosWithEnPassantUndone().
+          // The opponent pawn on rank 4 is moved back to rank 6 (its original
+          // square before the double push).  This works for both sides because
+          // lc0 mirrors the board for black.
+          if (hist_idx == -1 && has_en_passant) {
+            int ep_file_idx = GetLowestBit(en_passant_bb.as_int()) % 8;
+            if (sq == 32 + ep_file_idx) {
+              // EP pawn's current square (rank 4): write Empty.
+              std::memset(&rec[h * kTPGPieceOneHotSize], 0, kTPGPieceOneHotSize);
+              rec[h * kTPGPieceOneHotSize + 0] = ByteScaled(1.0f);
+            } else if (sq == 48 + ep_file_idx) {
+              // EP pawn's original square (rank 6): write TheirPawn.
+              std::memset(&rec[h * kTPGPieceOneHotSize], 0, kTPGPieceOneHotSize);
+              rec[h * kTPGPieceOneHotSize + 7] = ByteScaled(1.0f);
+            }
+          }
         }
         continue;
       }
@@ -515,9 +533,13 @@ std::vector<uint8_t> EncodePositionForCeresTPG(
     rec[kTPGPlySinceOffset] = ply_since;
 
     // En passant: mark the opponent pawn that can be captured.
+    // lc0's en_passant() stores the EP file as a fake pawn on rank 7 (white)
+    // or rank 0 (black, after Mirror). The opponent pawn that can be captured
+    // en passant is always on rank 4 in the current board representation
+    // (rank 4 for white, original rank 3 mirrored to rank 4 for black).
     if (has_en_passant) {
-      BitBoard sq_bb = BitBoard::FromSquare(Square::FromIdx(sq));
-      if ((en_passant_bb & sq_bb).as_int() != 0) {
+      int ep_file = GetLowestBit(en_passant_bb.as_int()) % 8;
+      if (sq == 32 + ep_file) {  // rank 4, EP file
         rec[kTPGEnPassantOffset] = ByteScaled(1.0f);
       }
     }
@@ -525,10 +547,13 @@ std::vector<uint8_t> EncodePositionForCeresTPG(
     rec[kTPGQPosBlunderOffset] = q_pos_blunder;
     rec[kTPGQNegBlunderOffset] = q_neg_blunder;
 
-    // Rank and file one-hot (mirror file for black).
+    // Rank and file one-hot.
+    // For black, the Ceres reference uses Square.Reversed (rank-flip only, file
+    // stays the same). Since lc0's board is already rank-flipped for black, the
+    // flipped-board rank and file are correct directly — no file mirror needed.
     Square square = Square::FromIdx(sq);
     int enc_rank = square.rank().idx;
-    int enc_file = we_are_black ? (7 - square.file().idx) : square.file().idx;
+    int enc_file = square.file().idx;
 
     rec[kTPGRankOffset + enc_rank] = ByteScaled(1.0f);
     rec[kTPGFileOffset + enc_file] = ByteScaled(1.0f);
