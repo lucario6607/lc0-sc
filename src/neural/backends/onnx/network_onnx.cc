@@ -1138,9 +1138,6 @@ OnnxNetwork::OnnxNetwork(const WeightsFile& file, const OptionsDict& opts,
   if (file.format().network_format().input() ==
       pblczero::NetworkFormat::INPUT_CERES_TPG) {
     ceres_tpg_ = true;
-    if (!inputs_.empty() && inputs_[0] == "squares") {
-      ceres_tpg_float_ = true;
-    }
   }
 
   uint64_t hash = 0;

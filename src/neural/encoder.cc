@@ -457,8 +457,7 @@ std::vector<uint8_t> EncodePositionForCeresTPG(
   // Default blunder and ply-since-last-move values for inference.
   uint8_t q_pos_blunder = ByteScaled(kDefaultQBlunder);
   uint8_t q_neg_blunder = ByteScaled(kDefaultQBlunder);
-  uint8_t ply_since =
-      ByteScaled(PliesSinceLastMoveEncoded(kDefaultPliesSinceLastMove));
+  uint8_t ply_since = 0;
 
   // En passant detection.
   BitBoard en_passant_bb = current_board.en_passant();
@@ -476,11 +475,16 @@ std::vector<uint8_t> EncodePositionForCeresTPG(
       int hist_idx = history_start - h;
       if (hist_idx < 0) {
         if (fill_empty_history == FillEmptyHistory::NO) break;
-        // Cascade fill: copy from previous history slot.
         if (h > 0) {
-          std::memcpy(&rec[h * kTPGPieceOneHotSize],
-                      &rec[(h - 1) * kTPGPieceOneHotSize],
-                      kTPGPieceOneHotSize);
+          int rev_out_sq = out_sq ^ 56;
+          const uint8_t* src = &result[rev_out_sq * bytes_per_square +
+                                       (h - 1) * kTPGPieceOneHotSize];
+          uint8_t* dst = &rec[h * kTPGPieceOneHotSize];
+          dst[0] = src[0];
+          for (int k = 1; k <= 6; k++) {
+            dst[k] = src[k + 6];
+            dst[k + 6] = src[k];
+          }
           rec[kTPGRepetitionOffset + h] = rec[kTPGRepetitionOffset + h - 1];
 
           // For the first cascade fill after real history ends, undo the EP
