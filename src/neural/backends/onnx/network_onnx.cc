@@ -68,11 +68,9 @@ class OnnxNetwork;
 
 static constexpr int kNumOutputPolicy = 1858;
 
-// Ceres value head calibration constants.
-static constexpr float kCeresFractionValue2 = 0.4f;
-static constexpr float kCeresValue1Temperature = 0.55f;
-static constexpr float kCeresValue2Temperature = 1.5f;
-// Ceres TPG ByteScaled divisor (SQUARE_BYTES_DIVISOR = 100 in Ceres C#).
+static constexpr float kDefaultCeresFractionValue2 = 0.4f;
+static constexpr float kDefaultCeresValue1Temperature = 0.55f;
+static constexpr float kDefaultCeresValue2Temperature = 1.5f;
 static constexpr float kCeresTPGByteDivisor = 100.0f;
 
 struct InputsOutputs {
@@ -217,10 +215,11 @@ class OnnxNetwork final : public Network {
   bool fp16_;
   bool bf16_;
   bool cpu_wdl_;
-  bool ceres_tpg_ = false;  // True when loading a Ceres TPG ONNX net.
-  bool ceres_tpg_float_ =
-      false;  // True if the Ceres net expects float16 ('squares') instead of
-              // uint8 ('squares_byte').
+  bool ceres_tpg_ = false;
+  bool ceres_tpg_float_ = false;
+  float ceres_fraction_value2_ = kDefaultCeresFractionValue2;
+  float ceres_value1_temperature_ = kDefaultCeresValue1Temperature;
+  float ceres_value2_temperature_ = kDefaultCeresValue2Temperature;
   // The batch size to use, or -1 for variable.
   int batch_size_;
   // The lower limit for variable batch size.
@@ -802,8 +801,8 @@ void OnnxComputation<DataType>::ComputeBlocking() {
         float d2 = AsFloat(data2[i * 3 + 1]);
         float l2 = AsFloat(data2[i * 3 + 2]);
 
-        const float temp1 = kCeresValue1Temperature;
-        const float temp2 = kCeresValue2Temperature;
+        const float temp1 = network_->ceres_value1_temperature_;
+        const float temp2 = network_->ceres_value2_temperature_;
 
         w /= temp1;
         d /= temp1;
@@ -830,7 +829,7 @@ void OnnxComputation<DataType>::ComputeBlocking() {
         d2 /= sum2;
         l2 /= sum2;
 
-        const float blend = kCeresFractionValue2;
+        const float blend = network_->ceres_fraction_value2_;
         const float blend1 = 1.0f - blend;
         // Blend in probability space using W and L, then infer D as residual.
         w = w * blend1 + w2 * blend;
@@ -847,7 +846,7 @@ void OnnxComputation<DataType>::ComputeBlocking() {
         }
       } else if (network_->cpu_wdl_ || network_->ceres_tpg_) {
         if (network_->ceres_tpg_) {
-          const float ceres_temp = kCeresValue1Temperature;
+          const float ceres_temp = network_->ceres_value1_temperature_;
           w /= ceres_temp;
           d /= ceres_temp;
           l /= ceres_temp;
@@ -1097,6 +1096,13 @@ OnnxNetwork::OnnxNetwork(const WeightsFile& file, const OptionsDict& opts,
   steps_ = opts.GetOrDefault<int>("steps", default_steps);
   min_batch_size_ = opts.GetOrDefault<int>("min_batch", default_min_batch);
 
+  ceres_fraction_value2_ =
+      opts.GetOrDefault<float>("ceres_v2frac", kDefaultCeresFractionValue2);
+  ceres_value1_temperature_ =
+      opts.GetOrDefault<float>("ceres_v1temp", kDefaultCeresValue1Temperature);
+  ceres_value2_temperature_ =
+      opts.GetOrDefault<float>("ceres_v2temp", kDefaultCeresValue2Temperature);
+
   // Sanity checks.
   if (batch_size_ <= 0) {
     batch_size_ = -1;  // Variable batch size.
@@ -1182,6 +1188,12 @@ OnnxNetwork::OnnxNetwork(const WeightsFile& file, const OptionsDict& opts,
         outputs_.push_back("value2");
       }
     }
+
+    CERR << "Ceres TPG network: input=" << inputs_[0]
+         << (wdl2_head_ != -1 ? " (dual value head)" : " (single value head)");
+    CERR << "Ceres V1 temperature=" << ceres_value1_temperature_
+         << ", V2 temperature=" << ceres_value2_temperature_
+         << ", V2 fraction=" << ceres_fraction_value2_;
   }
 }
 
