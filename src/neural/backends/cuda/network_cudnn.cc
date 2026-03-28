@@ -980,7 +980,11 @@ class CudnnNetwork : public Network {
   std::unique_ptr<NetworkComputation> NewComputation() override {
     // Set correct gpu id for this computation (as it might have been called
     // from a different thread).
-    ReportCUDAErrors(cudaSetDevice(gpu_id_));
+    int device = -1;
+    ReportCUDAErrors(cudaGetDevice(&device));
+    if (device != gpu_id_) {
+      ReportCUDAErrors(cudaSetDevice(gpu_id_));
+    }
     return std::make_unique<CudnnNetworkComputation<DataType>>(this, wdl_,
                                                                moves_left_);
   }
@@ -1176,7 +1180,7 @@ void CudnnNetworkComputation<DataType>::CaptureGraph(
 
 template <typename DataType>
 void CudnnNetworkComputation<DataType>::ComputeBlocking() {
-  assert(GetBatchSize() >= 1);
+  if (GetBatchSize() == 0) return;
   if (inputs_outputs_->cuda_graphs_[GetBatchSize() - 1]) {
     std::unique_lock<std::mutex> lock = network_->LockEval();
     network_->GraphLaunch(inputs_outputs_.get(), GetBatchSize());
