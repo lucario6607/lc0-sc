@@ -75,23 +75,8 @@ gen = generator(compile_proto, output: ['@BASENAME@.pb.h'],
     '--cpp_out=@BUILD_DIR@',
     '@INPUT@'])
 
-# Handle submodules.
+# Proto files are tracked directly in libs/lczero-common/proto/.
 git = find_program('git', required: false)
-if run_command('scripts/checkdir.py', 'libs/lczero-common/proto', check : false).returncode() != 0
-  if git.found()
-    if run_command(git, 'status', check : false).returncode() == 0
-      message('updating git submodule libs/lczero-common')
-      run_command(git, 'submodule', 'update', '--init', '--recursive', check : false)
-    else
-      message('cloning lczero-common.git into libs/lczero-common')
-      run_command(git, 'clone', '--depth=1',
-                  'https://github.com/LeelaChessZero/lczero-common.git',
-                  'libs/lczero-common/', check : false)
-    endif
-  else
-    error('Please install git to automatically fetch submodules or download the archives manually from GitHub.')
-  endif
-endif
 
 pb_files = [
   'src/utils/protomessage.cc',
