@@ -383,6 +383,8 @@ class SearchWorker {
 
     float GetMVal(int) const { return lock->m; }
 
+    float GetEVal(int) const { return lock->e; }
+
     float GetPVal(int, int move_id) const {
       const auto& moves = lock->p;
 
