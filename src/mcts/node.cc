@@ -358,6 +358,7 @@ void Node::SetVisitedNumberOfEdges(int value) {
 void Node::MakeNotTerminal() {
   terminal_type_ = Terminal::NonTerminal;
   n_ = 0;
+  weight_ = 0.0f;
 
   // If we have edges, we've been extended (1 visit), so include children too.
   if (edges_) {
@@ -366,6 +367,7 @@ void Node::MakeNotTerminal() {
       const auto n = child.GetN();
       if (n > 0) {
         n_ += n;
+        weight_ += n;
         // Flip Q for opponent.
         // Default values don't matter as n is > 0.
         wl_ += -child.GetWL(0.0f) * n;
@@ -374,8 +376,8 @@ void Node::MakeNotTerminal() {
     }
 
     // Recompute with current eval (instead of network's) and children's eval.
-    wl_ /= n_;
-    d_ /= n_;
+    wl_ /= weight_;
+    d_ /= weight_;
   }
 }
 
@@ -394,41 +396,48 @@ void Node::CancelScoreUpdate(int multivisit) {
   n_in_flight_ -= multivisit;
 }
 
-void Node::FinalizeScoreUpdate(float v, float d, float m, int multivisit) {
-  // Recompute Q.
-  wl_ += multivisit * (v - wl_) / (n_ + multivisit);
-  d_ += multivisit * (d - d_) / (n_ + multivisit);
-  m_ += multivisit * (m - m_) / (n_ + multivisit);
+void Node::FinalizeScoreUpdate(float v, float d, float m, int multivisit,
+                               float multiweight) {
+  // Recompute Q using weight-based averaging.
+  wl_ += multiweight * (v - wl_) / (weight_ + multiweight);
+  d_ += multiweight * (d - d_) / (weight_ + multiweight);
+  m_ += multiweight * (m - m_) / (weight_ + multiweight);
 
-  // Increment N.
+  // Increment N and weight.
   n_ += multivisit;
+  weight_ += multiweight;
   // Decrement virtual loss.
   n_in_flight_ -= multivisit;
 }
 
-void Node::AdjustForTerminal(float v, float d, float m, int multivisit) {
+void Node::AdjustForTerminal(float v, float d, float m, int multivisit,
+                             float multiweight) {
   // Recompute Q.
-  wl_ += multivisit * v / n_;
-  d_ += multivisit * d / n_;
-  m_ += multivisit * m / n_;
+  wl_ += multiweight * v / weight_;
+  d_ += multiweight * d / weight_;
+  m_ += multiweight * m / weight_;
 }
 
-void Node::RevertTerminalVisits(float v, float d, float m, int multivisit) {
+void Node::RevertTerminalVisits(float v, float d, float m, int multivisit,
+                                float multiweight) {
   // Compute new n_ first, as reducing a node to 0 visits is a special case.
   const int n_new = n_ - multivisit;
+  const float weight_new = weight_ - multiweight;
   if (n_new <= 0) {
     // If n_new == 0, reset all relevant values to 0.
     wl_ = 0.0;
     d_ = 1.0;
     m_ = 0.0;
     n_ = 0;
+    weight_ = 0.0f;
   } else {
     // Recompute Q and M.
-    wl_ -= multivisit * (v - wl_) / n_new;
-    d_ -= multivisit * (d - d_) / n_new;
-    m_ -= multivisit * (m - m_) / n_new;
-    // Decrement N.
+    wl_ -= multiweight * (v - wl_) / weight_new;
+    d_ -= multiweight * (d - d_) / weight_new;
+    m_ -= multiweight * (m - m_) / weight_new;
+    // Decrement N and weight.
     n_ -= multivisit;
+    weight_ -= multiweight;
   }
 }
 

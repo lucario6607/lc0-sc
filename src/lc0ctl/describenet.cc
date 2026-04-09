@@ -243,6 +243,9 @@ void ShowNetworkOnnxInfo(const pblczero::Net& weights,
   if (onnx_model.has_output_mlh()) {
     COUT << Justify("Output MLH") << onnx_model.output_mlh();
   }
+  if (onnx_model.has_output_err()) {
+    COUT << Justify("Output Error") << onnx_model.output_err();
+  }
 
   if (!show_onnx_internals) return;
   if (!onnx_model.has_model()) return;

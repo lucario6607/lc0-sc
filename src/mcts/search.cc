@@ -229,6 +229,12 @@ Search::Search(SearchCachedState& state, const NodeTree& tree, Network* network,
                                            played_history_, params_, &tb_hits_,
                                            &root_is_in_dtz_)),
       uci_responder_(std::move(uci_responder)) {
+  use_uncertainty_weighting_ = params_.GetUseUncertaintyWeighting();
+  uncertainty_weighting_cap_ = params_.GetUncertaintyWeightingCap();
+  uncertainty_weighting_coefficient_ =
+      params_.GetUncertaintyWeightingCoefficient();
+  uncertainty_weighting_exponent_ =
+      params_.GetUncertaintyWeightingExponent();
   if (params_.GetMaxConcurrentSearchers() != 0) {
     pending_searchers_.store(params_.GetMaxConcurrentSearchers(),
                              std::memory_order_release);
@@ -626,9 +632,11 @@ std::vector<std::string> Search::GetVerboseStats(Node* node) const {
       print(oss, "(D: ", d, ") ", 5, 3);
       print(oss, "(M: ", n->GetM(), ") ", 4, 1);
       print(oss, "(Q: ", wl + draw_score * d, ") ", 8, 5);
+      print(oss, "(E: ", n->GetE(), ") ", 6, 5);
     } else {
       *oss << "(WL:  -.-----) (D: -.---) (M:  -.-) ";
       print(oss, "(Q: ", fpu, ") ", 8, 5);
+      *oss << "(E: -.-----) ";
     }
   };
   auto print_tail = [&](auto* oss, const auto* n) {
@@ -785,12 +793,14 @@ Eval Search::GetBestEval(Move* move, bool* is_terminal) const {
   float parent_wl = -root_node_->GetWL();
   float parent_d = root_node_->GetD();
   float parent_m = root_node_->GetM();
-  if (!root_node_->HasChildren()) return {parent_wl, parent_d, parent_m};
+  float parent_e = root_node_->GetE();
+  if (!root_node_->HasChildren())
+    return {parent_wl, parent_d, parent_m, parent_e};
   EdgeAndNode best_edge = GetBestChildNoTemperature(root_node_, 0);
   if (move) *move = best_edge.GetMove(played_history_.IsBlackToMove());
   if (is_terminal) *is_terminal = best_edge.IsTerminal();
   return {best_edge.GetWL(parent_wl), best_edge.GetD(parent_d),
-          best_edge.GetM(parent_m - 1) + 1};
+          best_edge.GetM(parent_m - 1) + 1, best_edge.GetE()};
 }
 
 std::pair<Move, Move> Search::GetBestMove() {
@@ -1712,7 +1722,7 @@ void SearchWorker::EnsureNodeTwoFoldCorrectForDepth(Node* child_node,
          node_to_revert = node_to_revert->GetParent()) {
       // Revert all visits on twofold draw when making it non terminal.
       node_to_revert->RevertTerminalVisits(wl, d, m + (float)depth_counter,
-                                           terminal_visits);
+                                           terminal_visits, terminal_visits);
       depth_counter++;
       // Even if original tree still exists, we don't want to revert
       // more than until new root.
@@ -2652,6 +2662,7 @@ void SearchWorker::FetchSingleNodeResult(NodeToProcess* node_to_process,
   node_to_process->v = v;
   node_to_process->d = d;
   node_to_process->m = computation.GetMVal(idx_in_computation);
+  node_to_process->e = computation.GetEVal(idx_in_computation);
   // ...and secondly, the policy data.
   // Calculate maximum first.
   float max_p = -std::numeric_limits<float>::infinity();
@@ -2733,6 +2744,22 @@ void SearchWorker::DoBackupUpdateSingleNode(
   float v_delta = 0.0f;
   float d_delta = 0.0f;
   float m_delta = 0.0f;
+
+  // Compute uncertainty weight for this visit.
+  float avg_weight = 1.0f;
+  if (node_to_process.nn_queried) {
+    float e = node_to_process.e;
+    node->SetE(e);
+    if (search_->use_uncertainty_weighting_) {
+      const float cap = search_->uncertainty_weighting_cap_;
+      const float coefficient = search_->uncertainty_weighting_coefficient_;
+      const float exponent = search_->uncertainty_weighting_exponent_;
+      avg_weight = fmin(cap, coefficient * pow(e, exponent));
+    }
+  }
+  float multiweight =
+      static_cast<float>(node_to_process.multivisit) * avg_weight;
+
   uint32_t solid_threshold =
       static_cast<uint32_t>(params_.GetSolidTreeThreshold());
   for (Node *n = node, *p; n != search_->root_node_->GetParent(); n = p) {
@@ -2745,9 +2772,9 @@ void SearchWorker::DoBackupUpdateSingleNode(
       d = n->GetD();
       m = n->GetM();
     }
-    n->FinalizeScoreUpdate(v, d, m, node_to_process.multivisit);
+    n->FinalizeScoreUpdate(v, d, m, node_to_process.multivisit, multiweight);
     if (n_to_fix > 0 && !n->IsTerminal()) {
-      n->AdjustForTerminal(v_delta, d_delta, m_delta, n_to_fix);
+      n->AdjustForTerminal(v_delta, d_delta, m_delta, n_to_fix, n_to_fix);
     }
     if (n->GetN() >= solid_threshold) {
       if (n->MakeSolid() && n == search_->root_node_) {

@@ -121,6 +121,7 @@ class OnnxComputation final : public NetworkComputation {
   float GetDVal(int sample) const override;
   float GetPVal(int sample, int move_id) const override;
   float GetMVal(int sample) const override;
+  float GetEVal(int sample) const override;
 
  private:
   Ort::IoBinding PrepareInputs(int start, int batch_size, int step);
@@ -196,6 +197,7 @@ class OnnxNetwork final : public Network {
   int wdl_head_ = -1;
   int value_head_ = -1;
   int mlh_head_ = -1;
+  int error_head_ = -1;
   NetworkCapabilities capabilities_;
   bool fp16_;
   bool bf16_;
@@ -414,6 +416,14 @@ float OnnxComputation<DataType>::GetMVal(int sample) const {
   if (network_->mlh_head_ == -1) return 0.0f;
   DataType* data = static_cast<DataType*>(
       inputs_outputs_->output_tensors_data_[network_->mlh_head_]);
+  return AsFloat(data[sample]);
+}
+
+template <typename DataType>
+float OnnxComputation<DataType>::GetEVal(int sample) const {
+  if (network_->error_head_ == -1) return 0.0f;
+  DataType* data = static_cast<DataType*>(
+      inputs_outputs_->output_tensors_data_[network_->error_head_]);
   return AsFloat(data[sample]);
 }
 
@@ -834,6 +844,10 @@ OnnxNetwork::OnnxNetwork(const WeightsFile& file, const OptionsDict& opts,
   if (md.has_output_mlh()) {
     mlh_head_ = outputs_.size();
     outputs_.emplace_back(md.output_mlh());
+  }
+  if (md.has_output_err()) {
+    error_head_ = outputs_.size();
+    outputs_.emplace_back(md.output_err());
   }
   uint64_t hash = 0;
   if (provider == OnnxProvider::TRT) {

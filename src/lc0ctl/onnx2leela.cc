@@ -195,6 +195,10 @@ bool ValidateNetwork(const pblczero::Net& weights, pblczero::ModelProto& onnx) {
       !check_exists(onnx_model.output_mlh(), &outputs)) {
     return false;
   }
+  if (onnx_model.has_output_err() &&
+      !check_exists(onnx_model.output_err(), &outputs)) {
+    return false;
+  }
   for (const auto& input : inputs) {
     CERR << "Warning: ONNX input node '" << input << "' not used.";
   }

@@ -205,6 +205,10 @@ class Search {
   std::unique_ptr<UciResponder> uci_responder_;
   ContemptMode contempt_mode_;
   std::vector<float> root_utility_offsets_;
+  bool use_uncertainty_weighting_;
+  float uncertainty_weighting_cap_;
+  float uncertainty_weighting_coefficient_;
+  float uncertainty_weighting_exponent_;
   friend class SearchWorker;
 };
 
@@ -326,6 +330,8 @@ class SearchWorker {
     float d;
     // Estimated remaining plies left.
     float m;
+    // Uncertainty/error estimate from NN.
+    float e;
     // TB result for assymetric TB probe. It is used to correct NN evaluation.
     enum {
       WDL_UNKNOWN,

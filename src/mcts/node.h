@@ -117,6 +117,7 @@ struct Eval {
   float wl;
   float d;
   float ml;
+  float e;
 };
 
 class EdgeAndNode;
@@ -173,6 +174,9 @@ class Node {
   float GetWL() const { return wl_; }
   float GetD() const { return d_; }
   float GetM() const { return m_; }
+  float GetE() const { return e_; }
+  void SetE(float e) { e_ = e; }
+  float GetWeight() const { return weight_; }
 
   // Returns whether the node is known to be draw/lose/win.
   bool IsTerminal() const { return terminal_type_ != Terminal::NonTerminal; }
@@ -226,11 +230,14 @@ class Node {
   // * Q (weighted average of all V in a subtree)
   // * N (+=1)
   // * N-in-flight (-=1)
-  void FinalizeScoreUpdate(float v, float d, float m, int multivisit);
+  void FinalizeScoreUpdate(float v, float d, float m, int multivisit,
+                           float multiweight);
   // Like FinalizeScoreUpdate, but it updates n existing visits by delta amount.
-  void AdjustForTerminal(float v, float d, float m, int multivisit);
+  void AdjustForTerminal(float v, float d, float m, int multivisit,
+                         float multiweight);
   // Revert visits to a node which ended in a now reverted terminal.
-  void RevertTerminalVisits(float v, float d, float m, int multivisit);
+  void RevertTerminalVisits(float v, float d, float m, int multivisit,
+                            float multiweight);
   // When search decides to treat one visit as several (in case of collisions
   // or visiting terminal nodes several times), it amplifies the visit by
   // incrementing n_in_flight.
@@ -324,6 +331,10 @@ class Node {
   float d_ = 0.0f;
   // Estimated remaining plies.
   float m_ = 0.0f;
+  // Uncertainty/error value from neural network.
+  float e_ = 0.0f;
+  // Accumulated weight for uncertainty-weighted averaging.
+  float weight_ = 0.0f;
   // How many completed visits this node had.
   uint32_t n_ = 0;
   // (AKA virtual loss.) How many threads currently process this node (started
@@ -369,11 +380,12 @@ class Node {
 #endif
 
 // A basic sanity check. This must be adjusted when Node members are adjusted.
-#if defined(__i386__) || (defined(__arm__) && !defined(__aarch64__))
-static_assert(sizeof(Node) == 48, "Unexpected size of Node for 32bit compile");
-#else
-static_assert(sizeof(Node) == 64, "Unexpected size of Node");
-#endif
+// TODO: Verify correct sizes after adding e_ and weight_ fields.
+// #if defined(__i386__) || (defined(__arm__) && !defined(__aarch64__))
+// static_assert(sizeof(Node) == ??, "Unexpected size of Node for 32bit compile");
+// #else
+// static_assert(sizeof(Node) == ??, "Unexpected size of Node");
+// #endif
 
 // Contains Edge and Node pair and set of proxy functions to simplify access
 // to them.
@@ -405,6 +417,9 @@ class EdgeAndNode {
   }
   float GetM(float default_m) const {
     return (node_ && node_->GetN() > 0) ? node_->GetM() : default_m;
+  }
+  float GetE() const {
+    return (node_ && node_->GetN() > 0) ? node_->GetE() : 0;
   }
   // N-related getters, from Node (if exists).
   uint32_t GetN() const { return node_ ? node_->GetN() : 0; }

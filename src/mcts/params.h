@@ -235,6 +235,18 @@ class SearchParams {
     return kMaxCollisionVisitsScalingPower;
   }
   bool GetSearchSpinBackoff() const { return kSearchSpinBackoff; }
+  bool GetUseUncertaintyWeighting() const {
+    return options_.Get<bool>(kUseUncertaintyWeightingId);
+  }
+  float GetUncertaintyWeightingCap() const {
+    return options_.Get<float>(kUncertaintyWeightingCapId);
+  }
+  float GetUncertaintyWeightingCoefficient() const {
+    return options_.Get<float>(kUncertaintyWeightingCoefficientId);
+  }
+  float GetUncertaintyWeightingExponent() const {
+    return options_.Get<float>(kUncertaintyWeightingExponentId);
+  }
 
   // Search parameter IDs.
   static const OptionId kMiniBatchSizeId;
@@ -325,6 +337,10 @@ class SearchParams {
   static const OptionId kUCIOpponentId;
   static const OptionId kUCIRatingAdvId;
   static const OptionId kSearchSpinBackoffId;
+  static const OptionId kUseUncertaintyWeightingId;
+  static const OptionId kUncertaintyWeightingCapId;
+  static const OptionId kUncertaintyWeightingCoefficientId;
+  static const OptionId kUncertaintyWeightingExponentId;
 
  private:
   const OptionsDict& options_;

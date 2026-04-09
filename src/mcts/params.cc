@@ -612,6 +612,18 @@ const OptionId SearchParams::kUCIRatingAdvId{
 const OptionId SearchParams::kSearchSpinBackoffId{
     "search-spin-backoff", "SearchSpinBackoff",
     "Enable backoff for the spin lock that acquires available searcher."};
+const OptionId SearchParams::kUseUncertaintyWeightingId{
+    "use-uncertainty-weighting", "UseUncertaintyWeighting",
+    "Enable uncertainty-based visit weighting."};
+const OptionId SearchParams::kUncertaintyWeightingCapId{
+    "uncertainty-weighting-cap", "UncertaintyWeightingCap",
+    "Maximum weight per visit when using uncertainty weighting."};
+const OptionId SearchParams::kUncertaintyWeightingCoefficientId{
+    "uncertainty-weighting-coefficient", "UncertaintyWeightingCoefficient",
+    "Coefficient for uncertainty weighting formula."};
+const OptionId SearchParams::kUncertaintyWeightingExponentId{
+    "uncertainty-weighting-exponent", "UncertaintyWeightingExponent",
+    "Exponent for uncertainty weighting formula."};
 
 void SearchParams::Populate(OptionsParser* options) {
   // Here the uci optimized defaults" are set.
@@ -749,6 +761,12 @@ void SearchParams::Populate(OptionsParser* options) {
   options->Add<StringOption>(kUCIOpponentId);
   options->Add<FloatOption>(kUCIRatingAdvId, -10000.0f, 10000.0f) = 0.0f;
   options->Add<BoolOption>(kSearchSpinBackoffId) = false;
+  options->Add<BoolOption>(kUseUncertaintyWeightingId) = false;
+  options->Add<FloatOption>(kUncertaintyWeightingCapId, 0.0f, 10.0f) = 1.0f;
+  options->Add<FloatOption>(kUncertaintyWeightingCoefficientId, 0.0f, 10.0f) =
+      0.13f;
+  options->Add<FloatOption>(kUncertaintyWeightingExponentId, -10.0f, 0.0f) =
+      -1.76f;
 
   options->HideOption(kNoiseEpsilonId);
   options->HideOption(kNoiseAlphaId);
