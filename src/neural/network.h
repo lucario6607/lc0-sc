@@ -77,6 +77,18 @@ class NetworkComputation {
   // Returns P value @move_id of @sample.
   virtual float GetPVal(int sample, int move_id) const = 0;
   virtual float GetMVal(int sample) const = 0;
+  // Returns the action-head (W,D,L) for @move_id of @sample (Ceres C3 nets:
+  // per-move value estimates, softmaxed). Returns false when the loaded net
+  // has no action head or the backend does not support it.
+  virtual bool GetActionWDL(int sample, int move_id, float* w, float* d,
+                            float* l) const {
+    (void)sample;
+    (void)move_id;
+    (void)w;
+    (void)d;
+    (void)l;
+    return false;
+  }
   virtual ~NetworkComputation() = default;
 };
 

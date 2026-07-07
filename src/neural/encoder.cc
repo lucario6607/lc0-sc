@@ -439,9 +439,8 @@ std::vector<uint8_t> EncodePositionForCeresTPG(
   auto positions = history.GetPositions();
   const Position& current_pos = positions.back();
   const ChessBoard& current_board = current_pos.GetBoard();
-  const bool we_are_black = current_board.flipped();
 
-  // Castling rights (same for all squares).
+  // Castling rights from side-to-move perspective (same for all squares).
   uint8_t can_oo =
       ByteScaled(current_board.castlings().we_can_00() ? 1.0f : 0.0f);
   uint8_t can_ooo =
@@ -457,74 +456,120 @@ std::vector<uint8_t> EncodePositionForCeresTPG(
   // Default blunder and ply-since-last-move values for inference.
   uint8_t q_pos_blunder = ByteScaled(kDefaultQBlunder);
   uint8_t q_neg_blunder = ByteScaled(kDefaultQBlunder);
+  // Ceres's ONNX inference path (NNEvaluatorOptionsCeres.PlySinceLastMoveMode)
+  // defaults to "Zero", which leaves this byte at 0 rather than using the
+  // DEFAULT_PLIES_SINCE_LAST_PIECE_MOVED_IF_STARTPOS constant (that constant
+  // is only used by Ceres's training-data generator, a different code path).
+  // Verified against the real Ceres engine via the netdump/DUMPNET harness.
   uint8_t ply_since = 0;
-
-  // En passant detection.
-  BitBoard en_passant_bb = current_board.en_passant();
-  bool has_en_passant = !en_passant_bb.empty();
 
   int history_start = static_cast<int>(positions.size()) - 1;
 
-  for (int sq = 0; sq < 64; sq++) {
-    // Mirror file for black (lc0 already mirrors rank).
-    int out_sq = we_are_black ? (sq ^ 7) : sq;
-    uint8_t* rec = &result[out_sq * bytes_per_square];
-
-    // Write piece one-hot for each history position.
-    for (int h = 0; h < std::min(history_planes, kTPGHistoryPositions); h++) {
-      int hist_idx = history_start - h;
-      if (hist_idx < 0) {
-        if (fill_empty_history == FillEmptyHistory::NO) break;
-        if (h > 0) {
-          int rev_out_sq = out_sq ^ 56;
-          const uint8_t* src = &result[rev_out_sq * bytes_per_square +
-                                       (h - 1) * kTPGPieceOneHotSize];
-          uint8_t* dst = &rec[h * kTPGPieceOneHotSize];
-          dst[0] = src[0];
-          for (int k = 1; k <= 6; k++) {
-            dst[k] = src[k + 6];
-            dst[k + 6] = src[k];
-          }
-          rec[kTPGRepetitionOffset + h] = rec[kTPGRepetitionOffset + h - 1];
-
-          // For the first cascade fill after real history ends, undo the EP
-          // pawn's double-push to match Ceres's PosWithEnPassantUndone().
-          // The opponent pawn on rank 4 is moved back to rank 6 (its original
-          // square before the double push).  This works for both sides because
-          // lc0 mirrors the board for black.
-          if (hist_idx == -1 && has_en_passant) {
-            int ep_file_idx = GetLowestBit(en_passant_bb.as_int()) % 8;
-            if (sq == 32 + ep_file_idx) {
-              // EP pawn's current square (rank 4): write Empty.
-              std::memset(&rec[h * kTPGPieceOneHotSize], 0, kTPGPieceOneHotSize);
-              rec[h * kTPGPieceOneHotSize + 0] = ByteScaled(1.0f);
-            } else if (sq == 48 + ep_file_idx) {
-              // EP pawn's original square (rank 6): write TheirPawn.
-              std::memset(&rec[h * kTPGPieceOneHotSize], 0, kTPGPieceOneHotSize);
-              rec[h * kTPGPieceOneHotSize + 7] = ByteScaled(1.0f);
-            }
-          }
-        }
-        continue;
+  // En passant detection. Ceres derives the IsEnPassant byte from the board
+  // DIFF between history planes 0 and 1 (EncodedPositionBoards.
+  // EnPassantOpportunityBetweenBoards), never from FEN misc info, and flags
+  // ANY opponent double-push -- unlike lc0's own en_passant() flag, which
+  // board.cc only sets when an enemy pawn can actually capture. Replicate
+  // Ceres's exact 4-condition check: their pawn stood on our rank 7 in the
+  // prior position, is gone from there now, was absent from our rank 5
+  // before, and stands there now. With no real prior position, Ceres's
+  // plane 1 is a fill copy of plane 0, the diff is empty, and no en passant
+  // is emitted -- hence the history_start >= 1 requirement.
+  // The prior position's lc0 board is stored from the OPPONENT's
+  // perspective, so its squares are queried through ^56 with ours/theirs
+  // swapped (same rule as odd history planes). Ceres scans file h down to
+  // file a (its loop walks square indices downward) and takes the first hit.
+  int ep_file = -1;
+  if (history_start >= 1) {
+    const ChessBoard& prev_board = positions[history_start - 1].GetBoard();
+    for (int f = 7; f >= 0; f--) {
+      BitBoard src_now = BitBoard::FromSquare(Square::FromIdx(48 + f));
+      BitBoard tgt_now = BitBoard::FromSquare(Square::FromIdx(32 + f));
+      BitBoard src_prev = BitBoard::FromSquare(Square::FromIdx((48 + f) ^ 56));
+      BitBoard tgt_prev = BitBoard::FromSquare(Square::FromIdx((32 + f) ^ 56));
+      bool prior_their_pawn_on_src =
+          !(prev_board.ours() & prev_board.pawns() & src_prev).empty();
+      bool prior_their_pawn_on_tgt =
+          !(prev_board.ours() & prev_board.pawns() & tgt_prev).empty();
+      bool cur_their_pawn_on_src =
+          !(current_board.theirs() & current_board.pawns() & src_now).empty();
+      bool cur_their_pawn_on_tgt =
+          !(current_board.theirs() & current_board.pawns() & tgt_now).empty();
+      if (prior_their_pawn_on_src && !prior_their_pawn_on_tgt &&
+          !cur_their_pawn_on_src && cur_their_pawn_on_tgt) {
+        ep_file = f;
+        break;
       }
-      const ChessBoard& hist_board = positions[hist_idx].GetBoard();
+    }
+  }
 
-      bool invert_colors = false;
-      int query_sq = sq;
+  const int effective_planes = std::min(history_planes, kTPGHistoryPositions);
+  // L = index of the last available real history frame (h=0 is always real:
+  // it's the current position).
+  const int last_real_h = std::min(history_start, effective_planes - 1);
 
-      if (h % 2 == 1) {
-        // Odd history positions correspond to the opponent's turn.
-        // In lc0, boards are stored relative to the side to move.
-        // Thus, the opponent's board is vertically mirrored relative to ours.
-        invert_colors = true;
-        query_sq = sq ^ 56;  // Flip the rank to mirror vertically
-      }
+  // Pre-pass: write every *real* history frame (h = 0..last_real_h) for
+  // every square before the padding pass below. Padding (see below) derives
+  // from last_real_h's record, potentially reading a different square's
+  // record than the one it writes to (query_sq = sq ^ 56 for odd relative
+  // offsets) -- which may belong to a square not yet visited by a
+  // single-pass per-square loop. Precomputing all real frames up front
+  // avoids that ordering hazard entirely.
+  //
+  // Per Ceres's TPGSquareRecord.WritePosPieces: for h=0 the position passed
+  // in has already been normalized (GetHistoryPosition forces it to
+  // pos.IsWhite==true), which makes its own internal "needs reversal" checks
+  // dead code -- so Ceres's h=0 output slot N is, net of composing that
+  // normalization with Position.Reversed's rank-flip-plus-color-swap,
+  // exactly current_board's own coordinate N with no further transform.
+  // The same holds for every other real frame h>0, except that -- since
+  // positions alternate side-to-move every ply, while Ceres always
+  // re-derives "our piece" relative to the CURRENT mover -- the ours/theirs
+  // reading must flip every other ply: even h reads the historical
+  // position's own board directly (an even number of plies back is always
+  // the current mover's turn); odd h needs both a rank flip (^56) and an
+  // ours/theirs swap (the historical mover there is the opponent).
+  // (Verified against real Ceres output via the netdump/DUMPNET harness.)
+  for (int h = 0; h <= last_real_h; h++) {
+    int hist_idx = history_start - h;
+    bool invert_colors = (h % 2) == 1;
+    const ChessBoard& hist_board =
+        h == 0 ? current_board : positions[hist_idx].GetBoard();
+    int reps = positions[hist_idx].GetRepetitions();
+    uint8_t rep_byte = ByteScaled(std::min(reps, 1) * 1.0f);
+    for (int sq = 0; sq < 64; sq++) {
+      int query_sq = invert_colors ? (sq ^ 56) : sq;
+      uint8_t* rec = &result[sq * bytes_per_square];
       WritePieceOneHot(hist_board, query_sq, invert_colors,
                        &rec[h * kTPGPieceOneHotSize]);
+      rec[kTPGRepetitionOffset + h] = rep_byte;
+    }
+  }
 
-      // Repetition count for this history position.
-      int reps = positions[hist_idx].GetRepetitions();
-      rec[kTPGRepetitionOffset + h] = ByteScaled(std::min(reps, 1) * 1.0f);
+  for (int sq = 0; sq < 64; sq++) {
+    uint8_t* rec = &result[sq * bytes_per_square];
+
+    // Padding for history beyond the real game record. Ceres's inference
+    // path (NNEvaluator.Evaluate / DUMPNET, both via
+    // EncodedPositionBatchBuilder.Add(PositionWithHistory, fillInMissingPlanes:
+    // true) -> SetFromSequentialPositions) fills missing history boards with
+    // exact byte-copies of the OLDEST real board. Those filled boards are
+    // never "empty", so GetHistoryPosition's Reversed()-chain fallback never
+    // executes, and after the parity normalizations in HistoryPosition /
+    // GetHistoryPosition / WritePieceHistory cancel out, each padded plane is
+    // an exact byte-copy of the last real frame's plane -- same square, no
+    // rank flip, no ours/theirs swap. (Verified by reading
+    // SetFromSequentialPositions, HistoryPosition and WritePosPieces in the
+    // Ceres C# source; the previously implemented alternating
+    // Position.Reversed() chain only describes the never-taken empty-board
+    // path, and coincided with this rule in earlier passing tests only
+    // because their padding source was the flip-symmetric startpos.)
+    for (int h = last_real_h + 1; h < effective_planes; h++) {
+      if (fill_empty_history == FillEmptyHistory::NO) break;
+      std::memcpy(&rec[h * kTPGPieceOneHotSize],
+                  &rec[last_real_h * kTPGPieceOneHotSize],
+                  kTPGPieceOneHotSize);
+      rec[kTPGRepetitionOffset + h] = rec[kTPGRepetitionOffset + last_real_h];
     }
 
     // Shared per-square metadata.
@@ -536,25 +581,21 @@ std::vector<uint8_t> EncodePositionForCeresTPG(
     rec[kTPGMove50Offset] = move50;
     rec[kTPGPlySinceOffset] = ply_since;
 
-    // En passant: mark the opponent pawn that can be captured.
-    // lc0's en_passant() stores the EP file as a fake pawn on rank 7 (white)
-    // or rank 0 (black, after Mirror). The opponent pawn that can be captured
-    // en passant is always on rank 4 in the current board representation
-    // (rank 4 for white, original rank 3 mirrored to rank 4 for black).
-    if (has_en_passant) {
-      int ep_file = GetLowestBit(en_passant_bb.as_int()) % 8;
-      if (sq == 32 + ep_file) {  // rank 4, EP file
-        rec[kTPGEnPassantOffset] = ByteScaled(1.0f);
-      }
+    // En passant: mark the just-double-pushed opponent pawn (see the
+    // diff-based detection above). current_board is already in
+    // mover-relative coordinates, so this is always rank 4 (sq ==
+    // 32 + ep_file) regardless of which side is actually to move.
+    if (ep_file >= 0 && sq == 32 + ep_file) {
+      rec[kTPGEnPassantOffset] = ByteScaled(1.0f);
     }
 
     rec[kTPGQPosBlunderOffset] = q_pos_blunder;
     rec[kTPGQNegBlunderOffset] = q_neg_blunder;
 
-    // Rank and file one-hot.
-    // For black, the Ceres reference uses Square.Reversed (rank-flip only, file
-    // stays the same). Since lc0's board is already rank-flipped for black, the
-    // flipped-board rank and file are correct directly — no file mirror needed.
+    // Rank and file one-hot: always the literal grid position of the output
+    // slot itself (Ceres's own rank/file assignment is likewise always
+    // computed post-normalization, i.e. independent of which side is
+    // actually to move).
     Square square = Square::FromIdx(sq);
     int enc_rank = square.rank().idx;
     int enc_file = square.file().idx;

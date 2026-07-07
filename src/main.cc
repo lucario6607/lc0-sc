@@ -34,6 +34,7 @@
 #include "tools/benchmark.h"
 #include "tools/describenet.h"
 #include "tools/leela2onnx.h"
+#include "tools/netdump.h"
 #include "tools/onnx2leela.h"
 #include "utils/commandline.h"
 #include "utils/esc_codes.h"
@@ -101,6 +102,8 @@ int main(int argc, const char** argv) {
                                 "Convert ONNX network to Leela net.");
       CommandLine::RegisterMode("describenet",
                                 "Shows details about the Leela network.");
+      CommandLine::RegisterMode(
+          "netdump", "Dumps raw Ceres TPG encoding and NN output for a FEN.");
     }
     for (const std::string_view search_name :
          SearchManager::Get()->GetSearchNames()) {
@@ -132,6 +135,8 @@ int main(int argc, const char** argv) {
       lczero::ConvertOnnxToLeela();
     } else if (CommandLine::ConsumeCommand("describenet")) {
       lczero::DescribeNetworkCmd();
+    } else if (CommandLine::ConsumeCommand("netdump")) {
+      lczero::NetDumpCmd();
     } else {
       lczero::ChooseAndRunEngine();
     }

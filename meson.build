@@ -195,6 +195,7 @@ files += [
   'src/tools/benchmark.cc',
   'src/tools/describenet.cc',
   'src/tools/leela2onnx.cc',
+  'src/tools/netdump.cc',
   'src/tools/onnx2leela.cc',
   'src/utils/histogram.cc',
   'src/utils/numa.cc',

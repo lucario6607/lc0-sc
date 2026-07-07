@@ -54,6 +54,10 @@ struct EvalResultPtr {
   float* d = nullptr;
   float* m = nullptr;
   std::span<float> p = {};
+  // Optional per-move action-head output (Ceres C3 nets): 3 floats (W,D,L)
+  // per legal move, in the same move order as p. Only filled when non-empty
+  // and the loaded net actually has an action head.
+  std::span<float> action = {};
 };
 
 struct EvalResult {
@@ -61,9 +65,11 @@ struct EvalResult {
   float d;
   float m;
   std::vector<float> p;
+  // 3 floats (W,D,L) per legal move; resize to 3*num_moves to request.
+  std::vector<float> action;
 
   EvalResultPtr AsPtr() {
-    return EvalResultPtr{.q = &q, .d = &d, .m = &m, .p = p};
+    return EvalResultPtr{.q = &q, .d = &d, .m = &m, .p = p, .action = action};
   }
 };
 
