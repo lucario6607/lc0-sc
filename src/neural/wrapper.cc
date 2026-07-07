@@ -113,19 +113,23 @@ class NetworkAsBackendComputation : public BackendComputation {
       const PositionHistory history(pos.pos);
       auto byte_input =
           EncodePositionForCeresTPG(history, 8, backend_->fill_empty_history_);
-      // Ceres TPG uses 180° rotation (63-i) for black.  lc0's internal
-      // coordinates are already rank-flipped, so we need an additional
-      // file-flip (FlipTransform) to go from lc0 coords → model coords
-      // when mapping policy indices.
-      int tpg_transform =
-          history.IsBlackToMove() ? FlipTransform : 0;
+      // Policy indices: Ceres maps each legal move to the standard lc0
+      // 1858-entry policy table in mover-relative coordinates
+      // (ConverterMGMoveEncodedMove.MGChessMoveToEncodedMove), which is
+      // exactly the frame lc0's internal moves are already in -- so no
+      // transform at all, for either color. (The 63-i square-record
+      // reordering Ceres applies for black affects only the order of the
+      // input sequence, which the transformer is invariant to; it has no
+      // bearing on policy-output indexing. A FlipTransform previously
+      // applied here made lc0 read the file-mirrored move's logit for
+      // every black move, e.g. d2d4's logit for e7e5.)
       const size_t idx = entries_.emplace_back(
           Entry{.input = {},
                 .byte_input = std::move(byte_input),
                 .legal_moves =
                     MoveList(pos.legal_moves.begin(), pos.legal_moves.end()),
                 .result = result,
-                .transform = tpg_transform});
+                .transform = 0});
       return ENQUEUED_FOR_EVAL;
     }
     int transform;
@@ -157,6 +161,25 @@ class NetworkAsBackendComputation : public BackendComputation {
       if (result.d) *result.d = computation_->GetDVal(i);
       if (result.m) *result.m = computation_->GetMVal(i);
       if (!result.p.empty()) SoftmaxPolicy(result.p, computation_.get(), i);
+      if (!result.action.empty()) FillActionWDL(result.action, i);
+    }
+  }
+
+  // Fills dst with the action head's softmaxed (W,D,L) per legal move (3
+  // floats per move, same order as the policy span). Leaves dst untouched if
+  // the net has no action head.
+  void FillActionWDL(std::span<float> dst, int idx) {
+    const std::vector<Move>& moves = entries_[idx].legal_moves;
+    const int transform = entries_[idx].transform;
+    for (size_t im = 0; im < moves.size() && im * 3 + 2 < dst.size(); im++) {
+      float w, d, l;
+      if (!computation_->GetActionWDL(
+              idx, MoveToNNIndex(moves[im], transform), &w, &d, &l)) {
+        return;
+      }
+      dst[im * 3 + 0] = w;
+      dst[im * 3 + 1] = d;
+      dst[im * 3 + 2] = l;
     }
   }
 

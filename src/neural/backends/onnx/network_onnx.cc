@@ -133,6 +133,8 @@ class OnnxComputation final : public NetworkComputation {
   float GetDVal(int sample) const override;
   float GetPVal(int sample, int move_id) const override;
   float GetMVal(int sample) const override;
+  bool GetActionWDL(int sample, int move_id, float* w, float* d,
+                    float* l) const override;
 
  private:
   Ort::IoBinding PrepareInputs(int start, int batch_size, int step);
@@ -211,6 +213,7 @@ class OnnxNetwork final : public Network {
   int wdl2_head_ = -1;
   int value_head_ = -1;
   int mlh_head_ = -1;
+  int action_head_ = -1;
   NetworkCapabilities capabilities_;
   bool fp16_;
   bool bf16_;
@@ -249,9 +252,11 @@ InputsOutputs::InputsOutputs(OnnxNetwork* network)
   int wdl2_head = network->wdl2_head_;
   int policy_head = network->policy_head_;
   int mlh_head = network->mlh_head_;
+  int action_head = network->action_head_;
   int data_size = (network->fp16_ | network->bf16_) ? 2 : 4;
-  int outputs_size =
-      std::max({value_head, wdl_head, wdl2_head, policy_head, mlh_head}) + 1;
+  int outputs_size = std::max({value_head, wdl_head, wdl2_head, policy_head,
+                               mlh_head, action_head}) +
+                     1;
   output_tensors_data_.resize(outputs_size);
   output_tensors_data_device_.resize(outputs_size);
   output_tensors_step_.resize(outputs_size);
@@ -270,6 +275,10 @@ InputsOutputs::InputsOutputs(OnnxNetwork* network)
   }
   if (mlh_head != -1) {
     output_tensors_step_[mlh_head] = 1;
+  }
+  if (action_head != -1) {
+    // Action head: (W,D,L) logits per policy-table move slot.
+    output_tensors_step_[action_head] = kNumOutputPolicy * 3;
   }
 
   switch (provider_) {
@@ -497,10 +506,31 @@ float OnnxComputation<DataType>::GetMVal(int sample) const {
   DataType* data = static_cast<DataType*>(
       inputs_outputs_->output_tensors_data_[network_->mlh_head_]);
   float m_val = AsFloat(data[sample]);
-  if (network_->ceres_tpg_) {
-    m_val *= 100.0f;
-  }
   return m_val;
+}
+
+template <typename DataType>
+bool OnnxComputation<DataType>::GetActionWDL(int sample, int move_id, float* w,
+                                             float* d, float* l) const {
+  if (network_->action_head_ == -1) return false;
+  const DataType* data = static_cast<DataType*>(
+      inputs_outputs_->output_tensors_data_[network_->action_head_]);
+  const size_t base =
+      static_cast<size_t>(sample) * kNumOutputPolicy * 3 + move_id * 3;
+  // Softmax over the (W,D,L) logits of this single move, as Ceres does
+  // (PositionEvaluationBatch: per-move 3-way softmax, no temperature).
+  float a0 = AsFloat(data[base + 0]);
+  float a1 = AsFloat(data[base + 1]);
+  float a2 = AsFloat(data[base + 2]);
+  float max_logit = std::max({a0, a1, a2});
+  float e0 = std::exp(a0 - max_logit);
+  float e1 = std::exp(a1 - max_logit);
+  float e2 = std::exp(a2 - max_logit);
+  float total = e0 + e1 + e2;
+  *w = e0 / total;
+  *d = e1 / total;
+  *l = e2 / total;
+  return true;
 }
 
 template <typename DataType>
@@ -538,15 +568,23 @@ Ort::IoBinding OnnxComputation<DataType>::PrepareInputs(int start,
     // Bind outputs (float16 outputs).
     for (size_t i = 0; i < inputs_outputs_->output_tensors_step_.size(); i++) {
       int size = inputs_outputs_->output_tensors_step_[i];
-      int64_t dims[] = {batch_size, size};
-      binding.BindOutput(
-          network_->outputs_[i].c_str(),
-          Ort::Value::CreateTensor<DataType>(
-              inputs_outputs_->memory_info_,
-              static_cast<DataType*>(
-                  inputs_outputs_->output_tensors_data_device_[i]) +
-                  start * size,
-              size * batch_size, dims, 2));
+      DataType* buffer = static_cast<DataType*>(
+                             inputs_outputs_->output_tensors_data_device_[i]) +
+                         start * size;
+      if (static_cast<int>(i) == network_->action_head_) {
+        // The action output is rank-3: [batch, 1858, 3].
+        int64_t action_dims[] = {batch_size, kNumOutputPolicy, 3};
+        binding.BindOutput(network_->outputs_[i].c_str(),
+                           Ort::Value::CreateTensor<DataType>(
+                               inputs_outputs_->memory_info_, buffer,
+                               size * batch_size, action_dims, 3));
+      } else {
+        int64_t dims[] = {batch_size, size};
+        binding.BindOutput(network_->outputs_[i].c_str(),
+                           Ort::Value::CreateTensor<DataType>(
+                               inputs_outputs_->memory_info_, buffer,
+                               size * batch_size, dims, 2));
+      }
     }
 
     // Bind input as UINT8 or FLOAT16 tensor with shape [batch, 64, 137].
@@ -1183,11 +1221,26 @@ OnnxNetwork::OnnxNetwork(const WeightsFile& file, const OptionsDict& opts,
       if (oname == "value2") {
         wdl2_head_ = outputs_.size();
         outputs_.push_back("value2");
+      } else if (oname == "action") {
+        // C3 nets have a real action head shaped [batch, 1858, 3]; C1 nets
+        // carry a vestigial 1-element output of the same name, so check the
+        // per-position element count before treating it as an action head.
+        auto type_info = session_.front().GetOutputTypeInfo(i);
+        auto shape = type_info.GetTensorTypeAndShapeInfo().GetShape();
+        int64_t per_position = 1;
+        for (size_t dim = 1; dim < shape.size(); dim++) {
+          if (shape[dim] > 0) per_position *= shape[dim];
+        }
+        if (per_position == static_cast<int64_t>(kNumOutputPolicy) * 3) {
+          action_head_ = outputs_.size();
+          outputs_.push_back("action");
+        }
       }
     }
 
     CERR << "Ceres TPG network: input=" << inputs_[0]
-         << (wdl2_head_ != -1 ? " (dual value head)" : " (single value head)");
+         << (wdl2_head_ != -1 ? " (dual value head)" : " (single value head)")
+         << (action_head_ != -1 ? ", action head" : "");
     CERR << "Ceres V1 temperature=" << ceres_value1_temperature_
          << ", V2 temperature=" << ceres_value2_temperature_
          << ", V2 fraction=" << ceres_fraction_value2_;
