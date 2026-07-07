@@ -52,6 +52,20 @@ namespace {
 // Maximum delay between outputting "uci info" when nothing interesting happens.
 const int kUciInfoMinimumFrequencyMs = 5000;
 
+// A Node's own wl_/d_/m_ are running averages of the values backed up through
+// this edge, and go stale whenever the shared LowNode is a transposition that
+// has been visited through other parents. For *selection* the theoretically
+// correct MCGS formulation is to use the low node's current value directly
+// (flip WL, increment M); the per-edge averages are only needed to keep
+// ancestor averages consistent during backup. Returns true when the low node
+// has newer information than @node. Terminal Nodes keep their own (proven)
+// values. Note cpuct/puct_mult already read counts through the low node
+// (GetTotalVisits/GetChildrenVisits), so this also makes Q consistent with N.
+inline bool HasFresherLowNode(const Node* node) {
+  const auto& low_node = node->GetLowNode();
+  return low_node && !node->IsTerminal() && low_node->GetN() > node->GetN();
+}
+
 MoveList MakeRootMoveFilter(const MoveList& searchmoves,
                             SyzygyTablebase* syzygy_tb,
                             const PositionHistory& history, bool fast_play,
@@ -104,15 +118,22 @@ class MEvaluator {
   void SetParent(const Node* parent) {
     assert(parent);
     if (enabled_) {
-      parent_m_ = parent->GetM();
-      parent_within_threshold_ = WithinThreshold(parent, q_threshold_);
+      if (HasFresherLowNode(parent)) {
+        const auto& low_node = parent->GetLowNode();
+        parent_m_ = low_node->GetM() + 1;
+        parent_within_threshold_ = std::abs(low_node->GetWL()) > q_threshold_;
+      } else {
+        parent_m_ = parent->GetM();
+        parent_within_threshold_ = WithinThreshold(parent, q_threshold_);
+      }
     }
   }
 
   // Calculates the utility for favoring shorter wins and longer losses.
-  float GetMUtility(Node* child, float q) const {
+  // @child_m is the child's moves-left estimate in edge-node units (i.e.
+  // LowNode::GetM() + 1 when read from a low node).
+  float GetMUtility(float child_m, float q) const {
     if (!enabled_ || !parent_within_threshold_) return 0.0f;
-    const float child_m = child->GetM();
     float m = std::clamp(m_slope_ * (child_m - parent_m_), -m_cap_, m_cap_);
     m *= FastSign(-q);
     if (q_threshold_ > 0.0f && q_threshold_ < 1.0f) {
@@ -122,6 +143,10 @@ class MEvaluator {
     }
     m *= a_constant_ + a_linear_ * std::abs(q) + a_square_ * q * q;
     return m;
+  }
+
+  float GetMUtility(Node* child, float q) const {
+    return GetMUtility(child->GetM(), q);
   }
 
   float GetMUtility(const EdgeAndNode& child, float q) const {
@@ -483,12 +508,24 @@ float Search::GetDrawScore(bool is_odd_depth) const {
 }
 
 namespace {
+// Eval of @node's position from the perspective of the side to move there
+// (i.e. the "parent Q" used as the FPU basis when selecting among @node's
+// children). @draw_score is for the children's ply. Reads the shared LowNode
+// directly when it has fresher information than the edge (transpositions).
+inline float GetParentQ(const Node* node, float draw_score) {
+  if (HasFresherLowNode(node)) {
+    const auto& low_node = node->GetLowNode();
+    return low_node->GetWL() + draw_score * low_node->GetD();
+  }
+  return -node->GetQ(-draw_score);
+}
+
 inline float GetFpu(const SearchParams& params, const Node* node, bool is_root_node,
                     float draw_score) {
   const auto value = params.GetFpuValue(is_root_node);
   return params.GetFpuAbsolute(is_root_node)
              ? value
-             : -node->GetQ(-draw_score) -
+             : GetParentQ(node, draw_score) -
                    value * std::sqrt(node->GetVisitedPolicy());
 }
 
@@ -498,7 +535,7 @@ inline float GetFpu(const SearchParams& params, const Node* node, bool is_root_n
   const auto value = params.GetFpuValue(is_root_node);
   return params.GetFpuAbsolute(is_root_node)
              ? value
-             : -node->GetQ(-draw_score) - value * std::sqrt(visited_pol);
+             : GetParentQ(node, draw_score) - value * std::sqrt(visited_pol);
 }
 
 inline float ComputeCpuct(const SearchParams& params, uint32_t N,
@@ -1771,8 +1808,22 @@ void SearchWorker::PickNodesToExtendTask(
       for (Node* child : node->VisitedNodes()) {
         int index = child->Index();
         visited_pol += child->GetP();
-        float q = child->GetQ(draw_score);
-        current_util[index] = q + m_evaluator.GetMUtility(child, q);
+        float q, m_utility;
+        if (HasFresherLowNode(child)) {
+          // Transposed child: the shared low node has been updated through
+          // other parents since this edge's last visit, so select on its
+          // current value (flip WL, increment M) instead of the stale
+          // per-edge average. Backup still uses the edge average, keeping
+          // ancestor Q consistent; ShouldStopPickingHere still resyncs the
+          // edge when the divergence grows too large.
+          const auto& low_node = child->GetLowNode();
+          q = -low_node->GetWL() + draw_score * low_node->GetD();
+          m_utility = m_evaluator.GetMUtility(low_node->GetM() + 1, q);
+        } else {
+          q = child->GetQ(draw_score);
+          m_utility = m_evaluator.GetMUtility(child, q);
+        }
+        current_util[index] = q + m_utility;
       }
       const float fpu =
           GetFpu(params_, node, is_root_node, draw_score, visited_pol);
