@@ -39,6 +39,10 @@
 #include <sstream>
 #include <thread>
 
+#if defined(__AVX2__)
+#include <immintrin.h>
+#endif
+
 #include "search/dag_classic/node.h"
 #include "utils/fastmath.h"
 #include "utils/random.h"
@@ -51,6 +55,29 @@ namespace dag_classic {
 namespace {
 // Maximum delay between outputting "uci info" when nothing interesting happens.
 const int kUciInfoMinimumFrequencyMs = 5000;
+
+#if defined(__AVX2__)
+// Maximum value of scores[0..n), n must be >= 8. Used to accelerate the
+// selection argmax; the index of the maximum and the second-best value are
+// recovered by a cheap scalar pass afterwards. Only max operations are
+// performed, so the result is bit-exact with the scalar scan.
+inline float MaxScoreVec(const float* scores, int n) {
+  __m256 vmax = _mm256_loadu_ps(scores);
+  int i = 8;
+  for (; i + 8 <= n; i += 8) {
+    vmax = _mm256_max_ps(vmax, _mm256_loadu_ps(scores + i));
+  }
+  if (i < n) {
+    // Overlapping tail load; safe since n >= 8.
+    vmax = _mm256_max_ps(vmax, _mm256_loadu_ps(scores + n - 8));
+  }
+  __m128 m = _mm_max_ps(_mm256_castps256_ps128(vmax),
+                        _mm256_extractf128_ps(vmax, 1));
+  m = _mm_max_ps(m, _mm_movehl_ps(m, m));
+  m = _mm_max_ss(m, _mm_shuffle_ps(m, m, 1));
+  return _mm_cvtss_f32(m);
+}
+#endif
 
 MoveList MakeRootMoveFilter(const MoveList& searchmoves,
                             SyzygyTablebase* syzygy_tb,
@@ -1684,13 +1711,13 @@ void SearchWorker::PickNodesToExtendTask(
   // This 1 is 'filled pre-emptively'.
   std::array<float, 256> current_util;
 
-  // These 3 are 'filled on demand'.
+  // These 4 are 'filled on demand'.
   std::array<float, 256> current_score;
   std::array<int, 256> current_nstarted;
+  std::array<float, 256> current_pol;
   auto& cur_iters = workspace->cur_iters;
 
   Node::Iterator best_edge;
-  Node::Iterator second_best_edge;
   // Fetch the current best root node visits for possible smart pruning.
   const int64_t best_node_n = search_->current_best_edge_.GetN();
 
@@ -1786,86 +1813,119 @@ void SearchWorker::PickNodesToExtendTask(
           ComputeCpuct(params_, node->GetTotalVisits(), is_root_node);
       const float puct_mult =
           cpuct * std::sqrt(std::max(node->GetChildrenVisits(), 1u));
-      int cache_filled_idx = -1;
+      // Per-edge selection data (iterator, policy, N-started, score) is
+      // cached in index order into flat arrays, up to one edge past the
+      // first unvisited edge. Edges are sorted in decreasing policy order,
+      // so among unvisited edges the first one always has the best score
+      // and later ones can never win a pick; caching one extra edge keeps
+      // the second-best estimate correct. The repeated argmax below then
+      // runs as tight linear passes over contiguous floats
+      // (SIMD-accelerated where available) instead of re-walking edge
+      // iterators, re-reading atomics and re-decompressing policy on every
+      // pass.
+      int cache_filled_count = 0;
+      int first_unvisited = 0;
+      const auto fill_cache_entry = [&](int idx) {
+        if (idx == 0) {
+          cur_iters[idx] = node->Edges();
+        } else {
+          cur_iters[idx] = cur_iters[idx - 1];
+          ++cur_iters[idx];
+        }
+        current_nstarted[idx] = cur_iters[idx].GetNStarted();
+        current_pol[idx] = cur_iters[idx].GetP();
+        visits_to_perform[idx] = CurrentPath(0, 0, 0, 0, idx);
+        float score = current_pol[idx] * puct_mult /
+                          (1 + current_nstarted[idx]) +
+                      current_util[idx];
+        if (is_root_node) {
+          // If there's no chance to catch up to the current best node with
+          // remaining playouts, don't consider it.
+          // best_move_node_ could have changed since best_node_n was
+          // retrieved. To ensure we have at least one node to expand, always
+          // include current best node.
+          // If root move filter exists, make sure move is in the list.
+          // Excluded edges are masked to the lowest score so that the argmax
+          // passes below never pick them.
+          if ((cur_iters[idx] != search_->current_best_edge_ &&
+               latest_time_manager_hints_.GetEstimatedRemainingPlayouts() <
+                   best_node_n - cur_iters[idx].GetN()) ||
+              (!root_move_filter.empty() &&
+               std::find(root_move_filter.begin(), root_move_filter.end(),
+                         cur_iters[idx].GetMove()) ==
+                   root_move_filter.end())) {
+            score = std::numeric_limits<float>::lowest();
+          }
+        }
+        current_score[idx] = score;
+        ++cache_filled_count;
+      };
       int parent_max_limit = max_limit;
       int collision_left = cur_limit;
       while (cur_limit > 0) {
-        // Perform UCT for current node.
-        float best = std::numeric_limits<float>::lowest();
-        int best_idx = -1;
-        float best_without_u = std::numeric_limits<float>::lowest();
-        float second_best = std::numeric_limits<float>::lowest();
-        bool can_exit = false;
-        best_edge.Reset();
-        for (int idx = 0; idx < max_needed; ++idx) {
-          if (idx > cache_filled_idx) {
-            if (idx == 0) {
-              cur_iters[idx] = node->Edges();
-            } else {
-              cur_iters[idx] = cur_iters[idx - 1];
-              ++cur_iters[idx];
-            }
-            current_nstarted[idx] = cur_iters[idx].GetNStarted();
-            visits_to_perform[idx] = CurrentPath(0, 0, 0, 0, idx);
+        // Advance the unvisited boundary past edges that have visits
+        // (including first visits handed out by earlier iterations of this
+        // loop), caching entries on demand as the boundary moves.
+        while (first_unvisited < max_needed) {
+          if (first_unvisited >= cache_filled_count) {
+            fill_cache_entry(first_unvisited);
           }
-          int nstarted = current_nstarted[idx];
-          const float util = current_util[idx];
-          if (idx > cache_filled_idx) {
-            current_score[idx] =
-                cur_iters[idx].GetP() * puct_mult / (1 + nstarted) + util;
-            cache_filled_idx++;
-          }
-          if (is_root_node) {
-            // If there's no chance to catch up to the current best node with
-            // remaining playouts, don't consider it.
-            // best_move_node_ could have changed since best_node_n was
-            // retrieved. To ensure we have at least one node to expand, always
-            // include current best node.
-            if (cur_iters[idx] != search_->current_best_edge_ &&
-                latest_time_manager_hints_.GetEstimatedRemainingPlayouts() <
-                    best_node_n - cur_iters[idx].GetN()) {
-              continue;
-            }
-            // If root move filter exists, make sure move is in the list.
-            if (!root_move_filter.empty() &&
-                std::find(root_move_filter.begin(), root_move_filter.end(),
-                          cur_iters[idx].GetMove()) == root_move_filter.end()) {
-              continue;
-            }
-          }
+          if (current_nstarted[first_unvisited] == 0) break;
+          ++first_unvisited;
+        }
+        // Make sure one edge past the first unvisited one is cached too.
+        const int scan_limit = std::min(first_unvisited + 2, max_needed);
+        while (cache_filled_count < scan_limit) {
+          fill_cache_entry(cache_filled_count);
+        }
 
-          float score = current_score[idx];
-          if (score > best) {
-            second_best = best;
-            second_best_edge = best_edge;
-            best = score;
-            best_idx = idx;
-            best_without_u = util;
-            best_edge = cur_iters[idx];
-          } else if (score > second_best) {
-            second_best = score;
-            second_best_edge = cur_iters[idx];
+        // Perform UCT for current node: find the best score (first index on
+        // ties, matching the previous scan order) and the second best score
+        // in the cached range.
+        best_edge.Reset();
+        int best_idx = 0;
+        float best = current_score[0];
+        float second_best = std::numeric_limits<float>::lowest();
+#if defined(__AVX2__)
+        if (scan_limit >= 8) {
+          best = MaxScoreVec(current_score.data(), scan_limit);
+          best_idx = -1;
+          for (int idx = 0; idx < scan_limit; ++idx) {
+            const float score = current_score[idx];
+            if (best_idx < 0 && score == best) {
+              best_idx = idx;
+            } else if (score > second_best) {
+              second_best = score;
+            }
           }
-          if (can_exit) break;
-          if (nstarted == 0) {
-            // One more loop will get 2 unvisited nodes, which is sufficient to
-            // ensure second best is correct. This relies upon the fact that
-            // edges are sorted in policy decreasing order.
-            can_exit = true;
+        } else
+#endif
+        {
+          for (int idx = 1; idx < scan_limit; ++idx) {
+            const float score = current_score[idx];
+            if (score > best) {
+              second_best = best;
+              best = score;
+              best_idx = idx;
+            } else if (score > second_best) {
+              second_best = score;
+            }
           }
         }
+        const float best_without_u = current_util[best_idx];
+        best_edge = cur_iters[best_idx];
+
         int new_visits = 0;
-        if (second_best_edge) {
+        if (scan_limit > 1) {
           int estimated_visits_to_change_best = std::numeric_limits<int>::max();
           if (best_without_u < second_best) {
             const auto n1 = current_nstarted[best_idx] + 1;
             estimated_visits_to_change_best = static_cast<int>(
-                std::max(1.0f, std::min(cur_iters[best_idx].GetP() * puct_mult /
+                std::max(1.0f, std::min(current_pol[best_idx] * puct_mult /
                                                 (second_best - best_without_u) -
                                             n1 + 1,
                                         1e9f)));
           }
-          second_best_edge.Reset();
           max_limit = std::min(max_limit, estimated_visits_to_change_best);
           new_visits = std::min(cur_limit, estimated_visits_to_change_best);
         } else {
@@ -1889,9 +1949,12 @@ void SearchWorker::PickNodesToExtendTask(
           Node* child_node = best_edge.GetOrSpawnNode(/* parent */ node);
           child_node->IncrementNInFlight(new_visits);
           current_nstarted[best_idx] += new_visits;
-          current_score[best_idx] = cur_iters[best_idx].GetP() * puct_mult /
-                                        (1 + current_nstarted[best_idx]) +
-                                    current_util[best_idx];
+          // Keep root-masked edges at the lowest score.
+          if (current_score[best_idx] != std::numeric_limits<float>::lowest()) {
+            current_score[best_idx] = current_pol[best_idx] * puct_mult /
+                                          (1 + current_nstarted[best_idx]) +
+                                      current_util[best_idx];
+          }
           continue;
         }
 
@@ -1912,9 +1975,12 @@ void SearchWorker::PickNodesToExtendTask(
             child_node->IncrementNInFlight(new_visits);
             current_nstarted[best_idx] += new_visits;
           }
-          current_score[best_idx] = cur_iters[best_idx].GetP() * puct_mult /
-                                        (1 + current_nstarted[best_idx]) +
-                                    current_util[best_idx];
+          // Keep root-masked edges at the lowest score.
+          if (current_score[best_idx] != std::numeric_limits<float>::lowest()) {
+            current_score[best_idx] = current_pol[best_idx] * puct_mult /
+                                          (1 + current_nstarted[best_idx]) +
+                                      current_util[best_idx];
+          }
         } else {
           // We found a collision. Remaining visits go here.
           visits_to_perform[best_idx] += cur_limit;
