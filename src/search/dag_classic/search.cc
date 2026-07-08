@@ -66,6 +66,38 @@ inline bool HasFresherLowNode(const Node* node) {
   return low_node && !node->IsTerminal() && low_node->GetN() > node->GetN();
 }
 
+// Transposition-aware reads of an edge's child values for reporting and final
+// move selection, mirroring the selection formulation: prefer the shared
+// LowNode's current value (flip WL, increment M) when it is fresher than the
+// per-edge running average. Terminal edges keep their own (proven) values.
+inline float GetFreshWL(const EdgeAndNode& edge, float default_wl) {
+  const Node* node = edge.node();
+  if (node && HasFresherLowNode(node)) return -node->GetLowNode()->GetWL();
+  return edge.GetWL(default_wl);
+}
+
+inline float GetFreshD(const EdgeAndNode& edge, float default_d) {
+  const Node* node = edge.node();
+  if (node && HasFresherLowNode(node)) return node->GetLowNode()->GetD();
+  return edge.GetD(default_d);
+}
+
+inline float GetFreshM(const EdgeAndNode& edge, float default_m) {
+  const Node* node = edge.node();
+  if (node && HasFresherLowNode(node)) return node->GetLowNode()->GetM() + 1;
+  return edge.GetM(default_m);
+}
+
+inline float GetFreshQ(const EdgeAndNode& edge, float default_q,
+                       float draw_score) {
+  const Node* node = edge.node();
+  if (node && HasFresherLowNode(node)) {
+    const auto& low_node = node->GetLowNode();
+    return -low_node->GetWL() + draw_score * low_node->GetD();
+  }
+  return edge.GetQ(default_q, draw_score);
+}
+
 MoveList MakeRootMoveFilter(const MoveList& searchmoves,
                             SyzygyTablebase* syzygy_tb,
                             const PositionHistory& history, bool fast_play,
@@ -368,8 +400,8 @@ void Search::SendUciInfo(const classic::IterationStats& stats)
     ++multipv;
     uci_infos.emplace_back(common_info);
     auto& uci_info = uci_infos.back();
-    auto wl = edge.GetWL(default_wl);
-    auto d = edge.GetD(default_d);
+    auto wl = GetFreshWL(edge, default_wl);
+    auto d = GetFreshD(edge, default_d);
     float mu_uci = 0.0f;
     if (score_type == "WDL_mu" || (params_.GetWDLRescaleDiff() != 0.0f &&
                                    contempt_mode_ != ContemptMode::NONE)) {
@@ -384,7 +416,7 @@ void Search::SendUciInfo(const classic::IterationStats& stats)
               : params_.GetWDLRescaleDiff() * params_.GetWDLEvalObjectivity(),
           sign, true, params_.GetWDLMaxS());
     }
-    const auto q = edge.GetQ(default_q, draw_score);
+    const auto q = GetFreshQ(edge, default_q, draw_score);
     if (edge.IsTerminal() && wl != 0.0f) {
       uci_info.mate = std::copysign(
           std::round(edge.GetM(0.0f) + 1) / 2 + (edge.IsTbTerminal() ? 100 : 0),
@@ -431,7 +463,7 @@ void Search::SendUciInfo(const classic::IterationStats& stats)
     uci_info.wdl = ThinkingInfo::WDL{wdl_w, wdl_d, wdl_l};
     if (backend_attributes_.has_mlh) {
       uci_info.moves_left = static_cast<int>(
-          (1.0f + edge.GetM(1.0f + root_node_->GetM())) / 2.0f);
+          (1.0f + GetFreshM(edge, 1.0f + root_node_->GetM())) / 2.0f);
     }
     if (max_pv > 1) uci_info.multipv = multipv;
     if (per_pv_counters) uci_info.nodes = edge.GetN();
@@ -898,9 +930,11 @@ std::vector<EdgeAndNode> Search::GetBestChildrenNoTemperature(Node* parent,
           // Default doesn't matter here so long as they are the same as either
           // both are N==0 (thus we're comparing equal defaults) or N!=0 and
           // default isn't used.
-          if (a.GetQ(0.0f, draw_score) != b.GetQ(0.0f, draw_score)) {
-            return a.GetQ(0.0f, draw_score) > b.GetQ(0.0f, draw_score);
-          }
+          // Compare transposition-aware values so the played move agrees
+          // with what selection saw, not a stale per-edge average.
+          const auto a_q = GetFreshQ(a, 0.0f, draw_score);
+          const auto b_q = GetFreshQ(b, 0.0f, draw_score);
+          if (a_q != b_q) return a_q > b_q;
           return a.GetP() > b.GetP();
         }
 
@@ -1653,12 +1687,15 @@ std::pair<int, int> SearchWorker::GetRepetitions(int depth,
 }
 
 // Check if PickNodesToExtendTask should stop picking at this @node.
+// Note that WL/D/M divergence between a Node and its shared LowNode is no
+// longer a reason to stop: selection reads the low node's current values
+// directly (HasFresherLowNode) and backup resyncs the edge whenever a visit
+// passes through it (MaybeAdjustForTerminalOrTransposition), so stopping here
+// to force a resync would only spend a visit re-backing known information
+// instead of exploring. Only state that selection cannot handle below this
+// node (terminals, repetition draws, bound flips) still stops the descent.
 bool SearchWorker::ShouldStopPickingHere(Node* node, bool is_root_node,
                                          int repetitions) {
-  constexpr double wl_diff_limit = 0.01f;
-  constexpr float d_diff_limit = 0.01f;
-  constexpr float m_diff_limit = 2.0f;
-
   if (node->GetN() == 0 || node->IsTerminal()) return true;
 
   // Only stop at root when there is no other option.
@@ -1683,18 +1720,6 @@ bool SearchWorker::ShouldStopPickingHere(Node* node, bool is_root_node,
   auto [node_lower, node_upper] = node->GetBounds();
   if (low_node_lower != -node_upper || low_node_upper != -node_lower)
     return true;
-
-  // WL differs significantly (flip).
-  auto wl_diff = std::abs(low_node->GetWL() + node->GetWL());
-  if (wl_diff >= wl_diff_limit) return true;
-
-  // D differs significantly.
-  auto d_diff = std::abs(low_node->GetD() - node->GetD());
-  if (d_diff >= d_diff_limit) return true;
-
-  // M differs significantly (increment).
-  auto m_diff = std::abs(low_node->GetM() + 1 - node->GetM());
-  if (m_diff >= m_diff_limit) return true;
 
   return false;
 }
@@ -1813,9 +1838,10 @@ void SearchWorker::PickNodesToExtendTask(
           // Transposed child: the shared low node has been updated through
           // other parents since this edge's last visit, so select on its
           // current value (flip WL, increment M) instead of the stale
-          // per-edge average. Backup still uses the edge average, keeping
-          // ancestor Q consistent; ShouldStopPickingHere still resyncs the
-          // edge when the divergence grows too large.
+          // per-edge average. The edge average is resynced to the low node
+          // whenever backup passes through it
+          // (MaybeAdjustForTerminalOrTransposition), keeping ancestor
+          // averages consistent without ever stopping the descent early.
           const auto& low_node = child->GetLowNode();
           q = -low_node->GetWL() + draw_score * low_node->GetD();
           m_utility = m_evaluator.GetMUtility(low_node->GetM() + 1, q);
