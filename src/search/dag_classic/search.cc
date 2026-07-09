@@ -393,9 +393,14 @@ void Search::SendUciInfo(const classic::IterationStats& stats)
   common_info.tb_hits = tb_hits_.load(std::memory_order_acquire);
 
   int multipv = 0;
-  const auto default_q = -root_node_->GetQ(-draw_score);
-  const auto default_wl = -root_node_->GetWL();
-  const auto default_d = root_node_->GetD();
+  // Transposition-aware root defaults: the root's low node may have been
+  // updated through in-tree transpositions of the root position.
+  const bool root_fresh = HasFresherLowNode(root_node_);
+  const auto& root_low = root_node_->GetLowNode();
+  const auto default_wl =
+      root_fresh ? root_low->GetWL() : -root_node_->GetWL();
+  const auto default_d = root_fresh ? root_low->GetD() : root_node_->GetD();
+  const auto default_q = default_wl + draw_score * default_d;
   for (const auto& edge : edges) {
     ++multipv;
     uci_infos.emplace_back(common_info);
@@ -786,8 +791,8 @@ Eval Search::GetBestEval(Move* move, bool* is_terminal) const {
   EdgeAndNode best_edge = GetBestChildNoTemperature(root_node_, 0);
   if (move) *move = best_edge.GetMove(played_history_.IsBlackToMove());
   if (is_terminal) *is_terminal = best_edge.IsTerminal();
-  return {best_edge.GetWL(parent_wl), best_edge.GetD(parent_d),
-          best_edge.GetM(parent_m - 1) + 1};
+  return {GetFreshWL(best_edge, parent_wl), GetFreshD(best_edge, parent_d),
+          GetFreshM(best_edge, parent_m - 1) + 1};
 }
 
 std::pair<Move, Move> Search::GetBestMove() {
@@ -981,7 +986,7 @@ EdgeAndNode Search::GetBestRootChildWithTemperature(float temperature) const {
     }
     if (edge.GetN() + offset > max_n) {
       max_n = edge.GetN() + offset;
-      max_eval = edge.GetQ(fpu, draw_score);
+      max_eval = GetFreshQ(edge, fpu, draw_score);
     }
   }
 
@@ -994,7 +999,7 @@ EdgeAndNode Search::GetBestRootChildWithTemperature(float temperature) const {
                   edge.GetMove()) == root_move_filter_.end()) {
       continue;
     }
-    if (edge.GetQ(fpu, draw_score) < min_eval) continue;
+    if (GetFreshQ(edge, fpu, draw_score) < min_eval) continue;
     sum += std::pow(
         std::max(0.0f,
                  (max_n <= 0.0f
@@ -1016,7 +1021,7 @@ EdgeAndNode Search::GetBestRootChildWithTemperature(float temperature) const {
                   edge.GetMove()) == root_move_filter_.end()) {
       continue;
     }
-    if (edge.GetQ(fpu, draw_score) < min_eval) continue;
+    if (GetFreshQ(edge, fpu, draw_score) < min_eval) continue;
     if (idx-- == 0) return edge;
   }
   assert(false);
@@ -1086,8 +1091,12 @@ void Search::PopulateCommonIterationStats(classic::IterationStats* stats) {
                                  : MEvaluator();
     for (const auto& edge : root_node_->Edges()) {
       const auto n = edge.GetN();
-      const auto q = edge.GetQ(fpu, draw_score);
-      const auto m = m_evaluator.GetMUtility(edge, q);
+      const Node* child = edge.node();
+      const auto q = GetFreshQ(edge, fpu, draw_score);
+      const auto m =
+          (child && HasFresherLowNode(child))
+              ? m_evaluator.GetMUtility(child->GetLowNode()->GetM() + 1, q)
+              : m_evaluator.GetMUtility(edge, q);
       const auto q_plus_m = q + m;
       stats->edge_n.push_back(n);
       if (n > 0 && edge.IsTerminal() && edge.GetWL(0.0f) > 0.0f) {
