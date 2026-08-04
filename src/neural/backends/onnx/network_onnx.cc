@@ -138,6 +138,7 @@ class OnnxComputation final : public NetworkComputation {
 
  private:
   Ort::IoBinding PrepareInputs(int start, int batch_size, int step);
+  void StageCeresInput(int start, int batch_size);
 
   OnnxNetwork* network_;
   size_t input_size_ = 0;
@@ -534,35 +535,39 @@ bool OnnxComputation<DataType>::GetActionWDL(int sample, int move_id, float* w,
 }
 
 template <typename DataType>
+void OnnxComputation<DataType>::StageCeresInput(int start, int batch_size) {
+  const int end = std::min(start + batch_size, static_cast<int>(input_size_));
+  if (network_->ceres_tpg_float_) {
+    DataType* dest =
+        static_cast<DataType*>(inputs_outputs_->input_tensor_data_);
+    dest += start * kCeresTPGTotalBytes;
+    std::memset(static_cast<void*>(dest), 0,
+                static_cast<size_t>(batch_size) * kCeresTPGTotalBytes *
+                    sizeof(DataType));
+    for (int i = start; i < end; i++) {
+      for (int j = 0; j < kCeresTPGTotalBytes; j++) {
+        float val =
+            static_cast<float>(raw_byte_input_[i][j]) / kCeresTPGByteDivisor;
+        AsDataType(val, dest + (i - start) * kCeresTPGTotalBytes + j);
+      }
+    }
+  } else {
+    uint8_t* dest = static_cast<uint8_t*>(inputs_outputs_->input_tensor_data_);
+    dest += start * kCeresTPGTotalBytes;
+    std::memset(dest, 0, static_cast<size_t>(batch_size) * kCeresTPGTotalBytes);
+    for (int i = start; i < end; i++) {
+      std::memcpy(dest + (i - start) * kCeresTPGTotalBytes,
+                  raw_byte_input_[i].data(), kCeresTPGTotalBytes);
+    }
+  }
+}
+
+template <typename DataType>
 Ort::IoBinding OnnxComputation<DataType>::PrepareInputs(int start,
                                                         int batch_size,
                                                         int step) {
   if (network_->ceres_tpg_) {
-    // Stage Ceres TPG inputs into the host buffer.
-    {
-      if (network_->ceres_tpg_float_) {
-        DataType* dest =
-            static_cast<DataType*>(inputs_outputs_->input_tensor_data_);
-        dest += start * kCeresTPGTotalBytes;
-        int end = std::min(start + batch_size, static_cast<int>(input_size_));
-        for (int i = start; i < end; i++) {
-          for (int j = 0; j < kCeresTPGTotalBytes; j++) {
-            float val = static_cast<float>(raw_byte_input_[i][j]) / kCeresTPGByteDivisor;
-            AsDataType(val, dest + (i - start) * kCeresTPGTotalBytes + j);
-          }
-        }
-      } else {
-        uint8_t* dest =
-            static_cast<uint8_t*>(inputs_outputs_->input_tensor_data_);
-        dest += start * kCeresTPGTotalBytes;
-        std::memset(dest, 0, batch_size * kCeresTPGTotalBytes);
-        int end = std::min(start + batch_size, static_cast<int>(input_size_));
-        for (int i = start; i < end; i++) {
-          std::memcpy(dest + (i - start) * kCeresTPGTotalBytes,
-                      raw_byte_input_[i].data(), kCeresTPGTotalBytes);
-        }
-      }
-    }
+    StageCeresInput(start, batch_size);
 
     Ort::IoBinding binding{network_->session_[step - 1]};
     // Bind outputs (float16 outputs).
@@ -924,20 +929,43 @@ Ort::SessionOptions OnnxNetwork::GetOptions(int threads, int batch_size,
       level = GraphOptimizationLevel::ORT_ENABLE_ALL;
       break;
   }
+  if (ceres_tpg_ && level == GraphOptimizationLevel::ORT_ENABLE_ALL) {
+    // Match upstream Ceres, which deliberately never runs these nets at
+    // ORT_ENABLE_ALL (ONNXExecutor.cs: "Use of ORT_ENABLE_ALL might possibly
+    // exacerbate the nondeterminism of engine generation and inconsistent
+    // request for FP16 precision").  The C1 nets carry LayerNorm decomposed
+    // into Pow/ReduceMean/Sqrt/Div with no Cast nodes at all, so the level-3
+    // LayerNorm fusions are free to rewrite where FP16 accumulation happens --
+    // and SimplifiedLayerNormFusion outright fails on these graphs, aborting
+    // session init in graph_utils::GetIndexFromName on an
+    // InsertedPrecisionFreeCast_ arg it has already removed.  C2/C3 use the
+    // native RMSNormalization op and are unaffected either way.
+    level = GraphOptimizationLevel::ORT_ENABLE_EXTENDED;
+  }
   options.SetGraphOptimizationLevel(level);
 
   if (batch_size > 0 && provider_ != OnnxProvider::TRT) {
-    // Override the default (variable) batch size.
+    // Override the default (variable) batch size.  Nets disagree on what the
+    // symbolic batch dimension is called: lc0 nets and Ceres C2/C3 nets name
+    // it "batch", Ceres C1 nets name it "batch_size".  Overriding a name the
+    // graph does not use is a no-op, so set both rather than guessing.
+    const auto* ort_api = OrtGetApiBase()->GetApi(ORT_API_VERSION);
     Ort::ThrowOnError(
-        OrtGetApiBase()
-            ->GetApi(ORT_API_VERSION)
-            ->AddFreeDimensionOverrideByName(options, "batch", batch_size));
+        ort_api->AddFreeDimensionOverrideByName(options, "batch", batch_size));
+    Ort::ThrowOnError(ort_api->AddFreeDimensionOverrideByName(
+        options, "batch_size", batch_size));
   }
 
   if (ceres_tpg_) {
     // Ceres models require DisableMemPattern to avoid ORT memory planner
     // crashes with varying internal tensor shapes.
     options.DisableMemPattern();
+    // NOTE: do NOT disable SimplifiedLayerNormFusion via
+    // "optimization.disable_specified_optimizers" here.  It stops the C1 nets
+    // aborting at ORT_ENABLE_ALL, but on the CUDA and TensorRT providers it
+    // silently produces a graph that ignores its input and returns a fixed
+    // evaluation for every position.  The clamp to ORT_ENABLE_EXTENDED above
+    // is what keeps the broken fusion from running, and it is enough.
   }
 
   switch (provider_) {
@@ -956,7 +984,15 @@ Ort::SessionOptions OnnxNetwork::GetOptions(int threads, int batch_size,
       trt_options["device_id"] = std::to_string(gpu_);
       trt_options["trt_builder_optimization_level"] =
           std::to_string(std::clamp(optimize, 0, 5));
-      trt_options["trt_fp16_enable"] = optimize >= 6 ? "1" : "0";
+      // Ceres nets are FP16 graphs.  Leaving TensorRT's FP16 support off for
+      // them does not merely cost speed -- TRT then produces badly wrong
+      // evaluations (measured: mean 30 and up to 857 per mille of WDL away
+      // from the correct value over a 200-position set, versus ~1 per mille
+      // with it enabled).  Upstream Ceres always sets this for FP16 nets
+      // (ONNXExecutor.cs: trt_fp16_enable = precisionNumBits == 16), so match
+      // it rather than gating on the generic "optimize" knob.
+      trt_options["trt_fp16_enable"] =
+          (optimize >= 6 || (ceres_tpg_ && fp16_)) ? "1" : "0";
 #if ORT_API_VERSION >= 23
       trt_options["trt_bf16_enable"] = optimize >= 7 ? "1" : "0";
 #endif
@@ -1209,15 +1245,70 @@ OnnxNetwork::OnnxNetwork(const WeightsFile& file, const OptionsDict& opts,
     Ort::AllocatorWithDefaultOptions allocator;
     auto input_name = session_.front().GetInputNameAllocated(0, allocator);
     std::string name(input_name.get());
-    if (name == "squares") {
-      ceres_tpg_float_ = true;
-    }
     inputs_[0] = name;
 
+    // Decide the input path from the declared element type rather than from
+    // the tensor's name.  C1 FP16 nets call it "squares" (FLOAT16), the
+    // quantized C1/C2/C3 nets call it "squares_byte" (UINT8), but the name is
+    // only a convention and binding the wrong element type surfaces as an
+    // opaque ORT failure on the first eval.
+    // Keep the TypeInfo alive: GetTensorTypeAndShapeInfo() hands back a
+    // non-owning view into it.
+    auto input_type_info = session_.front().GetInputTypeInfo(0);
+    const auto input_info = input_type_info.GetTensorTypeAndShapeInfo();
+    const auto elem_type = input_info.GetElementType();
+    if (elem_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8) {
+      ceres_tpg_float_ = false;
+    } else if (elem_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16) {
+      ceres_tpg_float_ = true;
+    } else {
+      throw Exception(
+          "Ceres TPG network input '" + name +
+          "' has unsupported element type " +
+          std::to_string(static_cast<int>(elem_type)) +
+          "; expected UINT8 or FLOAT16.");
+    }
+
+    // The encoder emits exactly 64x137 bytes per position, so a net built to a
+    // different square-record layout must be rejected here with a readable
+    // message instead of failing later inside ORT.
+    const auto input_shape = input_info.GetShape();
+    if (input_shape.size() != 3 || input_shape[1] != kCeresTPGSquares ||
+        input_shape[2] != kCeresTPGBytesPerSquare) {
+      std::string got;
+      for (size_t d = 0; d < input_shape.size(); d++) {
+        got += (d ? "x" : "") + std::to_string(input_shape[d]);
+      }
+      throw Exception("Ceres TPG network input '" + name + "' has shape " +
+                      got + "; expected Nx" +
+                      std::to_string(kCeresTPGSquares) + "x" +
+                      std::to_string(kCeresTPGBytesPerSquare) + ".");
+    }
+
     size_t num_outputs = session_.front().GetOutputCount();
+    std::vector<std::string> session_outputs;
+    session_outputs.reserve(num_outputs);
     for (size_t i = 0; i < num_outputs; i++) {
       auto output_name = session_.front().GetOutputNameAllocated(i, allocator);
-      std::string oname(output_name.get());
+      session_outputs.emplace_back(output_name.get());
+    }
+    // The head names come from LoadRawOnnxFile(), which hardcodes them rather
+    // than reading them from the graph.  Check them here so a net that names
+    // its heads differently reports that plainly instead of failing inside ORT
+    // on the first eval.
+    for (const auto& required : outputs_) {
+      if (std::find(session_outputs.begin(), session_outputs.end(),
+                    required) == session_outputs.end()) {
+        std::string available;
+        for (const auto& o : session_outputs) {
+          available += (available.empty() ? "" : ", ") + o;
+        }
+        throw Exception("Ceres TPG network has no output named '" + required +
+                        "'. Available outputs: " + available + ".");
+      }
+    }
+    for (size_t i = 0; i < num_outputs; i++) {
+      const std::string& oname = session_outputs[i];
       if (oname == "value2") {
         wdl2_head_ = outputs_.size();
         outputs_.push_back("value2");

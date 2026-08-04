@@ -39,6 +39,7 @@
 
 #include "neural/shared_params.h"
 #include "proto/net.pb.h"
+#include "proto/onnx.pb.h"
 #include "utils/commandline.h"
 #include "utils/exception.h"
 #include "utils/filesystem.h"
@@ -227,11 +228,29 @@ WeightsFile LoadRawOnnxFile(const std::string& filename) {
   onnx->set_model(buffer);
   onnx->set_data_type(pblczero::OnnxModel::FLOAT16);
 
-  if (buffer.find("squares_byte") != std::string::npos) {
-    onnx->set_input_planes("squares_byte");
-  } else {
-    onnx->set_input_planes("squares");
+  // Read the real input name out of the graph.  The ONNX backend re-reads it
+  // from the live session, but the TensorRT provider builds its optimization
+  // profile keys from this value before any session exists, so a wrong guess
+  // there produces a TRT profile for a tensor that does not exist.  Fall back
+  // to a substring probe only if the model does not parse.
+  std::string input_name;
+  {
+    pblczero::ModelProto model;
+    try {
+      model.ParseFromString(buffer);
+      if (model.has_graph() && model.graph().input_size() > 0) {
+        input_name = std::string(model.graph().input(0).name());
+      }
+    } catch (const std::exception&) {
+      // Fall through to the substring probe below.
+    }
   }
+  if (input_name.empty()) {
+    input_name = buffer.find("squares_byte") != std::string::npos
+                     ? "squares_byte"
+                     : "squares";
+  }
+  onnx->set_input_planes(input_name);
 
   onnx->set_output_policy("policy");
   onnx->set_output_wdl("value");
