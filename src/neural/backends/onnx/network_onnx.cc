@@ -182,8 +182,7 @@ class OnnxNetwork final : public Network {
   }
   bool IsCpu() const override { return provider_ == OnnxProvider::CPU; }
 
-  Ort::SessionOptions GetOptions(int threads, int batch_size, uint64_t hash,
-                                 int optimize);
+  Ort::SessionOptions GetOptions(int threads, int batch_size, uint64_t hash, int optimize);
 
   std::unique_ptr<InputsOutputs> GetInputsOutputs() {
     std::lock_guard<std::mutex> lock(inputs_outputs_lock_);
@@ -255,6 +254,20 @@ InputsOutputs::InputsOutputs(OnnxNetwork* network)
   int mlh_head = network->mlh_head_;
   int action_head = network->action_head_;
   int data_size = (network->fp16_ | network->bf16_) ? 2 : 4;
+  // Host-side input size: raw TPG bytes (or their float conversion) for Ceres
+  // nets, packed (mask, value) pairs for the standard planes path.  On the
+  // device the standard path expands the planes, while the Ceres input is
+  // used exactly as staged.
+  const size_t input_host_size =
+      network->ceres_tpg_
+          ? static_cast<size_t>(max_batch_size) * kCeresTPGTotalBytes *
+                (network->ceres_tpg_float_ ? data_size : 1)
+          : static_cast<size_t>(max_batch_size) * kInputPlanes *
+                sizeof(InputPlane);
+  const size_t input_device_size =
+      network->ceres_tpg_ ? input_host_size
+                          : static_cast<size_t>(max_batch_size) * kInputPlanes *
+                                8 * 8 * data_size;
   int outputs_size = std::max({value_head, wdl_head, wdl2_head, policy_head,
                                mlh_head, action_head}) +
                      1;
@@ -294,25 +307,7 @@ InputsOutputs::InputsOutputs(OnnxNetwork* network)
           cudaEventCreate(&evaluation_done_event_, cudaEventDisableTiming));
       ReportCUDAErrors(
           cudaEventCreate(&outputs_download_event_, cudaEventDisableTiming));
-      {
-        // For Ceres TPG UINT8, input is UINT8 [batch, 64, 137] = 8768 bytes.
-        // For Ceres TPG FLOAT, input is FLOAT16 [batch, 64, 137] = 8768 * 2
-        // bytes. For lc0, input is float [batch, 112, 8, 8].
-        size_t input_alloc_size =
-            network->ceres_tpg_
-                ? (network->ceres_tpg_float_
-                       ? max_batch_size * kCeresTPGTotalBytes * data_size
-                       : max_batch_size * kCeresTPGTotalBytes)
-                : max_batch_size * kInputPlanes * sizeof(InputPlane);
-        size_t input_device_size =
-            network->ceres_tpg_
-                ? (network->ceres_tpg_float_
-                       ? max_batch_size * kCeresTPGTotalBytes * data_size
-                       : max_batch_size * kCeresTPGTotalBytes)
-                : max_batch_size * kInputPlanes * 8 * 8 * data_size;
-        ReportCUDAErrors(
-            cudaHostAlloc(&input_tensor_data_, input_alloc_size, 0));
-      }
+      ReportCUDAErrors(cudaHostAlloc(&input_tensor_data_, input_host_size, 0));
       for (int i = 0; i < outputs_size; i++) {
         ReportCUDAErrors(cudaHostAlloc(
             &output_tensors_data_[i],
@@ -320,22 +315,10 @@ InputsOutputs::InputsOutputs(OnnxNetwork* network)
       }
 
       output_tensors_data_device_.resize(outputs_size);
-      {
-        size_t upload_size =
-            network->ceres_tpg_
-                ? (network->ceres_tpg_float_
-                       ? max_batch_size * kCeresTPGTotalBytes * data_size
-                       : max_batch_size * kCeresTPGTotalBytes)
-                : max_batch_size * kInputPlanes * sizeof(InputPlane);
-        size_t device_size =
-            network->ceres_tpg_
-                ? (network->ceres_tpg_float_
-                       ? max_batch_size * kCeresTPGTotalBytes * data_size
-                       : max_batch_size * kCeresTPGTotalBytes)
-                : max_batch_size * kInputPlanes * 8 * 8 * data_size;
-        ReportCUDAErrors(cudaMalloc(&input_tensor_upload_device_, upload_size));
-        ReportCUDAErrors(cudaMalloc(&input_tensor_data_device_, device_size));
-      }
+      ReportCUDAErrors(
+          cudaMalloc(&input_tensor_upload_device_, input_host_size));
+      ReportCUDAErrors(
+          cudaMalloc(&input_tensor_data_device_, input_device_size));
       for (int i = 0; i < outputs_size; i++) {
         ReportCUDAErrors(
             cudaMalloc(&output_tensors_data_device_[i],
@@ -346,15 +329,7 @@ InputsOutputs::InputsOutputs(OnnxNetwork* network)
       break;
 #endif
     default:
-      if (network->ceres_tpg_) {
-        input_tensor_data_ =
-            malloc(network->ceres_tpg_float_
-                       ? max_batch_size * kCeresTPGTotalBytes * data_size
-                       : max_batch_size * kCeresTPGTotalBytes);
-      } else {
-        input_tensor_data_ =
-            malloc(max_batch_size * kInputPlanes * 8 * 8 * data_size);
-      }
+      input_tensor_data_ = malloc(input_device_size);
       for (int i = 0; i < outputs_size; i++) {
         output_tensors_data_[i] =
             malloc(max_batch_size * output_tensors_step_[i] * data_size);
@@ -363,7 +338,6 @@ InputsOutputs::InputsOutputs(OnnxNetwork* network)
       for (int i = 0; i < outputs_size; i++) {
         output_tensors_data_device_[i] = output_tensors_data_[i];
       }
-
       memory_info_ =
           Ort::MemoryInfo::CreateCpu(OrtDeviceAllocator, OrtMemTypeDefault);
   }
@@ -459,6 +433,7 @@ void OnnxComputation<DataType>::AddInputBytes(std::vector<uint8_t>&& input) {
   raw_byte_input_.emplace_back(std::move(input));
   input_size_++;
 }
+
 template <typename DataType>
 int OnnxComputation<DataType>::GetBatchSize() const {
   return input_size_;
@@ -506,8 +481,7 @@ float OnnxComputation<DataType>::GetMVal(int sample) const {
   if (network_->mlh_head_ == -1) return 0.0f;
   DataType* data = static_cast<DataType*>(
       inputs_outputs_->output_tensors_data_[network_->mlh_head_]);
-  float m_val = AsFloat(data[sample]);
-  return m_val;
+  return AsFloat(data[sample]);
 }
 
 template <typename DataType>
@@ -570,7 +544,6 @@ Ort::IoBinding OnnxComputation<DataType>::PrepareInputs(int start,
     StageCeresInput(start, batch_size);
 
     Ort::IoBinding binding{network_->session_[step - 1]};
-    // Bind outputs (float16 outputs).
     for (size_t i = 0; i < inputs_outputs_->output_tensors_step_.size(); i++) {
       int size = inputs_outputs_->output_tensors_step_[i];
       DataType* buffer = static_cast<DataType*>(
@@ -595,13 +568,11 @@ Ort::IoBinding OnnxComputation<DataType>::PrepareInputs(int start,
     // Bind input as UINT8 or FLOAT16 tensor with shape [batch, 64, 137].
     int64_t dims[] = {batch_size, kCeresTPGSquares, kCeresTPGBytesPerSquare};
     if (network_->ceres_tpg_float_) {
-      int data_size = (network_->fp16_ | network_->bf16_) ? 2 : 4;
       auto* data_ptr =
           static_cast<DataType*>(inputs_outputs_->input_tensor_data_device_) +
           start * kCeresTPGTotalBytes;
-      size_t data_byte_count =
-          static_cast<size_t>(batch_size) * kCeresTPGTotalBytes * data_size;
-
+      size_t data_byte_count = static_cast<size_t>(batch_size) *
+                               kCeresTPGTotalBytes * sizeof(DataType);
       ONNXTensorElementDataType onnx_type = ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT;
       if (network_->fp16_)
         onnx_type = ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16;
@@ -686,6 +657,8 @@ void OnnxComputation<DataType>::ComputeBlocking() {
     batch_size =
         std::max(static_cast<int>(input_size_), network_->min_batch_size_);
   }
+  // Only the DML onnxruntime execution provider is documented as needing
+  // locking, but it seems all GPU backends need it.
   if (network_->provider_ != OnnxProvider::CPU) {
     network_->lock_.lock();
   }
@@ -696,6 +669,7 @@ void OnnxComputation<DataType>::ComputeBlocking() {
     if (network_->provider_ == OnnxProvider::TRT && network_->batch_size_ > 0) {
       batch = std::min((int)input_size_ - (int)i, batch);
     }
+
     auto binding = PrepareInputs(i, batch, step);
 
     Ort::RunOptions options = {};
@@ -708,25 +682,19 @@ void OnnxComputation<DataType>::ComputeBlocking() {
                                 inputs_outputs_->inputs_processed_event_));
       }
       if (network_->ceres_tpg_) {
-        size_t byte_count = batch * kCeresTPGTotalBytes;
-        if (network_->ceres_tpg_float_) {
-          int data_size = (network_->fp16_ | network_->bf16_) ? 2 : 4;
-          byte_count = batch * kCeresTPGTotalBytes * data_size;
-        }
-        size_t input_offset = i * kCeresTPGTotalBytes;
-        if (network_->ceres_tpg_float_) {
-          int data_size = (network_->fp16_ | network_->bf16_) ? 2 : 4;
-          input_offset *= data_size;
-        }
-        auto* src =
+        // The staged Ceres input needs no plane expansion; copy it verbatim.
+        const size_t elem_size =
+            network_->ceres_tpg_float_ ? sizeof(DataType) : 1;
+        const size_t input_offset = i * kCeresTPGTotalBytes * elem_size;
+        const char* src =
             static_cast<char*>(inputs_outputs_->input_tensor_data_) +
             input_offset;
-        auto* dst =
+        char* dst =
             static_cast<char*>(inputs_outputs_->input_tensor_data_device_) +
             input_offset;
-        ReportCUDAErrors(cudaMemcpyAsync(dst, src, byte_count,
-                                         cudaMemcpyHostToDevice,
-                                         network_->upload_stream_));
+        ReportCUDAErrors(
+            cudaMemcpyAsync(dst, src, batch * kCeresTPGTotalBytes * elem_size,
+                            cudaMemcpyHostToDevice, network_->upload_stream_));
         ReportCUDAErrors(cudaEventRecord(
             inputs_outputs_->inputs_uploaded_event_, network_->upload_stream_));
         ReportCUDAErrors(
@@ -757,25 +725,26 @@ void OnnxComputation<DataType>::ComputeBlocking() {
             cudaStreamWaitEvent(network_->compute_stream_,
                                 inputs_outputs_->inputs_uploaded_event_));
         if (network_->fp16_) {
-          half* d = reinterpret_cast<half*>(
+          half* dst = reinterpret_cast<half*>(
               inputs_outputs_->input_tensor_data_device_);
-          d += i * kInputPlanes * 8 * 8;
-          expandPlanesOnnx(d, dst_masks, batch * kInputPlanes,
+          dst += i * kInputPlanes * 8 * 8;
+          expandPlanesOnnx(dst, dst_masks, batch * kInputPlanes,
                            network_->compute_stream_);
         } else if (network_->bf16_) {
-          __nv_bfloat16* d = reinterpret_cast<__nv_bfloat16*>(
+          __nv_bfloat16* dst = reinterpret_cast<__nv_bfloat16*>(
               inputs_outputs_->input_tensor_data_device_);
-          d += i * kInputPlanes * 8 * 8;
-          expandPlanesOnnx(d, dst_masks, batch * kInputPlanes,
+          dst += i * kInputPlanes * 8 * 8;
+          expandPlanesOnnx(dst, dst_masks, batch * kInputPlanes,
                            network_->compute_stream_);
         } else {
-          float* d = reinterpret_cast<float*>(
+          float* dst = reinterpret_cast<float*>(
               inputs_outputs_->input_tensor_data_device_);
-          d += i * kInputPlanes * 8 * 8;
-          expandPlanesOnnx(d, dst_masks, batch * kInputPlanes,
+          dst += i * kInputPlanes * 8 * 8;
+          expandPlanesOnnx(dst, dst_masks, batch * kInputPlanes,
                            network_->compute_stream_);
         }
       }
+
       ReportCUDAErrors(cudaEventRecord(inputs_outputs_->inputs_processed_event_,
                                        network_->upload_stream_));
       if (i == 0) {
@@ -991,8 +960,7 @@ Ort::SessionOptions OnnxNetwork::GetOptions(int threads, int batch_size,
       std::string cache_dir = CommandLine::BinaryDirectory() + "/trt_cache";
       std::map<std::string, std::string> trt_options;
       trt_options["device_id"] = std::to_string(gpu_);
-      trt_options["trt_builder_optimization_level"] =
-          std::to_string(std::clamp(optimize, 0, 5));
+      trt_options["trt_builder_optimization_level"] = std::to_string(std::clamp(optimize, 0, 5));
       // Ceres nets are FP16 graphs.  Leaving TensorRT's FP16 support off for
       // them does not merely cost speed -- TRT then produces badly wrong
       // evaluations (measured: mean 30 and up to 857 per mille of WDL away
@@ -1009,8 +977,7 @@ Ort::SessionOptions OnnxNetwork::GetOptions(int threads, int batch_size,
       trt_options["trt_max_partition_iterations"] = "1000";
       trt_options["trt_min_subgraph_size"] = "1";
       trt_options["trt_engine_cache_enable"] = "1";
-      // We need the batch size as well as the hash, as it is set after
-      // loading.
+      // We need the batch size as well as the hash, as it is set after loading.
       std::ostringstream oss;
       oss << std::hex << hash;
       trt_options["trt_engine_cache_prefix"] =
@@ -1029,17 +996,18 @@ Ort::SessionOptions OnnxNetwork::GetOptions(int threads, int batch_size,
 #ifdef USE_ONNX_CUDART
       trt_options["has_user_compute_stream"] = "1";
 #endif
-      std::string shape_suffix = ceres_tpg_
-          ? "x" + std::to_string(kCeresTPGSquares) + "x" +
-                std::to_string(kCeresTPGBytesPerSquare)
-          : "x112x8x8";
+      const std::string shape_suffix =
+          ceres_tpg_ ? "x" + std::to_string(kCeresTPGSquares) + "x" +
+                           std::to_string(kCeresTPGBytesPerSquare)
+                     : "x112x8x8";
       if (batch_size < 0) {
         trt_options["trt_profile_min_shapes"] =
             inputs_[0] + ":" + std::to_string(min_batch_size_) + shape_suffix;
         trt_options["trt_profile_max_shapes"] =
             inputs_[0] + ":" + std::to_string(max_batch_size_) + shape_suffix;
         trt_options["trt_profile_opt_shapes"] =
-            inputs_[0] + ":" + std::to_string(max_batch_size_ / 4) + shape_suffix;
+            inputs_[0] + ":" + std::to_string(max_batch_size_ / 4) +
+            shape_suffix;
       } else {
         trt_options["trt_profile_min_shapes"] =
             inputs_[0] + ":" + std::to_string(batch_size - batch_size_ + 1) +
@@ -1112,7 +1080,7 @@ Ort::SessionOptions OnnxNetwork::GetOptions(int threads, int batch_size,
 
 OnnxNetwork::OnnxNetwork(const WeightsFile& file, const OptionsDict& opts,
                          OnnxProvider provider, bool cpu_wdl)
-    : onnx_env_(ORT_LOGGING_LEVEL_ERROR, "lc0"),
+    : onnx_env_(ORT_LOGGING_LEVEL_WARNING, "lc0"),
       capabilities_{file.format().network_format().input(),
                     file.format().network_format().output(),
                     file.format().network_format().moves_left()},
@@ -1231,11 +1199,6 @@ OnnxNetwork::OnnxNetwork(const WeightsFile& file, const OptionsDict& opts,
     mlh_head_ = outputs_.size();
     outputs_.emplace_back(md.output_mlh());
   }
-  if (file.format().network_format().input() ==
-      pblczero::NetworkFormat::INPUT_CERES_TPG) {
-    ceres_tpg_ = true;
-  }
-
   uint64_t hash = 0;
   if (provider == OnnxProvider::TRT) {
     hash = std::hash<std::string_view>()(md.model());
@@ -1257,13 +1220,11 @@ OnnxNetwork::OnnxNetwork(const WeightsFile& file, const OptionsDict& opts,
   }
 
   for (int step = 1; step <= steps_; step++)
-    session_.emplace_back(
-        onnx_env_, file.onnx_model().model().data(),
-        file.onnx_model().model().size(),
-        GetOptions(threads, batch_size_ * step, hash, optimize));
+    session_.emplace_back(onnx_env_, file.onnx_model().model().data(),
+                          file.onnx_model().model().size(),
+                          GetOptions(threads, batch_size_ * step, hash, optimize));
 
-  if (file.format().network_format().input() ==
-      pblczero::NetworkFormat::INPUT_CERES_TPG) {
+  if (ceres_tpg_) {
     Ort::AllocatorWithDefaultOptions allocator;
     auto input_name = session_.front().GetInputNameAllocated(0, allocator);
     std::string name(input_name.get());

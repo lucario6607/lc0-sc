@@ -63,8 +63,7 @@ class NetworkComputation {
   // Adds a sample to the batch.
   virtual void AddInput(InputPlanes&& input) = 0;
   // Adds a raw byte input sample (for Ceres TPG format).
-  virtual void AddInputBytes(std::vector<uint8_t>&& input) {
-    (void)input;
+  virtual void AddInputBytes(std::vector<uint8_t>&& /*input*/) {
     throw Exception("AddInputBytes not supported by this backend.");
   }
   // Do the computation.
@@ -80,13 +79,8 @@ class NetworkComputation {
   // Returns the action-head (W,D,L) for @move_id of @sample (Ceres C3 nets:
   // per-move value estimates, softmaxed). Returns false when the loaded net
   // has no action head or the backend does not support it.
-  virtual bool GetActionWDL(int sample, int move_id, float* w, float* d,
-                            float* l) const {
-    (void)sample;
-    (void)move_id;
-    (void)w;
-    (void)d;
-    (void)l;
+  virtual bool GetActionWDL(int /*sample*/, int /*move_id*/, float* /*w*/,
+                            float* /*d*/, float* /*l*/) const {
     return false;
   }
   virtual ~NetworkComputation() = default;

@@ -28,6 +28,7 @@
 #include "neural/encoder.h"
 
 #include <algorithm>
+#include <cstring>
 
 namespace lczero {
 
@@ -379,18 +380,11 @@ constexpr int kTPGRankOffset = kTPGQNegBlunderOffset + 1;         // 121
 constexpr int kTPGFileOffset = kTPGRankOffset + 8;                // 129
 // Total = 129 + 8 = 137
 
-// Ceres default inference values (from NNEvaluatorOptionsCeres.cs).
+// Ceres default inference value (from NNEvaluatorOptionsCeres.cs).
 constexpr float kDefaultQBlunder = 0.03f;  // DEFAULT_Q_BLUNDER
-constexpr int kDefaultPliesSinceLastMove = 30;
 
 // Move50CountEncoded: min(move50, 100) / 50.0
 float Move50CountEncoded(int move50) { return std::min(move50, 100) / 50.0f; }
-
-// PliesSinceLastMoveEncoded: 2 / sqrt(numPlies + 1)
-float PliesSinceLastMoveEncoded(int numPlies) {
-  numPlies = std::min(numPlies, 255);
-  return 2.0f / std::sqrt(static_cast<float>(numPlies + 1));
-}
 
 // Write piece one-hot encoding for a given square and board.
 // Index 0 = empty, 1-6 = our pieces (P,N,B,R,Q,K), 7-12 = opponent pieces.
@@ -429,7 +423,6 @@ void WritePieceOneHot(const ChessBoard& board, int square_idx,
 }  // namespace
 
 std::vector<uint8_t> EncodePositionForCeresTPG(
-
     const PositionHistory& history, int history_planes,
     FillEmptyHistory fill_empty_history) {
   const int num_squares = kCeresTPGSquares;

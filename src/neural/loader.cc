@@ -191,17 +191,15 @@ WeightsFile ParseWeightsProto(const std::string& buffer) {
   return net;
 }
 
-}  // namespace
-
+// Returns true if the filename has a (case-insensitive) ".onnx" extension.
 bool IsOnnxFile(const std::string& filename) {
-  if (filename.size() >= 5) {
-    std::string ext = filename.substr(filename.size() - 5);
-    for (auto& c : ext) c = std::tolower(c);
-    if (ext == ".onnx") return true;
-  }
-  return false;
+  if (filename.size() < 5) return false;
+  std::string ext = filename.substr(filename.size() - 5);
+  for (auto& c : ext) c = std::tolower(static_cast<unsigned char>(c));
+  return ext == ".onnx";
 }
 
+// Wraps a raw .onnx file (e.g. a Ceres net) in a synthesized WeightsFile.
 WeightsFile LoadRawOnnxFile(const std::string& filename) {
   std::ifstream file(filename, std::ios::binary | std::ios::ate);
   if (!file) {
@@ -259,11 +257,11 @@ WeightsFile LoadRawOnnxFile(const std::string& filename) {
   return net;
 }
 
+}  // namespace
+
 WeightsFile LoadWeightsFromFile(const std::string& filename) {
-  // Check if it's a raw ONNX file (e.g. Ceres nets).
-  if (IsOnnxFile(filename)) {
-    return LoadRawOnnxFile(filename);
-  }
+  // Raw .onnx files (e.g. Ceres nets) bypass the protobuf weights parsing.
+  if (IsOnnxFile(filename)) return LoadRawOnnxFile(filename);
 
   FloatVectors vecs;
   auto buffer = DecompressGzip(filename);

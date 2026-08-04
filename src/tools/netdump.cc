@@ -43,7 +43,8 @@
 namespace lczero {
 namespace {
 
-const OptionId kFenId{"fen", "", "FEN of the position to dump (default startpos)."};
+const OptionId kFenId{"fen", "",
+                      "FEN of the position to dump (default startpos)."};
 const OptionId kMovesId{"moves", "",
                         "Space-separated UCI moves to play from the FEN "
                         "before dumping."};

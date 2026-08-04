@@ -28,6 +28,7 @@
 #include "neural/wrapper.h"
 
 #include <algorithm>
+#include <cmath>
 #include <numeric>
 
 #include "neural/encoder.h"
@@ -123,7 +124,7 @@ class NetworkAsBackendComputation : public BackendComputation {
       // bearing on policy-output indexing. A FlipTransform previously
       // applied here made lc0 read the file-mirrored move's logit for
       // every black move, e.g. d2d4's logit for e7e5.)
-      const size_t idx = entries_.emplace_back(
+      entries_.emplace_back(
           Entry{.input = {},
                 .byte_input = std::move(byte_input),
                 .legal_moves =
