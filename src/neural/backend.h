@@ -54,7 +54,7 @@ struct EvalResultPtr {
   float* d = nullptr;
   float* m = nullptr;
   std::span<float> p = {};
-  // Optional per-move action-head output (Ceres C3 nets): 3 floats (W,D,L)
+  // Optional per-move action-head output (Ceres C2/C3 nets): 3 floats (W,D,L)
   // per legal move, in the same move order as p. Only filled when non-empty
   // and the loaded net actually has an action head.
   std::span<float> action = {};

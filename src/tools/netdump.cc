@@ -107,7 +107,7 @@ void NetDumpCmd() {
     EvalResult result;
     result.p.resize(legal.size());
     // Request per-move action-head WDL (filled only for nets that have the
-    // head, e.g. Ceres C3; stays NaN otherwise).
+    // head, e.g. Ceres C2/C3; stays NaN otherwise).
     result.action.assign(legal.size() * 3,
                          std::numeric_limits<float>::quiet_NaN());
     auto computation = backend->CreateComputation();
@@ -124,7 +124,7 @@ void NetDumpCmd() {
                 << "\n";
     }
     std::cout << "END_POLICY\n";
-    // Action head (Ceres C3): per-move (W,D,L). Omitted when the net has no
+    // Action head (Ceres C2/C3): per-move (W,D,L). Omitted when the net has no
     // action head (values stay NaN).
     if (!result.action.empty() && !std::isnan(result.action[0])) {
       std::cout << "BEGIN_ACTION " << result.p.size() << "\n";

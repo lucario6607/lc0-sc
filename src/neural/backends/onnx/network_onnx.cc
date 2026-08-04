@@ -1302,7 +1302,7 @@ OnnxNetwork::OnnxNetwork(const WeightsFile& file, const OptionsDict& opts,
         wdl2_head_ = outputs_.size();
         outputs_.push_back("value2");
       } else if (oname == "action") {
-        // C3 nets have a real action head shaped [batch, 1858, 3]; C1 nets
+        // C2/C3 nets have a real action head shaped [batch, 1858, 3]; C1 nets
         // carry a vestigial 1-element output of the same name, so check the
         // per-position element count before treating it as an action head.
         auto type_info = session_.front().GetOutputTypeInfo(i);
