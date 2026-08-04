@@ -1080,7 +1080,13 @@ Ort::SessionOptions OnnxNetwork::GetOptions(int threads, int batch_size,
 
 OnnxNetwork::OnnxNetwork(const WeightsFile& file, const OptionsDict& opts,
                          OnnxProvider provider, bool cpu_wdl)
-    : onnx_env_(ORT_LOGGING_LEVEL_WARNING, "lc0"),
+    // Ceres graphs log copious benign warnings (e.g. unused-initializer
+    // cleanup for every transformer layer) during session creation, so raise
+    // the log threshold for them; keep upstream behavior for lc0 nets.
+    : onnx_env_(IsCeresTPGFormat(file.format().network_format().input())
+                    ? ORT_LOGGING_LEVEL_ERROR
+                    : ORT_LOGGING_LEVEL_WARNING,
+                "lc0"),
       capabilities_{file.format().network_format().input(),
                     file.format().network_format().output(),
                     file.format().network_format().moves_left()},
