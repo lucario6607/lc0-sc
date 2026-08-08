@@ -115,8 +115,10 @@ elif get_option('malloc') != ''
   deps += cc.find_library(get_option('malloc'), required: true)
 endif
 
-# ONNX and HLO protobufs.
-files += gen.process('proto/onnx.proto',
+# ONNX and HLO protobufs.  The ONNX one goes in common_files because loader.cc
+# parses raw .onnx files (Ceres nets) and so needs the generated header in
+# every target it is built into, lc0_lib included.
+common_files += gen.process('proto/onnx.proto',
   preserve_path_from : meson.current_source_dir())
 
 files += gen.process('proto/hlo.proto',
