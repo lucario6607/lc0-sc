@@ -70,6 +70,32 @@ simply be run with newer runtime DLLs: drop `onnxruntime.dll`,
 `onnxruntime_providers_shared.dll` and (for GPU) `onnxruntime_providers_cuda.dll`
 / `onnxruntime_providers_tensorrt.dll` from a 1.24 package next to `lc0.exe`.
 
+It is **not** forward compatible, and the CI artifacts contain only `lc0*.exe`
+(the artifact path is `/build/lc0*.exe/`), so the runtime DLLs are always
+supplied by the user and are easy to get wrong in the other direction. A binary
+built against 1.24 headers running against an older DLL dies at startup with:
+
+```
+The requested API version [24] is not available, only API versions [1, 22]
+are supported in this build. Current ORT Version is: 1.22.1
+```
+
+That means a stale `onnxruntime.dll` is being loaded — Windows searches the
+directory containing `lc0.exe` before `PATH`, so an old copy sitting beside the
+executable wins. Use one matched set of DLLs from a single package:
+
+* `onnx-dml` — `onnxruntime.dll` and `onnxruntime_providers_shared.dll` from
+  `runtimes/win-x64/native/` of the `Microsoft.ML.OnnxRuntime.DirectML` package
+  (the DirectML execution provider is built into `onnxruntime.dll`; no separate
+  DirectML redistributable is needed, the one shipped with Windows is enough).
+* `onnx-cuda` / `onnx-trt` — `onnxruntime.dll`,
+  `onnxruntime_providers_shared.dll`, `onnxruntime_providers_cuda.dll` and
+  `onnxruntime_providers_tensorrt.dll` from `lib/` of
+  `onnxruntime-win-x64-gpu-<version>.zip`.
+
+Do not mix the two: the DirectML package carries no CUDA or TensorRT providers,
+and the GPU package carries no DirectML.
+
 Two more things bite here, and both are handled in code:
 
 * **Input dtype varies.** `squares` is FLOAT16; `squares_byte` is UINT8. The
