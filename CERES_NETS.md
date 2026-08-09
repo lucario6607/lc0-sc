@@ -38,16 +38,39 @@ lc0 --backend=onnx-cuda --weights=/path/to/C1-256-10.onnx
 
 Measured directly from the ONNX graphs. All outputs are `FLOAT16` in every net.
 
-| Net | Input tensor | Input dtype | Batch dim name | `action` head |
-|---|---|---|---|---|
-| C1-256-10 | `squares` | FLOAT16 | `batch_size` | `[b,1]` vestigial |
-| C1-512-15 | `squares` | FLOAT16 | `batch_size` | `[b,1]` vestigial |
-| C1-640-34 | `squares` | FLOAT16 | `batch_size` | `[b,1]` vestigial |
-| C1-BIG (`C1-ULTRA-I8.zip`) | `squares_byte` | UINT8 | `batch_size` | `[b,1]` vestigial |
-| C2-384-12-I8 | `squares_byte` | UINT8 | `batch` | `[b,1858,3]` real |
-| C3-768-30-pre8-I8 | `squares_byte` | UINT8 | `batch` (outputs unnamed) | `[b,1858,3]` real |
+| Net | Input tensor | Input dtype | Opset | Batch dim name | `action` head |
+|---|---|---|---|---|---|
+| C1-256-10 | `squares` | FLOAT16 | 17 | `batch_size` | `[b,1]` vestigial |
+| C1-512-15 | `squares` | FLOAT16 | 17 | `batch_size` | `[b,1]` vestigial |
+| C1-640-34 | `squares` | FLOAT16 | 17 | `batch_size` | `[b,1]` vestigial |
+| C1-BIG (`C1-ULTRA-I8.zip`) | `squares_byte` | UINT8 | 17 | `batch_size` | `[b,1]` vestigial |
+| C2-384-12-I8 | `squares_byte` | UINT8 | **23** | `batch` | `[b,1858,3]` real |
+| C3-768-30-pre8-I8 | `squares_byte` | UINT8 | **23** | `batch` (outputs unnamed) | `[b,1858,3]` real |
 
-Two things bite here, and both are handled in code:
+### ONNX Runtime 1.23+ is mandatory for the C2/C3 nets
+
+The quantized C2/C3 nets are stamped **ONNX opset 23** (IR 10); the C1 family is
+opset 17. ONNX Runtime supports `ai.onnx` only up to opset 22 until 1.23, so an
+older runtime refuses to load C2/C3 **on every backend**, failing in about five
+seconds during session creation with:
+
+```
+ValidateOpsetForDomain ... Opset 23 is under development and support for this
+is limited ... Current official support for domain ai.onnx is till opset 22.
+```
+
+This is a runtime-version limit, not a defect in the Ceres support, and it is
+why reports take the shape "the C1 nets work but the I8 nets do not". Verified
+by running the identical binary against both runtimes: on ORT 1.22.1 C2 and C3
+are rejected while C1-256-10 evaluates normally; on 1.24 all three evaluate
+correctly.
+
+The ORT C API is backward compatible, so an lc0 built against older headers can
+simply be run with newer runtime DLLs: drop `onnxruntime.dll`,
+`onnxruntime_providers_shared.dll` and (for GPU) `onnxruntime_providers_cuda.dll`
+/ `onnxruntime_providers_tensorrt.dll` from a 1.24 package next to `lc0.exe`.
+
+Two more things bite here, and both are handled in code:
 
 * **Input dtype varies.** `squares` is FLOAT16; `squares_byte` is UINT8. The
   name is only a convention, so the element type is read from the session.

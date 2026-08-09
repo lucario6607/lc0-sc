@@ -59,12 +59,16 @@ install:
 - cmd: IF %NAME%==onednn set DNNL_NAME=dnnl_win_2.7.2_cpu_vcomp_gpu_vcomp
 - cmd: IF %NAME%==onednn IF NOT EXIST C:\cache\%DNNL_NAME% appveyor DownloadFile https://github.com/borg323/oneDNN/releases/download/v2.7.2/dnnl_win_2.7.2_cpu_vcomp_gpu_vcomp.zip
 - cmd: IF %NAME%==onednn IF NOT EXIST C:\cache\%DNNL_NAME% 7z x dnnl_win_2.7.2_cpu_vcomp_gpu_vcomp.zip -oC:\cache
-- cmd: IF %NAME%==onnx set ONNX_NAME=onnxruntime-win-x64-dml-1.22.1
-- cmd: IF %NAME%==onnx set ONNX_NAME_TWO=onnxruntime-win-x64-gpu-1.22.1
-- cmd: IF %NAME%==onnx IF NOT EXIST C:\cache\%ONNX_NAME% appveyor DownloadFile https://github.com/microsoft/onnxruntime/releases/download/v1.22.1/Microsoft.ML.OnnxRuntime.DirectML.1.22.1.nupkg
-- cmd: IF %NAME%==onnx IF NOT EXIST C:\cache\%ONNX_NAME% 7z x Microsoft.ML.OnnxRuntime.DirectML.1.22.1.nupkg -oC:\cache\%ONNX_NAME%
-- cmd: IF %NAME%==onnx IF NOT EXIST C:\cache\%ONNX_NAME_TWO% appveyor DownloadFile https://github.com/microsoft/onnxruntime/releases/download/v1.22.1/onnxruntime-win-x64-gpu-1.22.1.zip
-- cmd: IF %NAME%==onnx IF NOT EXIST C:\cache\%ONNX_NAME_TWO% 7z x onnxruntime-win-x64-gpu-1.22.1.zip -oC:\cache
+# ONNX Runtime 1.24.2 or newer is required: the Ceres C2/C3 quantized nets are
+# stamped ONNX opset 23, and ORT 1.22 supports ai.onnx only up to opset 22, so
+# it refuses to load them on every backend.  The DirectML build is not a GitHub
+# release asset at this version, so it comes from nuget.org instead.
+- cmd: IF %NAME%==onnx set ONNX_NAME=onnxruntime-win-x64-dml-1.24.2
+- cmd: IF %NAME%==onnx set ONNX_NAME_TWO=onnxruntime-win-x64-gpu-1.24.2
+- cmd: IF %NAME%==onnx IF NOT EXIST C:\cache\%ONNX_NAME% appveyor DownloadFile https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime.directml/1.24.2/microsoft.ml.onnxruntime.directml.1.24.2.nupkg
+- cmd: IF %NAME%==onnx IF NOT EXIST C:\cache\%ONNX_NAME% 7z x microsoft.ml.onnxruntime.directml.1.24.2.nupkg -oC:\cache\%ONNX_NAME%
+- cmd: IF %NAME%==onnx IF NOT EXIST C:\cache\%ONNX_NAME_TWO% appveyor DownloadFile https://github.com/microsoft/onnxruntime/releases/download/v1.24.2/onnxruntime-win-x64-gpu-1.24.2.zip
+- cmd: IF %NAME%==onnx IF NOT EXIST C:\cache\%ONNX_NAME_TWO% 7z x onnxruntime-win-x64-gpu-1.24.2.zip -oC:\cache
 - cmd: IF %NAME%==cpu-openblas IF NOT EXIST C:\cache\OpenBLAS appveyor DownloadFile https://sjeng.org/ftp/OpenBLAS-0.3.3-win-oldthread.zip
 - cmd: IF %NAME%==cpu-openblas IF NOT EXIST C:\cache\OpenBLAS 7z x OpenBLAS-0.3.3-win-oldthread.zip -oC:\cache\OpenBLAS
 - cmd: IF %OPENCL%==true nuget install opencl-nug -Version 0.777.77 -OutputDirectory C:\cache
