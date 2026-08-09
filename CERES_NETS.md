@@ -343,13 +343,51 @@ lc0 on CPU vs Ceres on TRT: mean 0.77‰, max 7‰, 199/200 bestmove.
 Residual of a few per mille is FP16 kernel-selection noise plus the per-mille
 granularity of the reported WDL, not a semantic difference.
 
+### Backend coverage
+
+Every net against every ONNX backend, on ORT 1.24 (RTX 5080, CUDA 13.1,
+TensorRT 10.15, DirectML 1.15.5), using the §9 endgame check. A tick is the
+expected decisive-win WDL; a cross names the node the runtime died on.
+
+| Net | `onnx-cpu` | `onnx-cuda` | `onnx-dml` | `onnx-trt` |
+|---|---|---|---|---|
+| C1-256-10 | 998 2 0 | 998 2 0 | 998 2 0 | 998 2 0 |
+| C1-512-15 | 998 2 0 | 998 2 0 | 998 2 0 | 998 2 0 |
+| C1-640-34 | 999 1 0 | 999 1 0 | 999 1 0 | 999 1 0 |
+| C1-BIG | ✗ `Pow` | ✗ `Transpose` | 986 13 1 | 999 1 0 |
+| C2-384-12-I8 | 999 1 0 | 999 1 0 | 999 1 0 | 999 1 0 |
+| C3-768-30-pre8-I8 | 999 1 0 | 999 1 0 | 999 1 0 | 999 1 0 |
+| C1-640-34-LEPNED-I8 | 998 2 0 | 998 2 0 | ✗ `Reshape` | 998 2 0 |
+
+Every net runs on at least two backends. The two gaps are both execution
+provider defects rather than anything in the Ceres support, and they are
+disjoint: the net that fails on DirectML runs everywhere else, and the net that
+fails on CPU and CUDA is fine on DirectML and TensorRT.
+
 ---
 
 ## 8. Known issues
 
-* **C1-BIG does not run.** It loads (`readyok`) then the process exits during
-  the first evaluation — in **Ceres too**, identically. Not an lc0 defect;
-  unproven and unfixed. Suspected memory.
+* **C1-BIG runs only on DirectML and TensorRT.** It fails on `onnx-cpu` with a
+  non-zero status from a `Pow` node and on `onnx-cuda` from a `Transpose` node,
+  both in `net2_/transformer...`; on `onnx-dml` and `onnx-trt` it evaluates
+  normally. (An earlier revision of this document claimed the net does not run
+  at all and that Ceres fails identically; that is wrong — it was only ever
+  tried on the two backends where it happens to fail.) Its DirectML WDL is
+  `986 13 1` against `999 1 0` on TensorRT, a wider spread than the ~1‰ seen
+  elsewhere, so prefer TensorRT for this net.
+* **`C1-640-34-LEPNED-I8` cannot run on DirectML.** DirectML fails inside its
+  own `Reshape` kernel: with a fixed batch the session aborts during
+  initialisation (`E_INVALIDARG` from `MLOperatorAuthorImpl`), and with
+  `batch=-1` the session builds and then dies executing `Reshape` node
+  `node_view_1` (`8007023E`). Neither the batch size, the graph optimisation
+  level (0/1/2 and an unclamped `ORT_ENABLE_ALL`), `disable_metacommands`, a
+  newer runtime (ORT DirectML 1.24.4), nor a different DX12 adapter avoids it.
+  Nothing on the lc0 side can work around it; use `onnx-cuda` or `onnx-trt`.
+  The C2/C3 nets are unaffected — this net builds LayerNorm and Mish out of
+  primitives (`Pow`/`ReduceMean`/`Sqrt`, `Greater`/`Softplus`/`Tanh`/`Where`)
+  where those use single native ops, giving DirectML far more surface to fail
+  on.
 * **Small run-to-run variation on GPU.** Re-evaluating the same position in one
   process can shift a few per mille on `onnx-cuda`. A standard BT4 net does the
   same while being stable on CPU, so this is pre-existing lc0/ORT GPU
