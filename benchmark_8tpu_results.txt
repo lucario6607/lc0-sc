@@ -1,0 +1,1785 @@
+[1m[31m       _
+|   _ | |
+|_ |_ |_|[0m v0.34.0-dev+git.fa36794d built Sep  6 2026
+Loading weights file from: BT4.pb.gz
+Weights file has multihead format, updating format flag
+Creating backend [xla]...
+Warning: PJRT library /home/kolby/.local/lib/python3.10/site-packages/libtpu/libtpu.so minor version 75 is older than compiled 80. Proceeding with backwards compatibility.
+Devices:
+  TpuDevice(id=0, process_index=0, coords=(0,0,0), core_on_chip=0)
+  TpuDevice(id=1, process_index=0, coords=(1,0,0), core_on_chip=0)
+  TpuDevice(id=2, process_index=0, coords=(0,1,0), core_on_chip=0)
+  TpuDevice(id=3, process_index=0, coords=(1,1,0), core_on_chip=0)
+  TpuDevice(id=4, process_index=0, coords=(0,2,0), core_on_chip=0)
+  TpuDevice(id=5, process_index=0, coords=(1,2,0), core_on_chip=0)
+  TpuDevice(id=6, process_index=0, coords=(0,3,0), core_on_chip=0)
+  TpuDevice(id=7, process_index=0, coords=(1,3,0), core_on_chip=0)
+Converting weights to ONNX first (bf16).
+Building HLO for batch size 24...
+Building HLO for batch size 64...
+Building HLO for batch size 256...
+Transferring constants...
+Done.
+Creating backend [xla]...
+Warning: PJRT library /home/kolby/.local/lib/python3.10/site-packages/libtpu/libtpu.so minor version 75 is older than compiled 80. Proceeding with backwards compatibility.
+Devices:
+  TpuDevice(id=0, process_index=0, coords=(0,0,0), core_on_chip=0)
+  TpuDevice(id=1, process_index=0, coords=(1,0,0), core_on_chip=0)
+  TpuDevice(id=2, process_index=0, coords=(0,1,0), core_on_chip=0)
+  TpuDevice(id=3, process_index=0, coords=(1,1,0), core_on_chip=0)
+  TpuDevice(id=4, process_index=0, coords=(0,2,0), core_on_chip=0)
+  TpuDevice(id=5, process_index=0, coords=(1,2,0), core_on_chip=0)
+  TpuDevice(id=6, process_index=0, coords=(0,3,0), core_on_chip=0)
+  TpuDevice(id=7, process_index=0, coords=(1,3,0), core_on_chip=0)
+Converting weights to ONNX first (bf16).
+Building HLO for batch size 24...
+Building HLO for batch size 64...
+Building HLO for batch size 256...
+Transferring constants...
+Done.
+Creating backend [xla]...
+Warning: PJRT library /home/kolby/.local/lib/python3.10/site-packages/libtpu/libtpu.so minor version 75 is older than compiled 80. Proceeding with backwards compatibility.
+Devices:
+  TpuDevice(id=0, process_index=0, coords=(0,0,0), core_on_chip=0)
+  TpuDevice(id=1, process_index=0, coords=(1,0,0), core_on_chip=0)
+  TpuDevice(id=2, process_index=0, coords=(0,1,0), core_on_chip=0)
+  TpuDevice(id=3, process_index=0, coords=(1,1,0), core_on_chip=0)
+  TpuDevice(id=4, process_index=0, coords=(0,2,0), core_on_chip=0)
+  TpuDevice(id=5, process_index=0, coords=(1,2,0), core_on_chip=0)
+  TpuDevice(id=6, process_index=0, coords=(0,3,0), core_on_chip=0)
+  TpuDevice(id=7, process_index=0, coords=(1,3,0), core_on_chip=0)
+Converting weights to ONNX first (bf16).
+Building HLO for batch size 24...
+Building HLO for batch size 64...
+Building HLO for batch size 256...
+Transferring constants...
+Done.
+Creating backend [xla]...
+Warning: PJRT library /home/kolby/.local/lib/python3.10/site-packages/libtpu/libtpu.so minor version 75 is older than compiled 80. Proceeding with backwards compatibility.
+Devices:
+  TpuDevice(id=0, process_index=0, coords=(0,0,0), core_on_chip=0)
+  TpuDevice(id=1, process_index=0, coords=(1,0,0), core_on_chip=0)
+  TpuDevice(id=2, process_index=0, coords=(0,1,0), core_on_chip=0)
+  TpuDevice(id=3, process_index=0, coords=(1,1,0), core_on_chip=0)
+  TpuDevice(id=4, process_index=0, coords=(0,2,0), core_on_chip=0)
+  TpuDevice(id=5, process_index=0, coords=(1,2,0), core_on_chip=0)
+  TpuDevice(id=6, process_index=0, coords=(0,3,0), core_on_chip=0)
+  TpuDevice(id=7, process_index=0, coords=(1,3,0), core_on_chip=0)
+Converting weights to ONNX first (bf16).
+Building HLO for batch size 24...
+Building HLO for batch size 64...
+Building HLO for batch size 256...
+Transferring constants...
+Done.
+Creating backend [xla]...
+Warning: PJRT library /home/kolby/.local/lib/python3.10/site-packages/libtpu/libtpu.so minor version 75 is older than compiled 80. Proceeding with backwards compatibility.
+Devices:
+  TpuDevice(id=0, process_index=0, coords=(0,0,0), core_on_chip=0)
+  TpuDevice(id=1, process_index=0, coords=(1,0,0), core_on_chip=0)
+  TpuDevice(id=2, process_index=0, coords=(0,1,0), core_on_chip=0)
+  TpuDevice(id=3, process_index=0, coords=(1,1,0), core_on_chip=0)
+  TpuDevice(id=4, process_index=0, coords=(0,2,0), core_on_chip=0)
+  TpuDevice(id=5, process_index=0, coords=(1,2,0), core_on_chip=0)
+  TpuDevice(id=6, process_index=0, coords=(0,3,0), core_on_chip=0)
+  TpuDevice(id=7, process_index=0, coords=(1,3,0), core_on_chip=0)
+Converting weights to ONNX first (bf16).
+Building HLO for batch size 24...
+Building HLO for batch size 64...
+Building HLO for batch size 256...
+Transferring constants...
+Done.
+Creating backend [xla]...
+Warning: PJRT library /home/kolby/.local/lib/python3.10/site-packages/libtpu/libtpu.so minor version 75 is older than compiled 80. Proceeding with backwards compatibility.
+Devices:
+  TpuDevice(id=0, process_index=0, coords=(0,0,0), core_on_chip=0)
+  TpuDevice(id=1, process_index=0, coords=(1,0,0), core_on_chip=0)
+  TpuDevice(id=2, process_index=0, coords=(0,1,0), core_on_chip=0)
+  TpuDevice(id=3, process_index=0, coords=(1,1,0), core_on_chip=0)
+  TpuDevice(id=4, process_index=0, coords=(0,2,0), core_on_chip=0)
+  TpuDevice(id=5, process_index=0, coords=(1,2,0), core_on_chip=0)
+  TpuDevice(id=6, process_index=0, coords=(0,3,0), core_on_chip=0)
+  TpuDevice(id=7, process_index=0, coords=(1,3,0), core_on_chip=0)
+Converting weights to ONNX first (bf16).
+Building HLO for batch size 24...
+Building HLO for batch size 64...
+Building HLO for batch size 256...
+Transferring constants...
+Done.
+Creating backend [xla]...
+Warning: PJRT library /home/kolby/.local/lib/python3.10/site-packages/libtpu/libtpu.so minor version 75 is older than compiled 80. Proceeding with backwards compatibility.
+Devices:
+  TpuDevice(id=0, process_index=0, coords=(0,0,0), core_on_chip=0)
+  TpuDevice(id=1, process_index=0, coords=(1,0,0), core_on_chip=0)
+  TpuDevice(id=2, process_index=0, coords=(0,1,0), core_on_chip=0)
+  TpuDevice(id=3, process_index=0, coords=(1,1,0), core_on_chip=0)
+  TpuDevice(id=4, process_index=0, coords=(0,2,0), core_on_chip=0)
+  TpuDevice(id=5, process_index=0, coords=(1,2,0), core_on_chip=0)
+  TpuDevice(id=6, process_index=0, coords=(0,3,0), core_on_chip=0)
+  TpuDevice(id=7, process_index=0, coords=(1,3,0), core_on_chip=0)
+Converting weights to ONNX first (bf16).
+Building HLO for batch size 24...
+Building HLO for batch size 64...
+Building HLO for batch size 256...
+Transferring constants...
+Done.
+Creating backend [xla]...
+Warning: PJRT library /home/kolby/.local/lib/python3.10/site-packages/libtpu/libtpu.so minor version 75 is older than compiled 80. Proceeding with backwards compatibility.
+Devices:
+  TpuDevice(id=0, process_index=0, coords=(0,0,0), core_on_chip=0)
+  TpuDevice(id=1, process_index=0, coords=(1,0,0), core_on_chip=0)
+  TpuDevice(id=2, process_index=0, coords=(0,1,0), core_on_chip=0)
+  TpuDevice(id=3, process_index=0, coords=(1,1,0), core_on_chip=0)
+  TpuDevice(id=4, process_index=0, coords=(0,2,0), core_on_chip=0)
+  TpuDevice(id=5, process_index=0, coords=(1,2,0), core_on_chip=0)
+  TpuDevice(id=6, process_index=0, coords=(0,3,0), core_on_chip=0)
+  TpuDevice(id=7, process_index=0, coords=(1,3,0), core_on_chip=0)
+Converting weights to ONNX first (bf16).
+Building HLO for batch size 24...
+Building HLO for batch size 64...
+Building HLO for batch size 256...
+Transferring constants...
+Done.
+
+Position: 1/34 rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
+Benchmark time 294 ms, 2 nodes, 12 nps, move e2e4
+Benchmark time 302 ms, 4 nodes, 24 nps, move c2c4
+Benchmark time 304 ms, 5 nodes, 30 nps, move e2e4
+Benchmark time 455 ms, 13 nodes, 41 nps, move c2c4
+Benchmark time 472 ms, 16 nodes, 48 nps, move e2e4
+Benchmark time 475 ms, 18 nodes, 53 nps, move g1f3
+Benchmark time 495 ms, 22 nodes, 61 nps, move e2e4
+Benchmark time 498 ms, 27 nodes, 75 nps, move g1f3
+Benchmark time 501 ms, 30 nodes, 82 nps, move e2e4
+Benchmark time 505 ms, 39 nodes, 106 nps, move d2d4
+Benchmark time 508 ms, 51 nodes, 137 nps, move d2d4
+Benchmark time 516 ms, 101 nodes, 267 nps, move d2d4
+Benchmark time 519 ms, 162 nodes, 426 nps, move d2d4
+Benchmark time 523 ms, 253 nodes, 658 nps, move d2d4
+Benchmark time 528 ms, 424 nodes, 1087 nps, move d2d4
+Benchmark time 541 ms, 1050 nodes, 2611 nps, move c2c4
+Benchmark time 543 ms, 1204 nodes, 2980 nps, move d2d4
+Benchmark time 545 ms, 1315 nodes, 3238 nps, move d2d4
+Benchmark time 547 ms, 1563 nodes, 3821 nps, move d2d4
+Benchmark time 558 ms, 2373 nodes, 5663 nps, move d2d4
+Benchmark time 585 ms, 4636 nodes, 10394 nps, move c2c4
+Benchmark time 595 ms, 5333 nodes, 11669 nps, move c2c4
+Benchmark time 628 ms, 7921 nodes, 16198 nps, move c2c4
+Benchmark time 636 ms, 8705 nodes, 17515 nps, move c2c4
+Benchmark time 665 ms, 11780 nodes, 22395 nps, move c2c4
+Benchmark time 707 ms, 16504 nodes, 29056 nps, move c2c4
+Benchmark time 804 ms, 27111 nodes, 40768 nps, move c2c4
+Benchmark time 842 ms, 31380 nodes, 44637 nps, move c2c4
+Benchmark time 847 ms, 32181 nodes, 45389 nps, move d2d4
+Benchmark time 872 ms, 35269 nodes, 48115 nps, move d2d4
+Benchmark time 928 ms, 42807 nodes, 54186 nps, move d2d4
+Benchmark time 962 ms, 47105 nodes, 57235 nps, move d2d4
+Benchmark time 992 ms, 51163 nodes, 59980 nps, move d2d4
+Benchmark time 1069 ms, 61178 nodes, 65782 nps, move d2d4
+Benchmark time 1220 ms, 80650 nodes, 74606 nps, move d2d4
+Benchmark time 1289 ms, 89911 nodes, 78183 nps, move d2d4
+Benchmark time 1389 ms, 103278 nodes, 82622 nps, move d2d4
+Benchmark time 1409 ms, 105465 nodes, 83043 nps, move d2d4
+Benchmark time 1452 ms, 112012 nodes, 85245 nps, move d2d4
+Benchmark time 2179 ms, 215795 nodes, 105781 nps, move d2d4
+Benchmark time 2349 ms, 241013 nodes, 109006 nps, move d2d4
+Benchmark time 2728 ms, 296399 nodes, 114439 nps, move d2d4
+Benchmark time 2880 ms, 318610 nodes, 116238 nps, move d2d4
+Benchmark time 3599 ms, 427895 nodes, 123669 nps, move d2d4
+Benchmark time 3767 ms, 454706 nodes, 125332 nps, move d2d4
+Benchmark time 5155 ms, 646418 nodes, 128871 nps, move d2d4
+Benchmark time 5190 ms, 651292 nodes, 128917 nps, move d2d4
+Benchmark time 5213 ms, 654181 nodes, 128928 nps, move d2d4
+Benchmark time 5296 ms, 664910 nodes, 128933 nps, move d2d4
+Benchmark time 6244 ms, 780580 nodes, 127859 nps, move d2d4
+Benchmark time 7084 ms, 883659 nodes, 127218 nps, move d2d4
+Benchmark time 7524 ms, 937031 nodes, 126883 nps, move d2d4
+Benchmark time 8052 ms, 998957 nodes, 126242 nps, move d2d4
+Benchmark time 8231 ms, 1019657 nodes, 126008 nps, move d2d4
+Benchmark time 10000 ms, 1216590 nodes, 123373 nps, move d2d4
+bestmove d2d4
+
+Position: 2/34 r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 10
+Benchmark time 6 ms, 2 nodes, 666 nps, move e2a6
+Benchmark time 9 ms, 3 nodes, 500 nps, move e2a6
+Benchmark time 13 ms, 5 nodes, 555 nps, move e2a6
+Benchmark time 16 ms, 8 nodes, 666 nps, move e2a6
+Benchmark time 19 ms, 9 nodes, 600 nps, move e2a6
+Benchmark time 22 ms, 12 nodes, 666 nps, move e2a6
+Benchmark time 27 ms, 16 nodes, 695 nps, move e2a6
+Benchmark time 33 ms, 24 nodes, 827 nps, move e2a6
+Benchmark time 34 ms, 30 nodes, 1000 nps, move e2a6
+Benchmark time 38 ms, 45 nodes, 1285 nps, move e2a6
+Benchmark time 39 ms, 49 nodes, 1400 nps, move e2a6
+Benchmark time 53 ms, 84 nodes, 1680 nps, move e2a6
+Benchmark time 65 ms, 120 nodes, 1967 nps, move e2a6
+Benchmark time 68 ms, 139 nodes, 2171 nps, move e2a6
+Benchmark time 75 ms, 177 nodes, 2492 nps, move e2a6
+Benchmark time 81 ms, 206 nodes, 2675 nps, move e2a6
+Benchmark time 84 ms, 220 nodes, 2750 nps, move e2a6
+Benchmark time 101 ms, 271 nodes, 2793 nps, move e2a6
+Benchmark time 101 ms, 283 nodes, 2917 nps, move e2a6
+Benchmark time 102 ms, 292 nodes, 2949 nps, move e2a6
+Benchmark time 104 ms, 299 nodes, 2990 nps, move e2a6
+Benchmark time 123 ms, 340 nodes, 2857 nps, move e2a6
+Benchmark time 147 ms, 495 nodes, 3461 nps, move e2a6
+Benchmark time 161 ms, 594 nodes, 3783 nps, move e2a6
+Benchmark time 280 ms, 1353 nodes, 4902 nps, move e2a6
+Benchmark time 481 ms, 4314 nodes, 9044 nps, move e2a6
+Benchmark time 669 ms, 7064 nodes, 10622 nps, move e2a6
+Benchmark time 696 ms, 7676 nodes, 11076 nps, move e2a6
+Benchmark time 936 ms, 11611 nodes, 12458 nps, move e2a6
+Benchmark time 1119 ms, 15558 nodes, 13953 nps, move e2a6
+Benchmark time 1140 ms, 16201 nodes, 14261 nps, move e2a6
+Benchmark time 2064 ms, 48761 nodes, 23670 nps, move e2a6
+Benchmark time 2435 ms, 64801 nodes, 26656 nps, move e2a6
+Benchmark time 2574 ms, 71611 nodes, 27864 nps, move e2a6
+Benchmark time 3307 ms, 104377 nodes, 31591 nps, move e2a6
+Benchmark time 4580 ms, 170205 nodes, 37195 nps, move e2a6
+Benchmark time 4652 ms, 174633 nodes, 37571 nps, move e2a6
+Benchmark time 4710 ms, 178512 nodes, 37932 nps, move e2a6
+Benchmark time 7342 ms, 329192 nodes, 44855 nps, move e2a6
+Benchmark time 10000 ms, 479591 nodes, 47973 nps, move e2a6
+bestmove e2a6
+
+Position: 3/34 8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 11
+Benchmark time 6 ms, 2 nodes, 1000 nps, move b4f4
+Benchmark time 9 ms, 3 nodes, 600 nps, move b4f4
+Benchmark time 12 ms, 5 nodes, 625 nps, move b4f4
+Benchmark time 15 ms, 6 nodes, 545 nps, move b4f4
+Benchmark time 18 ms, 7 nodes, 500 nps, move b4f4
+Benchmark time 21 ms, 10 nodes, 588 nps, move b4f4
+Benchmark time 24 ms, 13 nodes, 650 nps, move b4f4
+Benchmark time 29 ms, 17 nodes, 653 nps, move b4f4
+Benchmark time 30 ms, 18 nodes, 692 nps, move b4f4
+Benchmark time 32 ms, 22 nodes, 758 nps, move b4f4
+Benchmark time 33 ms, 24 nodes, 800 nps, move b4f4
+Benchmark time 53 ms, 52 nodes, 1061 nps, move b4f4
+Benchmark time 56 ms, 58 nodes, 1115 nps, move b4f4
+Benchmark time 59 ms, 63 nodes, 1145 nps, move b4f4
+Benchmark time 67 ms, 108 nodes, 1714 nps, move b4f4
+Benchmark time 72 ms, 129 nodes, 1869 nps, move b4f4
+Benchmark time 76 ms, 164 nodes, 2277 nps, move b4f4
+Benchmark time 89 ms, 313 nodes, 3639 nps, move b4f4
+Benchmark time 135 ms, 733 nodes, 5595 nps, move b4f4
+Benchmark time 269 ms, 4158 nodes, 15631 nps, move b4f4
+Benchmark time 534 ms, 18231 nodes, 34333 nps, move b4f4
+Benchmark time 541 ms, 18960 nodes, 35307 nps, move b4f4
+Benchmark time 618 ms, 26806 nodes, 43586 nps, move b4f4
+Benchmark time 830 ms, 46605 nodes, 56422 nps, move b4f4
+Benchmark time 1018 ms, 65904 nodes, 64930 nps, move b4f4
+Benchmark time 1297 ms, 97505 nodes, 75351 nps, move b4f4
+Benchmark time 1338 ms, 102776 nodes, 76985 nps, move b4f4
+Benchmark time 2363 ms, 237964 nodes, 100832 nps, move b4f4
+Benchmark time 2762 ms, 295157 nodes, 106979 nps, move b4f4
+Benchmark time 2788 ms, 299459 nodes, 107525 nps, move b4f4
+Benchmark time 5045 ms, 606057 nodes, 120225 nps, move b4f4
+Benchmark time 5099 ms, 613099 nodes, 120309 nps, move b4f4
+Benchmark time 5899 ms, 714352 nodes, 121158 nps, move b4f4
+Benchmark time 6898 ms, 841505 nodes, 122045 nps, move b4f4
+Benchmark time 6901 ms, 841973 nodes, 122060 nps, move b4f4
+Benchmark time 6907 ms, 842764 nodes, 122086 nps, move b4f4
+Benchmark time 8579 ms, 1043653 nodes, 121708 nps, move b4f4
+Benchmark time 10000 ms, 1213278 nodes, 121376 nps, move b4f4
+bestmove b4f4
+
+Position: 4/34 4rrk1/pp1n3p/3q2pQ/2p1pb2/2PP4/2P3N1/P2B2PP/4RRK1 b - - 7 19
+Benchmark time 6 ms, 2 nodes, 666 nps, move f5d3
+Benchmark time 9 ms, 3 nodes, 500 nps, move f5d3
+Benchmark time 12 ms, 5 nodes, 555 nps, move f5d3
+Benchmark time 15 ms, 7 nodes, 583 nps, move f5d3
+Benchmark time 16 ms, 8 nodes, 615 nps, move f5d3
+Benchmark time 18 ms, 11 nodes, 733 nps, move f5d3
+Benchmark time 21 ms, 16 nodes, 888 nps, move f5d3
+Benchmark time 22 ms, 17 nodes, 894 nps, move f5d3
+Benchmark time 31 ms, 30 nodes, 1111 nps, move f5d3
+Benchmark time 34 ms, 34 nodes, 1133 nps, move f5d3
+Benchmark time 34 ms, 38 nodes, 1266 nps, move f5d3
+Benchmark time 34 ms, 40 nodes, 1290 nps, move f5d3
+Benchmark time 36 ms, 45 nodes, 1363 nps, move f5d3
+Benchmark time 50 ms, 99 nodes, 2152 nps, move f5d3
+Benchmark time 53 ms, 122 nodes, 2489 nps, move f5d3
+Benchmark time 65 ms, 174 nodes, 2806 nps, move f5d3
+Benchmark time 81 ms, 235 nodes, 3012 nps, move f5d3
+Benchmark time 95 ms, 328 nodes, 3604 nps, move f5d3
+Benchmark time 97 ms, 376 nodes, 4000 nps, move f5d3
+Benchmark time 117 ms, 603 nodes, 5336 nps, move f5d3
+Benchmark time 199 ms, 1347 nodes, 6907 nps, move f5d3
+Benchmark time 216 ms, 1481 nodes, 6985 nps, move f5d3
+Benchmark time 246 ms, 1847 nodes, 7600 nps, move f5d3
+Benchmark time 331 ms, 2792 nodes, 8512 nps, move f5d3
+Benchmark time 337 ms, 2956 nodes, 8876 nps, move f5d3
+Benchmark time 397 ms, 4056 nodes, 10320 nps, move f5d3
+Benchmark time 596 ms, 7722 nodes, 13043 nps, move f5d3
+Benchmark time 736 ms, 11512 nodes, 15705 nps, move f5d3
+Benchmark time 934 ms, 15549 nodes, 16701 nps, move f5d3
+Benchmark time 983 ms, 16502 nodes, 16855 nps, move f5d3
+Benchmark time 992 ms, 16610 nodes, 16811 nps, move f5d3
+Benchmark time 1012 ms, 17059 nodes, 16923 nps, move f5d3
+Benchmark time 1212 ms, 22295 nodes, 18440 nps, move f5d3
+Benchmark time 1541 ms, 32502 nodes, 21132 nps, move f5d3
+Benchmark time 1717 ms, 39862 nodes, 23270 nps, move f5d3
+Benchmark time 3323 ms, 124680 nodes, 37565 nps, move f5d3
+Benchmark time 3704 ms, 148344 nodes, 40082 nps, move f5d3
+Benchmark time 3727 ms, 149762 nodes, 40215 nps, move f5d3
+Benchmark time 3947 ms, 164886 nodes, 41806 nps, move f5d3
+Benchmark time 8948 ms, 472372 nodes, 52814 nps, move f5d3
+Benchmark time 10000 ms, 536384 nodes, 53659 nps, move f5d3
+bestmove f5d3
+
+Position: 5/34 rq3rk1/ppp2ppp/1bnpb3/3N2B1/3NP3/7P/PPPQ1PP1/2KR3R w - - 7 14 moves d4e6
+Benchmark time 6 ms, 2 nodes, 666 nps, move f7e6
+Benchmark time 9 ms, 3 nodes, 500 nps, move f7e6
+Benchmark time 12 ms, 4 nodes, 444 nps, move f7e6
+Benchmark time 19 ms, 7 nodes, 466 nps, move f7e6
+Benchmark time 26 ms, 16 nodes, 695 nps, move f7e6
+Benchmark time 27 ms, 17 nodes, 739 nps, move f7e6
+Benchmark time 30 ms, 21 nodes, 807 nps, move f7e6
+Benchmark time 32 ms, 28 nodes, 965 nps, move f7e6
+Benchmark time 34 ms, 31 nodes, 1033 nps, move f7e6
+Benchmark time 43 ms, 64 nodes, 1641 nps, move f7e6
+Benchmark time 46 ms, 77 nodes, 1833 nps, move f7e6
+Benchmark time 49 ms, 96 nodes, 2133 nps, move f7e6
+Benchmark time 63 ms, 203 nodes, 3383 nps, move f7e6
+Benchmark time 66 ms, 213 nodes, 3435 nps, move f7e6
+Benchmark time 69 ms, 253 nodes, 3892 nps, move f7e6
+Benchmark time 72 ms, 305 nodes, 4420 nps, move f7e6
+Benchmark time 78 ms, 432 nodes, 5760 nps, move f7e6
+Benchmark time 106 ms, 669 nodes, 6558 nps, move f7e6
+Benchmark time 106 ms, 687 nodes, 6669 nps, move f7e6
+Benchmark time 109 ms, 709 nodes, 6752 nps, move f7e6
+Benchmark time 109 ms, 752 nodes, 7094 nps, move f7e6
+Benchmark time 111 ms, 769 nodes, 7120 nps, move f7e6
+Benchmark time 297 ms, 4338 nodes, 14755 nps, move f7e6
+Benchmark time 309 ms, 4574 nodes, 14996 nps, move f7e6
+Benchmark time 539 ms, 10325 nodes, 19299 nps, move f7e6
+Benchmark time 554 ms, 10669 nodes, 19398 nps, move f7e6
+Benchmark time 782 ms, 19695 nodes, 25314 nps, move f7e6
+Benchmark time 819 ms, 21111 nodes, 25871 nps, move f7e6
+Benchmark time 863 ms, 22910 nodes, 26670 nps, move f7e6
+Benchmark time 1188 ms, 40796 nodes, 34456 nps, move f7e6
+Benchmark time 2308 ms, 107316 nodes, 46557 nps, move f7e6
+Benchmark time 2752 ms, 138476 nodes, 50373 nps, move f7e6
+Benchmark time 5481 ms, 335097 nodes, 61182 nps, move f7e6
+Benchmark time 5817 ms, 359168 nodes, 61776 nps, move f7e6
+Benchmark time 7869 ms, 495748 nodes, 63024 nps, move f7e6
+Benchmark time 7920 ms, 499402 nodes, 63087 nps, move f7e6
+Benchmark time 8102 ms, 511985 nodes, 63215 nps, move f7e6
+Benchmark time 8433 ms, 534849 nodes, 63453 nps, move f7e6
+Benchmark time 10000 ms, 642247 nodes, 64250 nps, move f7e6
+bestmove f7e6
+
+Position: 6/34 r1bq1r1k/1pp1n1pp/1p1p4/4p2Q/4Pp2/1BNP4/PPP2PPP/3R1RK1 w - - 2 14 moves g2g4
+Benchmark time 6 ms, 2 nodes, 666 nps, move f4f3
+Benchmark time 9 ms, 3 nodes, 500 nps, move f4f3
+Benchmark time 12 ms, 7 nodes, 777 nps, move f4f3
+Benchmark time 14 ms, 11 nodes, 1100 nps, move f4f3
+Benchmark time 15 ms, 12 nodes, 1090 nps, move f4f3
+Benchmark time 22 ms, 23 nodes, 1210 nps, move f4f3
+Benchmark time 25 ms, 32 nodes, 1454 nps, move f4f3
+Benchmark time 26 ms, 35 nodes, 1521 nps, move f4f3
+Benchmark time 29 ms, 48 nodes, 1846 nps, move f4f3
+Benchmark time 46 ms, 110 nodes, 2558 nps, move f4f3
+Benchmark time 48 ms, 116 nodes, 2577 nps, move f4f3
+Benchmark time 48 ms, 117 nodes, 2600 nps, move f4f3
+Benchmark time 62 ms, 187 nodes, 3224 nps, move f4f3
+Benchmark time 90 ms, 398 nodes, 4574 nps, move f4f3
+Benchmark time 96 ms, 474 nodes, 5152 nps, move f4f3
+Benchmark time 145 ms, 1213 nodes, 8542 nps, move f4f3
+Benchmark time 164 ms, 1577 nodes, 9856 nps, move f4f3
+Benchmark time 259 ms, 3412 nodes, 13380 nps, move f4f3
+Benchmark time 282 ms, 4014 nodes, 14387 nps, move f4f3
+Benchmark time 451 ms, 9528 nodes, 21267 nps, move f4f3
+Benchmark time 526 ms, 11984 nodes, 22913 nps, move f4f3
+Benchmark time 542 ms, 12526 nodes, 23239 nps, move f4f3
+Benchmark time 828 ms, 23774 nodes, 28816 nps, move f4f3
+Benchmark time 1189 ms, 44436 nodes, 37467 nps, move f4f3
+Benchmark time 1360 ms, 54163 nodes, 39943 nps, move f4f3
+Benchmark time 1432 ms, 58069 nodes, 40664 nps, move f4f3
+Benchmark time 1633 ms, 69315 nodes, 42524 nps, move f4f3
+Benchmark time 2898 ms, 161531 nodes, 55796 nps, move f4f3
+Benchmark time 3382 ms, 198784 nodes, 58829 nps, move f4f3
+Benchmark time 3964 ms, 243979 nodes, 61595 nps, move f4f3
+Benchmark time 3978 ms, 244844 nodes, 61595 nps, move f4f3
+Benchmark time 7375 ms, 499516 nodes, 67758 nps, move f4f3
+Benchmark time 10000 ms, 682908 nodes, 68318 nps, move f4f3
+bestmove f4f3
+
+Position: 7/34 r3r1k1/2p2ppp/p1p1bn2/8/1q2P3/2NPQN2/PPP3PP/R4RK1 b - - 2 15
+Benchmark time 6 ms, 2 nodes, 666 nps, move b4b2
+Benchmark time 9 ms, 3 nodes, 500 nps, move b4b2
+Benchmark time 12 ms, 4 nodes, 444 nps, move b4b2
+Benchmark time 16 ms, 5 nodes, 416 nps, move b4b2
+Benchmark time 24 ms, 13 nodes, 650 nps, move b4b2
+Benchmark time 28 ms, 19 nodes, 791 nps, move b4b2
+Benchmark time 31 ms, 36 nodes, 1285 nps, move b4b2
+Benchmark time 34 ms, 44 nodes, 1466 nps, move b4b2
+Benchmark time 40 ms, 79 nodes, 2135 nps, move b4b2
+Benchmark time 46 ms, 99 nodes, 2357 nps, move b4b2
+Benchmark time 71 ms, 310 nodes, 4626 nps, move b4b2
+Benchmark time 73 ms, 338 nodes, 4898 nps, move b4b2
+Benchmark time 82 ms, 414 nodes, 5240 nps, move b4b2
+Benchmark time 108 ms, 845 nodes, 8047 nps, move b4b2
+Benchmark time 188 ms, 1902 nodes, 10336 nps, move b4b2
+Benchmark time 205 ms, 2221 nodes, 10995 nps, move b4b2
+Benchmark time 217 ms, 2385 nodes, 11144 nps, move b4b2
+Benchmark time 234 ms, 2642 nodes, 11437 nps, move b4b2
+Benchmark time 303 ms, 3344 nodes, 11183 nps, move b4b2
+Benchmark time 361 ms, 5831 nodes, 16287 nps, move b4b2
+Benchmark time 390 ms, 6848 nodes, 17740 nps, move b4b2
+Benchmark time 395 ms, 7165 nodes, 18278 nps, move b4b2
+Benchmark time 400 ms, 7395 nodes, 18674 nps, move b4b2
+Benchmark time 704 ms, 15186 nodes, 21663 nps, move b4b2
+Benchmark time 910 ms, 23548 nodes, 25962 nps, move b4b2
+Benchmark time 1284 ms, 44862 nodes, 35048 nps, move b4b2
+Benchmark time 1978 ms, 86920 nodes, 44032 nps, move b4b2
+Benchmark time 2700 ms, 133663 nodes, 49578 nps, move b4b2
+Benchmark time 3053 ms, 156655 nodes, 51379 nps, move b4b2
+Benchmark time 3061 ms, 157373 nodes, 51462 nps, move b4b2
+Benchmark time 3507 ms, 189544 nodes, 54093 nps, move b4b2
+Benchmark time 3520 ms, 190529 nodes, 54189 nps, move b4b2
+Benchmark time 3524 ms, 190719 nodes, 54181 nps, move b4b2
+Benchmark time 8526 ms, 543018 nodes, 63712 nps, move b4b2
+Benchmark time 10001 ms, 641695 nodes, 64188 nps, move b4b2
+bestmove b4b2
+
+Position: 8/34 r1bbk1nr/pp3p1p/2n5/1N4p1/2Np1B2/8/PPP2PPP/2KR1B1R w kq - 0 13
+Benchmark time 6 ms, 2 nodes, 666 nps, move f4g3
+Benchmark time 9 ms, 5 nodes, 833 nps, move f4g3
+Benchmark time 12 ms, 7 nodes, 777 nps, move f4g3
+Benchmark time 16 ms, 10 nodes, 769 nps, move f4g3
+Benchmark time 22 ms, 15 nodes, 789 nps, move f4g3
+Benchmark time 28 ms, 21 nodes, 840 nps, move f4g3
+Benchmark time 31 ms, 31 nodes, 1107 nps, move f4g3
+Benchmark time 39 ms, 46 nodes, 1277 nps, move f4g3
+Benchmark time 42 ms, 64 nodes, 1641 nps, move f4g3
+Benchmark time 82 ms, 245 nodes, 3141 nps, move f4g3
+Benchmark time 84 ms, 257 nodes, 3172 nps, move f4c7
+Benchmark time 107 ms, 481 nodes, 4625 nps, move f4c7
+Benchmark time 111 ms, 540 nodes, 5000 nps, move f4c7
+Benchmark time 115 ms, 630 nodes, 5625 nps, move f4c7
+Benchmark time 121 ms, 712 nodes, 6033 nps, move f4c7
+Benchmark time 136 ms, 946 nodes, 7112 nps, move f4c7
+Benchmark time 142 ms, 1089 nodes, 7834 nps, move f4g3
+Benchmark time 145 ms, 1180 nodes, 8368 nps, move f4c7
+Benchmark time 168 ms, 1624 nodes, 9842 nps, move f4g3
+Benchmark time 172 ms, 1785 nodes, 10625 nps, move f4g3
+Benchmark time 173 ms, 1807 nodes, 10692 nps, move f4c7
+Benchmark time 197 ms, 2148 nodes, 11072 nps, move f4g3
+Benchmark time 259 ms, 2840 nodes, 11093 nps, move f4c7
+Benchmark time 261 ms, 2863 nodes, 11096 nps, move f4g3
+Benchmark time 274 ms, 3093 nodes, 11413 nps, move f4g3
+Benchmark time 440 ms, 5306 nodes, 12169 nps, move f4g3
+Benchmark time 459 ms, 5557 nodes, 12186 nps, move f4g3
+Benchmark time 463 ms, 5601 nodes, 12202 nps, move f4g3
+Benchmark time 546 ms, 8206 nodes, 15112 nps, move f4g3
+Benchmark time 1131 ms, 29137 nodes, 25830 nps, move f4g3
+Benchmark time 1260 ms, 35969 nodes, 28614 nps, move f4g3
+Benchmark time 1767 ms, 62726 nodes, 35558 nps, move f4g3
+Benchmark time 3091 ms, 138518 nodes, 44856 nps, move f4g3
+Benchmark time 3457 ms, 157790 nodes, 45683 nps, move f4g3
+Benchmark time 3574 ms, 164652 nodes, 46108 nps, move f4g3
+Benchmark time 8187 ms, 443456 nodes, 54185 nps, move f4g3
+Benchmark time 10000 ms, 550216 nodes, 55043 nps, move f4g3
+bestmove f4g3
+
+Position: 9/34 r1bq1rk1/ppp1nppp/4n3/3p3Q/3P4/1BP1B3/PP1N2PP/R4RK1 w - - 1 16
+Benchmark time 6 ms, 2 nodes, 666 nps, move a1e1
+Benchmark time 9 ms, 3 nodes, 500 nps, move a1e1
+Benchmark time 13 ms, 7 nodes, 700 nps, move a1e1
+Benchmark time 16 ms, 13 nodes, 1000 nps, move a1e1
+Benchmark time 22 ms, 22 nodes, 1222 nps, move b3c2
+Benchmark time 23 ms, 25 nodes, 1250 nps, move a1e1
+Benchmark time 24 ms, 26 nodes, 1300 nps, move b3c2
+Benchmark time 27 ms, 41 nodes, 1782 nps, move a1e1
+Benchmark time 29 ms, 48 nodes, 1846 nps, move a1e1
+Benchmark time 31 ms, 49 nodes, 1814 nps, move b3c2
+Benchmark time 31 ms, 50 nodes, 1785 nps, move a1e1
+Benchmark time 32 ms, 54 nodes, 1928 nps, move b3c2
+Benchmark time 32 ms, 61 nodes, 2178 nps, move a1e1
+Benchmark time 35 ms, 63 nodes, 2032 nps, move b3c2
+Benchmark time 35 ms, 64 nodes, 2064 nps, move b3c2
+Benchmark time 38 ms, 74 nodes, 2176 nps, move b3c2
+Benchmark time 41 ms, 91 nodes, 2459 nps, move a1e1
+Benchmark time 45 ms, 132 nodes, 3142 nps, move a1e1
+Benchmark time 47 ms, 141 nodes, 3204 nps, move a1e1
+Benchmark time 69 ms, 342 nodes, 5181 nps, move a1e1
+Benchmark time 81 ms, 486 nodes, 6311 nps, move a1e1
+Benchmark time 100 ms, 820 nodes, 8541 nps, move a1e1
+Benchmark time 173 ms, 1870 nodes, 11000 nps, move a1e1
+Benchmark time 177 ms, 1965 nodes, 11358 nps, move a1e1
+Benchmark time 208 ms, 2489 nodes, 12200 nps, move a1e1
+Benchmark time 262 ms, 3278 nodes, 12705 nps, move a1e1
+Benchmark time 271 ms, 3573 nodes, 13382 nps, move a1e1
+Benchmark time 273 ms, 3653 nodes, 13579 nps, move b3c2
+Benchmark time 274 ms, 3676 nodes, 13614 nps, move a1e1
+Benchmark time 275 ms, 3700 nodes, 13602 nps, move b3c2
+Benchmark time 277 ms, 3719 nodes, 13622 nps, move a1e1
+Benchmark time 283 ms, 3939 nodes, 14067 nps, move b3c2
+Benchmark time 329 ms, 5387 nodes, 16575 nps, move b3c2
+Benchmark time 331 ms, 5487 nodes, 16728 nps, move b3c2
+Benchmark time 493 ms, 12506 nodes, 25522 nps, move b3c2
+Benchmark time 675 ms, 21004 nodes, 31302 nps, move a1e1
+Benchmark time 825 ms, 30180 nodes, 36715 nps, move b3c2
+Benchmark time 1104 ms, 47508 nodes, 43189 nps, move b3c2
+Benchmark time 1170 ms, 51873 nodes, 44487 nps, move a1e1
+Benchmark time 1246 ms, 56903 nodes, 45815 nps, move a1e1
+Benchmark time 1313 ms, 60507 nodes, 46188 nps, move a1e1
+Benchmark time 1335 ms, 61966 nodes, 46555 nps, move a1e1
+Benchmark time 1340 ms, 62594 nodes, 46816 nps, move a1e1
+Benchmark time 2106 ms, 112349 nodes, 53448 nps, move a1e1
+Benchmark time 3059 ms, 185115 nodes, 60594 nps, move a1e1
+Benchmark time 4574 ms, 302144 nodes, 66114 nps, move a1e1
+Benchmark time 8618 ms, 590837 nodes, 68590 nps, move a1e1
+Benchmark time 8825 ms, 605583 nodes, 68644 nps, move a1e1
+Benchmark time 10000 ms, 685098 nodes, 68530 nps, move a1e1
+bestmove a1e1
+
+Position: 10/34 4r1k1/r1q2ppp/ppp2n2/4P3/5Rb1/1N1BQ3/PPP3PP/R5K1 w - - 1 17
+Benchmark time 6 ms, 2 nodes, 666 nps, move e3g3
+Benchmark time 9 ms, 4 nodes, 800 nps, move e3g3
+Benchmark time 12 ms, 6 nodes, 750 nps, move f4f6
+Benchmark time 15 ms, 7 nodes, 583 nps, move f4f6
+Benchmark time 18 ms, 8 nodes, 533 nps, move f4f6
+Benchmark time 21 ms, 10 nodes, 555 nps, move f4f6
+Benchmark time 24 ms, 12 nodes, 571 nps, move f4f6
+Benchmark time 27 ms, 13 nodes, 541 nps, move f4f6
+Benchmark time 30 ms, 18 nodes, 666 nps, move f4f6
+Benchmark time 33 ms, 20 nodes, 666 nps, move f4f6
+Benchmark time 36 ms, 23 nodes, 696 nps, move f4f6
+Benchmark time 39 ms, 28 nodes, 777 nps, move f4f6
+Benchmark time 54 ms, 63 nodes, 1260 nps, move f4f6
+Benchmark time 56 ms, 66 nodes, 1269 nps, move f4f6
+Benchmark time 62 ms, 77 nodes, 1305 nps, move f4f6
+Benchmark time 66 ms, 105 nodes, 1693 nps, move f4f6
+Benchmark time 70 ms, 126 nodes, 1909 nps, move f4f6
+Benchmark time 73 ms, 140 nodes, 2000 nps, move f4f6
+Benchmark time 76 ms, 158 nodes, 2164 nps, move f4f6
+Benchmark time 80 ms, 202 nodes, 2657 nps, move f4f6
+Benchmark time 88 ms, 269 nodes, 3202 nps, move f4f6
+Benchmark time 119 ms, 503 nodes, 4336 nps, move f4f6
+Benchmark time 146 ms, 635 nodes, 4440 nps, move f4f6
+Benchmark time 167 ms, 853 nodes, 5201 nps, move f4f6
+Benchmark time 252 ms, 1594 nodes, 6401 nps, move f4f6
+Benchmark time 258 ms, 1646 nodes, 6454 nps, move f4f6
+Benchmark time 267 ms, 1660 nodes, 6287 nps, move f4f6
+Benchmark time 288 ms, 1940 nodes, 6807 nps, move f4f6
+Benchmark time 344 ms, 2622 nodes, 7689 nps, move f4f6
+Benchmark time 402 ms, 3605 nodes, 9057 nps, move f4f6
+Benchmark time 417 ms, 3969 nodes, 9586 nps, move f4f6
+Benchmark time 418 ms, 3992 nodes, 9619 nps, move f4f6
+Benchmark time 422 ms, 4146 nodes, 9918 nps, move f4f6
+Benchmark time 429 ms, 4511 nodes, 10589 nps, move f4f6
+Benchmark time 970 ms, 13206 nodes, 13656 nps, move f4f6
+Benchmark time 1178 ms, 18606 nodes, 15834 nps, move f4f6
+Benchmark time 1181 ms, 18642 nodes, 15825 nps, move f4f6
+Benchmark time 1181 ms, 18728 nodes, 15898 nps, move f4f6
+Benchmark time 1183 ms, 18732 nodes, 15874 nps, move f4f6
+Benchmark time 1196 ms, 19045 nodes, 15977 nps, move f4f6
+Benchmark time 1198 ms, 19107 nodes, 15989 nps, move f4f6
+Benchmark time 1199 ms, 19114 nodes, 15981 nps, move f4f6
+Benchmark time 1199 ms, 19124 nodes, 15989 nps, move f4f6
+Benchmark time 1201 ms, 19162 nodes, 15994 nps, move f4f6
+Benchmark time 2558 ms, 68418 nodes, 26778 nps, move f4f6
+Benchmark time 2614 ms, 71153 nodes, 27251 nps, move f4f6
+Benchmark time 2841 ms, 84297 nodes, 29702 nps, move f4f6
+Benchmark time 2919 ms, 87441 nodes, 29986 nps, move f4f6
+Benchmark time 2946 ms, 89058 nodes, 30260 nps, move f4f6
+Benchmark time 4092 ms, 145941 nodes, 35691 nps, move f4f6
+Benchmark time 5956 ms, 251447 nodes, 42238 nps, move e3g3
+Benchmark time 5965 ms, 252093 nodes, 42283 nps, move f4f6
+Benchmark time 6045 ms, 256747 nodes, 42493 nps, move e3g3
+Benchmark time 6401 ms, 276767 nodes, 43258 nps, move f4f6
+Benchmark time 7150 ms, 318189 nodes, 44520 nps, move f4f6
+Benchmark time 9616 ms, 458004 nodes, 47644 nps, move e3g3
+Benchmark time 9819 ms, 468869 nodes, 47765 nps, move f4f6
+Benchmark time 10000 ms, 478653 nodes, 47879 nps, move f4f6
+bestmove f4f6
+
+Position: 11/34 2rqkb1r/ppp2p2/2npb1p1/1N1Nn2p/2P1PP2/8/PP2B1PP/R1BQK2R b KQ - 0 11
+Benchmark time 6 ms, 2 nodes, 666 nps, move e5g4
+Benchmark time 9 ms, 3 nodes, 500 nps, move e5g4
+Benchmark time 12 ms, 6 nodes, 666 nps, move e5g4
+Benchmark time 16 ms, 11 nodes, 846 nps, move e5g4
+Benchmark time 17 ms, 12 nodes, 923 nps, move e5g4
+Benchmark time 20 ms, 14 nodes, 875 nps, move e5g4
+Benchmark time 22 ms, 21 nodes, 1105 nps, move e5g4
+Benchmark time 24 ms, 25 nodes, 1250 nps, move e5g4
+Benchmark time 34 ms, 61 nodes, 2033 nps, move e5g4
+Benchmark time 41 ms, 89 nodes, 2342 nps, move e5g4
+Benchmark time 47 ms, 115 nodes, 2613 nps, move e5g4
+Benchmark time 49 ms, 130 nodes, 2888 nps, move e5d7
+Benchmark time 51 ms, 148 nodes, 3083 nps, move e5d7
+Benchmark time 54 ms, 174 nodes, 3411 nps, move e5d7
+Benchmark time 57 ms, 204 nodes, 3777 nps, move e5d7
+Benchmark time 63 ms, 251 nodes, 4254 nps, move e5g4
+Benchmark time 76 ms, 406 nodes, 5561 nps, move e5g4
+Benchmark time 90 ms, 573 nodes, 6662 nps, move e5d7
+Benchmark time 90 ms, 595 nodes, 6839 nps, move e5d7
+Benchmark time 91 ms, 604 nodes, 6942 nps, move e5d7
+Benchmark time 93 ms, 650 nodes, 7222 nps, move e5d7
+Benchmark time 94 ms, 656 nodes, 7208 nps, move e5d7
+Benchmark time 96 ms, 693 nodes, 7451 nps, move e5d7
+Benchmark time 139 ms, 1172 nodes, 8681 nps, move e5d7
+Benchmark time 141 ms, 1189 nodes, 8615 nps, move e5d7
+Benchmark time 142 ms, 1213 nodes, 8789 nps, move e5d7
+Benchmark time 147 ms, 1267 nodes, 8860 nps, move e5g4
+Benchmark time 191 ms, 1764 nodes, 9433 nps, move e5d7
+Benchmark time 201 ms, 1993 nodes, 10065 nps, move e5g4
+Benchmark time 234 ms, 2580 nodes, 11217 nps, move e5g4
+Benchmark time 244 ms, 2709 nodes, 11287 nps, move e5g4
+Benchmark time 349 ms, 5056 nodes, 14612 nps, move e5g4
+Benchmark time 424 ms, 6648 nodes, 15790 nps, move e5g4
+Benchmark time 426 ms, 6672 nodes, 15810 nps, move e5g4
+Benchmark time 464 ms, 7097 nodes, 15428 nps, move e5g4
+Benchmark time 495 ms, 7687 nodes, 15655 nps, move e5g4
+Benchmark time 499 ms, 7796 nodes, 15717 nps, move e5g4
+Benchmark time 516 ms, 8086 nodes, 15792 nps, move e5g4
+Benchmark time 521 ms, 8175 nodes, 15781 nps, move e5g4
+Benchmark time 536 ms, 8477 nodes, 15934 nps, move e5g4
+Benchmark time 939 ms, 20296 nodes, 21706 nps, move e5g4
+Benchmark time 1126 ms, 27730 nodes, 24692 nps, move e5g4
+Benchmark time 1132 ms, 27993 nodes, 24816 nps, move e5g4
+Benchmark time 1270 ms, 34679 nodes, 27370 nps, move e5g4
+Benchmark time 2078 ms, 77755 nodes, 37490 nps, move e5g4
+Benchmark time 3534 ms, 155853 nodes, 44138 nps, move e5g4
+Benchmark time 3853 ms, 175707 nodes, 45638 nps, move e5g4
+Benchmark time 4296 ms, 205822 nodes, 47954 nps, move e5g4
+Benchmark time 5756 ms, 292721 nodes, 50881 nps, move e5g4
+Benchmark time 5784 ms, 294255 nodes, 50909 nps, move e5g4
+Benchmark time 5891 ms, 301412 nodes, 51199 nps, move e5g4
+Benchmark time 9092 ms, 496942 nodes, 54675 nps, move e5g4
+Benchmark time 9134 ms, 499700 nodes, 54725 nps, move e5g4
+Benchmark time 10000 ms, 551414 nodes, 55163 nps, move e5g4
+bestmove e5g4
+
+Position: 12/34 r1bq1r1k/b1p1npp1/p2p3p/1p6/3PP3/1B2NN2/PP3PPP/R2Q1RK1 w - - 1 16
+Benchmark time 6 ms, 2 nodes, 666 nps, move a2a4
+Benchmark time 9 ms, 3 nodes, 500 nps, move a2a4
+Benchmark time 12 ms, 7 nodes, 777 nps, move a2a4
+Benchmark time 15 ms, 12 nodes, 1000 nps, move a2a4
+Benchmark time 18 ms, 19 nodes, 1266 nps, move a2a4
+Benchmark time 19 ms, 22 nodes, 1375 nps, move a2a4
+Benchmark time 35 ms, 56 nodes, 1750 nps, move a2a4
+Benchmark time 41 ms, 79 nodes, 2135 nps, move a2a4
+Benchmark time 55 ms, 161 nodes, 3156 nps, move a2a4
+Benchmark time 65 ms, 366 nodes, 5903 nps, move a2a4
+Benchmark time 80 ms, 634 nodes, 8342 nps, move a2a4
+Benchmark time 85 ms, 768 nodes, 9365 nps, move a2a4
+Benchmark time 88 ms, 856 nodes, 10190 nps, move f1e1
+Benchmark time 106 ms, 1365 nodes, 13252 nps, move a2a4
+Benchmark time 107 ms, 1425 nodes, 13834 nps, move a2a4
+Benchmark time 116 ms, 1784 nodes, 15787 nps, move a2a4
+Benchmark time 161 ms, 2882 nodes, 18240 nps, move a2a4
+Benchmark time 167 ms, 3225 nodes, 19785 nps, move f1e1
+Benchmark time 209 ms, 4920 nodes, 23883 nps, move a2a4
+Benchmark time 220 ms, 5299 nodes, 24532 nps, move a2a4
+Benchmark time 253 ms, 6858 nodes, 27542 nps, move a2a4
+Benchmark time 347 ms, 10978 nodes, 32005 nps, move a2a4
+Benchmark time 405 ms, 13682 nodes, 34119 nps, move a2a4
+Benchmark time 1028 ms, 54882 nodes, 53595 nps, move a2a4
+Benchmark time 1033 ms, 55299 nodes, 53740 nps, move a2a4
+Benchmark time 1039 ms, 55484 nodes, 53607 nps, move a2a4
+Benchmark time 1259 ms, 71048 nodes, 56566 nps, move a2a4
+Benchmark time 1615 ms, 97942 nodes, 60758 nps, move a2a4
+Benchmark time 2102 ms, 135807 nodes, 64731 nps, move a2a4
+Benchmark time 2611 ms, 179704 nodes, 68904 nps, move a2a4
+Benchmark time 3908 ms, 294231 nodes, 75347 nps, move a2a4
+Benchmark time 8868 ms, 682590 nodes, 77006 nps, move a2a4
+Benchmark time 10001 ms, 770471 nodes, 77070 nps, move a2a4
+bestmove a2a4
+
+Position: 13/34 3r1rk1/p5pp/bpp1pp2/8/q1PP1P2/b3P3/P2NQRPP/1R2B1K1 b - - 6 22
+Benchmark time 6 ms, 2 nodes, 666 nps, move c6c5
+Benchmark time 9 ms, 4 nodes, 666 nps, move c6c5
+Benchmark time 10 ms, 5 nodes, 714 nps, move a3e7
+Benchmark time 12 ms, 7 nodes, 777 nps, move c6c5
+Benchmark time 13 ms, 8 nodes, 800 nps, move a3e7
+Benchmark time 15 ms, 9 nodes, 818 nps, move c6c5
+Benchmark time 18 ms, 11 nodes, 785 nps, move c6c5
+Benchmark time 21 ms, 16 nodes, 941 nps, move c6c5
+Benchmark time 26 ms, 28 nodes, 1217 nps, move c6c5
+Benchmark time 29 ms, 36 nodes, 1384 nps, move c6c5
+Benchmark time 30 ms, 38 nodes, 1461 nps, move c6c5
+Benchmark time 31 ms, 41 nodes, 1518 nps, move c6c5
+Benchmark time 33 ms, 44 nodes, 1517 nps, move c6c5
+Benchmark time 33 ms, 46 nodes, 1586 nps, move c6c5
+Benchmark time 42 ms, 74 nodes, 1947 nps, move c6c5
+Benchmark time 44 ms, 79 nodes, 1975 nps, move c6c5
+Benchmark time 57 ms, 132 nodes, 2444 nps, move c6c5
+Benchmark time 60 ms, 149 nodes, 2614 nps, move c6c5
+Benchmark time 64 ms, 187 nodes, 3116 nps, move c6c5
+Benchmark time 90 ms, 477 nodes, 5546 nps, move c6c5
+Benchmark time 95 ms, 582 nodes, 6326 nps, move c6c5
+Benchmark time 317 ms, 3416 nodes, 10913 nps, move c6c5
+Benchmark time 371 ms, 4532 nodes, 12315 nps, move c6c5
+Benchmark time 981 ms, 22644 nodes, 23153 nps, move c6c5
+Benchmark time 1148 ms, 30622 nodes, 26767 nps, move c6c5
+Benchmark time 1187 ms, 32610 nodes, 27542 nps, move c6c5
+Benchmark time 1209 ms, 33472 nodes, 27754 nps, move c6c5
+Benchmark time 1213 ms, 33758 nodes, 27922 nps, move c6c5
+Benchmark time 1217 ms, 33922 nodes, 27942 nps, move c6c5
+Benchmark time 1218 ms, 33933 nodes, 27951 nps, move c6c5
+Benchmark time 1218 ms, 34004 nodes, 27986 nps, move c6c5
+Benchmark time 1221 ms, 34051 nodes, 27979 nps, move c6c5
+Benchmark time 1227 ms, 34260 nodes, 28013 nps, move c6c5
+Benchmark time 1439 ms, 45383 nodes, 31625 nps, move c6c5
+Benchmark time 1450 ms, 46029 nodes, 31809 nps, move c6c5
+Benchmark time 1675 ms, 55397 nodes, 33152 nps, move c6c5
+Benchmark time 1869 ms, 65791 nodes, 35276 nps, move c6c5
+Benchmark time 4005 ms, 190810 nodes, 47678 nps, move c6c5
+Benchmark time 4646 ms, 232353 nodes, 50043 nps, move c6c5
+Benchmark time 7902 ms, 436349 nodes, 55241 nps, move c6c5
+Benchmark time 10000 ms, 570897 nodes, 57112 nps, move c6c5
+bestmove c6c5
+
+Position: 14/34 r1q2rk1/2p1bppp/2Pp4/p6b/Q1PNp3/4B3/PP1R1PPP/2K4R w - - 2 18
+Benchmark time 6 ms, 2 nodes, 666 nps, move d4b5
+Benchmark time 9 ms, 4 nodes, 666 nps, move c1b1
+Benchmark time 10 ms, 7 nodes, 1000 nps, move d4b5
+Benchmark time 12 ms, 9 nodes, 1000 nps, move d4b5
+Benchmark time 15 ms, 12 nodes, 1000 nps, move d4b5
+Benchmark time 16 ms, 15 nodes, 1153 nps, move d4b5
+Benchmark time 22 ms, 28 nodes, 1555 nps, move d4b5
+Benchmark time 28 ms, 33 nodes, 1375 nps, move c1b1
+Benchmark time 31 ms, 46 nodes, 1703 nps, move c1b1
+Benchmark time 34 ms, 63 nodes, 2032 nps, move c1b1
+Benchmark time 43 ms, 126 nodes, 3230 nps, move c1b1
+Benchmark time 49 ms, 210 nodes, 4666 nps, move c1b1
+Benchmark time 59 ms, 340 nodes, 6071 nps, move d4b5
+Benchmark time 67 ms, 494 nodes, 7718 nps, move d4b5
+Benchmark time 80 ms, 823 nodes, 10828 nps, move c1b1
+Benchmark time 82 ms, 954 nodes, 12230 nps, move d4b5
+Benchmark time 83 ms, 1040 nodes, 13164 nps, move c1b1
+Benchmark time 88 ms, 1232 nodes, 14494 nps, move c1b1
+Benchmark time 91 ms, 1321 nodes, 15011 nps, move d4b5
+Benchmark time 98 ms, 1362 nodes, 14489 nps, move d4b5
+Benchmark time 109 ms, 1756 nodes, 16723 nps, move d4b5
+Benchmark time 159 ms, 2621 nodes, 16801 nps, move g2g3
+Benchmark time 169 ms, 2875 nodes, 17424 nps, move d4b5
+Benchmark time 171 ms, 3012 nodes, 18035 nps, move g2g3
+Benchmark time 205 ms, 4850 nodes, 24129 nps, move a4b5
+Benchmark time 215 ms, 5235 nodes, 24693 nps, move d4b5
+Benchmark time 218 ms, 5301 nodes, 24771 nps, move a4b5
+Benchmark time 221 ms, 5557 nodes, 25490 nps, move d4b5
+Benchmark time 237 ms, 6116 nodes, 26248 nps, move a4b5
+Benchmark time 304 ms, 7067 nodes, 23556 nps, move d4b5
+Benchmark time 306 ms, 7080 nodes, 23366 nps, move a4b5
+Benchmark time 307 ms, 7099 nodes, 23351 nps, move d4b5
+Benchmark time 323 ms, 7359 nodes, 23068 nps, move a4b5
+Benchmark time 359 ms, 8347 nodes, 23512 nps, move a4b5
+Benchmark time 429 ms, 12749 nodes, 29927 nps, move d4b5
+Benchmark time 501 ms, 16606 nodes, 33412 nps, move d4b5
+Benchmark time 510 ms, 17296 nodes, 34181 nps, move a4b5
+Benchmark time 511 ms, 17329 nodes, 34112 nps, move d4b5
+Benchmark time 529 ms, 18259 nodes, 34712 nps, move a4b5
+Benchmark time 549 ms, 19665 nodes, 36082 nps, move d4b5
+Benchmark time 644 ms, 26230 nodes, 40984 nps, move g2g3
+Benchmark time 694 ms, 29558 nodes, 42837 nps, move g2g3
+Benchmark time 716 ms, 31056 nodes, 43556 nps, move a4b5
+Benchmark time 721 ms, 31401 nodes, 43733 nps, move a4b5
+Benchmark time 1340 ms, 74664 nodes, 55844 nps, move a4b5
+Benchmark time 1521 ms, 88726 nodes, 58449 nps, move a4b5
+Benchmark time 1601 ms, 94018 nodes, 58871 nps, move d4b5
+Benchmark time 2231 ms, 144772 nodes, 64978 nps, move a4b5
+Benchmark time 2241 ms, 145370 nodes, 64955 nps, move d4b5
+Benchmark time 2255 ms, 146334 nodes, 65008 nps, move a4b5
+Benchmark time 2578 ms, 171276 nodes, 66540 nps, move a4b5
+Benchmark time 2647 ms, 177675 nodes, 67199 nps, move a4b5
+Benchmark time 4050 ms, 297398 nodes, 73486 nps, move d4b5
+Benchmark time 4466 ms, 330330 nodes, 74031 nps, move a4b5
+Benchmark time 5023 ms, 374359 nodes, 74588 nps, move d4b5
+Benchmark time 5444 ms, 406718 nodes, 74750 nps, move a4b5
+Benchmark time 5475 ms, 409007 nodes, 74745 nps, move d4b5
+Benchmark time 5631 ms, 420849 nodes, 74777 nps, move c1b1
+Benchmark time 6012 ms, 449836 nodes, 74860 nps, move c1b1
+Benchmark time 6034 ms, 451391 nodes, 74857 nps, move c1b1
+Benchmark time 6410 ms, 479948 nodes, 74921 nps, move c1b1
+Benchmark time 7288 ms, 545055 nodes, 74818 nps, move d4b5
+Benchmark time 8063 ms, 601211 nodes, 74591 nps, move c1b1
+Benchmark time 8072 ms, 601852 nodes, 74597 nps, move d4b5
+Benchmark time 10000 ms, 743052 nodes, 74334 nps, move d4b5
+bestmove d4b5
+
+Position: 15/34 4k2r/1pb2ppp/1p2p3/1R1p4/3P4/2r1PN2/P4PPP/1R4K1 b - - 3 22
+Benchmark time 6 ms, 2 nodes, 666 nps, move e8d7
+Benchmark time 9 ms, 4 nodes, 666 nps, move e8d7
+Benchmark time 12 ms, 9 nodes, 1000 nps, move e8d7
+Benchmark time 15 ms, 10 nodes, 833 nps, move e8d7
+Benchmark time 18 ms, 11 nodes, 785 nps, move e8d7
+Benchmark time 31 ms, 30 nodes, 1111 nps, move e8d7
+Benchmark time 39 ms, 60 nodes, 1666 nps, move e8d7
+Benchmark time 45 ms, 93 nodes, 2214 nps, move e8d7
+Benchmark time 54 ms, 120 nodes, 2400 nps, move e8d7
+Benchmark time 62 ms, 195 nodes, 3305 nps, move e8d7
+Benchmark time 79 ms, 248 nodes, 3306 nps, move e8d7
+Benchmark time 104 ms, 633 nodes, 6330 nps, move e8d7
+Benchmark time 106 ms, 666 nodes, 6529 nps, move e8d7
+Benchmark time 106 ms, 674 nodes, 6607 nps, move e8d7
+Benchmark time 107 ms, 684 nodes, 6640 nps, move e8d7
+Benchmark time 108 ms, 733 nodes, 6980 nps, move e8d7
+Benchmark time 231 ms, 3812 nodes, 16719 nps, move e8d7
+Benchmark time 323 ms, 7410 nodes, 23228 nps, move e8d7
+Benchmark time 327 ms, 7653 nodes, 23620 nps, move e8d7
+Benchmark time 330 ms, 7922 nodes, 24226 nps, move e8d7
+Benchmark time 419 ms, 12512 nodes, 30076 nps, move e8d7
+Benchmark time 432 ms, 13395 nodes, 31296 nps, move e8d7
+Benchmark time 461 ms, 15156 nodes, 33164 nps, move e8d7
+Benchmark time 517 ms, 18993 nodes, 37023 nps, move e8d7
+Benchmark time 556 ms, 21241 nodes, 38410 nps, move f7f6
+Benchmark time 559 ms, 21370 nodes, 38504 nps, move e8d7
+Benchmark time 561 ms, 21452 nodes, 38444 nps, move f7f6
+Benchmark time 564 ms, 21498 nodes, 38320 nps, move e8d7
+Benchmark time 590 ms, 22488 nodes, 38375 nps, move f7f6
+Benchmark time 600 ms, 23041 nodes, 38594 nps, move e8d7
+Benchmark time 1305 ms, 78517 nodes, 60351 nps, move e8d7
+Benchmark time 1789 ms, 127909 nodes, 71657 nps, move e8d7
+Benchmark time 1814 ms, 130316 nodes, 71997 nps, move e8d7
+Benchmark time 3867 ms, 354656 nodes, 91808 nps, move e8d7
+Benchmark time 4929 ms, 462575 nodes, 93904 nps, move e8d7
+Benchmark time 7204 ms, 688789 nodes, 95665 nps, move e8d7
+Benchmark time 8193 ms, 788763 nodes, 96319 nps, move e8d7
+Benchmark time 9072 ms, 874389 nodes, 96425 nps, move e8d7
+Benchmark time 10000 ms, 966131 nodes, 96642 nps, move e8d7
+bestmove e8d7
+
+Position: 16/34 3q2k1/pb3p1p/4pbp1/2r5/PpN2N2/1P2P2P/5PP1/Q2R2K1 b - - 4 26
+Benchmark time 6 ms, 2 nodes, 1000 nps, move d8e7
+Benchmark time 9 ms, 4 nodes, 800 nps, move d8e7
+Benchmark time 10 ms, 5 nodes, 714 nps, move c5d5
+Benchmark time 12 ms, 6 nodes, 750 nps, move c5d5
+Benchmark time 13 ms, 7 nodes, 700 nps, move d8e7
+Benchmark time 13 ms, 8 nodes, 800 nps, move c5d5
+Benchmark time 13 ms, 9 nodes, 900 nps, move d8e7
+Benchmark time 15 ms, 12 nodes, 1090 nps, move d8e7
+Benchmark time 21 ms, 22 nodes, 1294 nps, move d8e7
+Benchmark time 22 ms, 25 nodes, 1315 nps, move d8e7
+Benchmark time 26 ms, 32 nodes, 1391 nps, move d8e7
+Benchmark time 39 ms, 70 nodes, 2000 nps, move d8e7
+Benchmark time 42 ms, 80 nodes, 2105 nps, move d8e7
+Benchmark time 54 ms, 113 nodes, 2260 nps, move d8e7
+Benchmark time 88 ms, 316 nodes, 3761 nps, move d8e7
+Benchmark time 90 ms, 343 nodes, 3942 nps, move d8e7
+Benchmark time 96 ms, 409 nodes, 4445 nps, move d8e7
+Benchmark time 99 ms, 434 nodes, 4568 nps, move d8e7
+Benchmark time 99 ms, 448 nodes, 4715 nps, move d8e7
+Benchmark time 102 ms, 497 nodes, 5071 nps, move c5d5
+Benchmark time 104 ms, 529 nodes, 5290 nps, move c5d5
+Benchmark time 144 ms, 1060 nodes, 7571 nps, move d8e7
+Benchmark time 191 ms, 1457 nodes, 7750 nps, move d8e7
+Benchmark time 239 ms, 1901 nodes, 8089 nps, move c5d5
+Benchmark time 261 ms, 2021 nodes, 7833 nps, move d8e7
+Benchmark time 443 ms, 5729 nodes, 13020 nps, move d8e7
+Benchmark time 578 ms, 9645 nodes, 16803 nps, move d8e7
+Benchmark time 651 ms, 11797 nodes, 18205 nps, move d8e7
+Benchmark time 698 ms, 13136 nodes, 18927 nps, move c5d5
+Benchmark time 846 ms, 18358 nodes, 21776 nps, move c5d5
+Benchmark time 1030 ms, 25035 nodes, 24376 nps, move c5d5
+Benchmark time 1087 ms, 27702 nodes, 25555 nps, move c5d5
+Benchmark time 1258 ms, 36142 nodes, 28821 nps, move c5d5
+Benchmark time 1645 ms, 57462 nodes, 35016 nps, move c5d5
+Benchmark time 2089 ms, 84025 nodes, 40280 nps, move c5d5
+Benchmark time 3479 ms, 176889 nodes, 50888 nps, move d8e7
+Benchmark time 3667 ms, 186921 nodes, 51029 nps, move c5d5
+Benchmark time 4511 ms, 241154 nodes, 53494 nps, move c5d5
+Benchmark time 4586 ms, 245711 nodes, 53625 nps, move c5d5
+Benchmark time 9587 ms, 560915 nodes, 58532 nps, move c5d5
+Benchmark time 9693 ms, 567938 nodes, 58616 nps, move c5d5
+Benchmark time 10000 ms, 588218 nodes, 58845 nps, move c5d5
+bestmove c5d5
+
+Position: 17/34 6k1/6p1/6Pp/ppp5/3pn2P/1P3K2/1PP2P2/3N4 b - - 0 1
+Benchmark time 6 ms, 2 nodes, 1000 nps, move e4f6
+Benchmark time 9 ms, 4 nodes, 800 nps, move e4d6
+Benchmark time 12 ms, 7 nodes, 875 nps, move e4d6
+Benchmark time 16 ms, 20 nodes, 1538 nps, move e4d6
+Benchmark time 22 ms, 31 nodes, 1631 nps, move e4d6
+Benchmark time 25 ms, 38 nodes, 1809 nps, move e4d6
+Benchmark time 32 ms, 55 nodes, 1964 nps, move e4d6
+Benchmark time 40 ms, 79 nodes, 2194 nps, move e4d6
+Benchmark time 41 ms, 82 nodes, 2216 nps, move e4d6
+Benchmark time 45 ms, 113 nodes, 2690 nps, move e4d6
+Benchmark time 69 ms, 325 nodes, 5000 nps, move e4d6
+Benchmark time 77 ms, 446 nodes, 6109 nps, move e4d6
+Benchmark time 80 ms, 495 nodes, 6513 nps, move e4d6
+Benchmark time 96 ms, 869 nodes, 9344 nps, move e4d6
+Benchmark time 98 ms, 920 nodes, 9787 nps, move e4f6
+Benchmark time 99 ms, 931 nodes, 9697 nps, move e4d6
+Benchmark time 99 ms, 952 nodes, 9916 nps, move e4f6
+Benchmark time 110 ms, 1071 nodes, 10103 nps, move e4f6
+Benchmark time 142 ms, 1557 nodes, 11282 nps, move e4f6
+Benchmark time 143 ms, 1582 nodes, 11381 nps, move e4f6
+Benchmark time 147 ms, 1777 nodes, 12340 nps, move e4f6
+Benchmark time 182 ms, 2504 nodes, 13988 nps, move e4f6
+Benchmark time 208 ms, 3732 nodes, 18294 nps, move e4f6
+Benchmark time 240 ms, 5060 nodes, 21350 nps, move e4f6
+Benchmark time 269 ms, 6761 nodes, 25513 nps, move e4f6
+Benchmark time 304 ms, 8198 nodes, 27235 nps, move e4d6
+Benchmark time 318 ms, 8971 nodes, 28570 nps, move e4d6
+Benchmark time 387 ms, 13646 nodes, 35536 nps, move e4f6
+Benchmark time 396 ms, 14354 nodes, 36617 nps, move e4f6
+Benchmark time 400 ms, 14592 nodes, 36848 nps, move e4f6
+Benchmark time 409 ms, 15198 nodes, 37433 nps, move e4f6
+Benchmark time 843 ms, 46842 nodes, 55764 nps, move e4f6
+Benchmark time 1186 ms, 83074 nodes, 70282 nps, move e4f6
+Benchmark time 1392 ms, 103304 nodes, 74372 nps, move e4f6
+Benchmark time 1745 ms, 140755 nodes, 80847 nps, move e4f6
+Benchmark time 1756 ms, 142038 nodes, 81071 nps, move e4f6
+Benchmark time 2869 ms, 262768 nodes, 91716 nps, move e4f6
+Benchmark time 2876 ms, 263687 nodes, 91781 nps, move e4f6
+Benchmark time 2878 ms, 263794 nodes, 91754 nps, move e4f6
+Benchmark time 2895 ms, 265761 nodes, 91895 nps, move e4f6
+Benchmark time 2946 ms, 272900 nodes, 92728 nps, move e4f6
+Benchmark time 2960 ms, 274758 nodes, 92917 nps, move e4f6
+Benchmark time 3525 ms, 334220 nodes, 94894 nps, move e4f6
+Benchmark time 3693 ms, 354137 nodes, 95972 nps, move e4f6
+Benchmark time 3709 ms, 356072 nodes, 96079 nps, move e4f6
+Benchmark time 4257 ms, 418097 nodes, 98283 nps, move e4c3
+Benchmark time 5102 ms, 505843 nodes, 99223 nps, move e4c3
+Benchmark time 5131 ms, 508693 nodes, 99199 nps, move e4c3
+Benchmark time 5166 ms, 512024 nodes, 99171 nps, move e4c3
+Benchmark time 10000 ms, 996247 nodes, 99654 nps, move e4c3
+bestmove e4c3
+
+Position: 18/34 3b4/5kp1/1p1p1p1p/pP1PpP1P/P1P1P3/3KN3/8/8 w - - 0 1
+Benchmark time 6 ms, 2 nodes, 1000 nps, move c4c5
+Benchmark time 9 ms, 3 nodes, 600 nps, move c4c5
+Benchmark time 12 ms, 5 nodes, 625 nps, move c4c5
+Benchmark time 14 ms, 7 nodes, 636 nps, move c4c5
+Benchmark time 19 ms, 10 nodes, 625 nps, move c4c5
+Benchmark time 20 ms, 11 nodes, 647 nps, move c4c5
+Benchmark time 21 ms, 13 nodes, 764 nps, move c4c5
+Benchmark time 22 ms, 15 nodes, 833 nps, move c4c5
+Benchmark time 26 ms, 22 nodes, 956 nps, move c4c5
+Benchmark time 29 ms, 23 nodes, 884 nps, move c4c5
+Benchmark time 33 ms, 35 nodes, 1166 nps, move c4c5
+Benchmark time 36 ms, 39 nodes, 1218 nps, move c4c5
+Benchmark time 36 ms, 40 nodes, 1250 nps, move c4c5
+Benchmark time 36 ms, 41 nodes, 1242 nps, move c4c5
+Benchmark time 70 ms, 214 nodes, 3242 nps, move c4c5
+Benchmark time 71 ms, 251 nodes, 3746 nps, move c4c5
+Benchmark time 72 ms, 280 nodes, 4057 nps, move c4c5
+Benchmark time 136 ms, 1672 nodes, 12666 nps, move c4c5
+Benchmark time 137 ms, 1728 nodes, 12895 nps, move c4c5
+Benchmark time 173 ms, 3328 nodes, 19576 nps, move c4c5
+Benchmark time 187 ms, 4336 nodes, 23565 nps, move c4c5
+Benchmark time 206 ms, 5407 nodes, 26635 nps, move c4c5
+Benchmark time 226 ms, 6858 nodes, 30891 nps, move c4c5
+Benchmark time 272 ms, 10930 nodes, 40631 nps, move c4c5
+Benchmark time 533 ms, 64171 nodes, 121077 nps, move c4c5
+Benchmark time 539 ms, 65606 nodes, 122399 nps, move c4c5
+Benchmark time 563 ms, 71717 nodes, 128066 nps, move c4c5
+Benchmark time 1539 ms, 331056 nodes, 215531 nps, move c4c5
+Benchmark time 2214 ms, 533826 nodes, 241550 nps, move c4c5
+Benchmark time 2551 ms, 641349 nodes, 251706 nps, move c4c5
+Benchmark time 2670 ms, 677199 nodes, 253917 nps, move c4c5
+Benchmark time 6245 ms, 1660336 nodes, 265994 nps, move c4c5
+Benchmark time 6248 ms, 1661001 nodes, 265972 nps, move c4c5
+Benchmark time 6256 ms, 1662645 nodes, 265895 nps, move c4c5
+Benchmark time 9160 ms, 2248371 nodes, 245562 nps, move c4c5
+Benchmark time 10000 ms, 2414311 nodes, 241503 nps, move c4c5
+bestmove c4c5
+
+Position: 19/34 2K5/p7/7P/5pR1/8/5k2/r7/8 w - - 0 1 moves g5g6 f3e3 g6g5 e3f3
+Benchmark time 6 ms, 2 nodes, 1000 nps, move g5h5
+Benchmark time 9 ms, 3 nodes, 600 nps, move g5h5
+Benchmark time 15 ms, 7 nodes, 636 nps, move g5h5
+Benchmark time 17 ms, 9 nodes, 642 nps, move g5f5
+Benchmark time 20 ms, 12 nodes, 750 nps, move g5h5
+Benchmark time 23 ms, 18 nodes, 900 nps, move g5h5
+Benchmark time 32 ms, 50 nodes, 1785 nps, move g5h5
+Benchmark time 35 ms, 56 nodes, 1806 nps, move g5h5
+Benchmark time 42 ms, 75 nodes, 1973 nps, move g5h5
+Benchmark time 46 ms, 111 nodes, 2581 nps, move g5h5
+Benchmark time 46 ms, 113 nodes, 2627 nps, move g5h5
+Benchmark time 47 ms, 115 nodes, 2674 nps, move g5h5
+Benchmark time 52 ms, 131 nodes, 2729 nps, move g5h5
+Benchmark time 55 ms, 139 nodes, 2725 nps, move g5h5
+Benchmark time 58 ms, 173 nodes, 3203 nps, move g5h5
+Benchmark time 61 ms, 220 nodes, 3859 nps, move g5h5
+Benchmark time 85 ms, 550 nodes, 6790 nps, move g5h5
+Benchmark time 90 ms, 664 nodes, 7632 nps, move g5h5
+Benchmark time 91 ms, 673 nodes, 7647 nps, move g5h5
+Benchmark time 96 ms, 757 nodes, 8228 nps, move g5h5
+Benchmark time 96 ms, 762 nodes, 8282 nps, move g5h5
+Benchmark time 97 ms, 778 nodes, 8276 nps, move g5h5
+Benchmark time 97 ms, 787 nodes, 8372 nps, move g5h5
+Benchmark time 103 ms, 879 nodes, 8790 nps, move g5h5
+Benchmark time 105 ms, 924 nodes, 9148 nps, move g5f5
+Benchmark time 106 ms, 952 nodes, 9333 nps, move g5h5
+Benchmark time 107 ms, 1001 nodes, 9718 nps, move g5f5
+Benchmark time 108 ms, 1063 nodes, 10123 nps, move g5h5
+Benchmark time 109 ms, 1090 nodes, 10380 nps, move g5f5
+Benchmark time 126 ms, 1745 nodes, 14303 nps, move g5f5
+Benchmark time 146 ms, 3013 nodes, 21218 nps, move g5f5
+Benchmark time 150 ms, 3366 nodes, 23054 nps, move g5f5
+Benchmark time 216 ms, 4903 nodes, 23127 nps, move g5h5
+Benchmark time 279 ms, 8707 nodes, 31661 nps, move g5h5
+Benchmark time 378 ms, 16961 nodes, 45229 nps, move g5f5
+Benchmark time 430 ms, 21188 nodes, 49737 nps, move g5f5
+Benchmark time 457 ms, 22887 nodes, 50523 nps, move g5h5
+Benchmark time 489 ms, 26856 nodes, 55373 nps, move g5h5
+Benchmark time 551 ms, 31901 nodes, 58213 nps, move g5h5
+Benchmark time 764 ms, 58055 nodes, 76388 nps, move g5h5
+Benchmark time 859 ms, 70910 nodes, 82935 nps, move g5h5
+Benchmark time 1184 ms, 117832 nodes, 99773 nps, move g5h5
+Benchmark time 1288 ms, 131213 nodes, 102111 nps, move g5h5
+Benchmark time 1483 ms, 158225 nodes, 106981 nps, move g5h5
+Benchmark time 1491 ms, 159300 nodes, 107128 nps, move g5h5
+Benchmark time 1917 ms, 229932 nodes, 120194 nps, move g5h5
+Benchmark time 2436 ms, 323302 nodes, 132936 nps, move g5h5
+Benchmark time 2465 ms, 328208 nodes, 133363 nps, move g5f5
+Benchmark time 2486 ms, 331720 nodes, 133596 nps, move g5h5
+Benchmark time 2571 ms, 346574 nodes, 134958 nps, move g5f5
+Benchmark time 2578 ms, 347711 nodes, 135085 nps, move g5h5
+Benchmark time 2865 ms, 401542 nodes, 140301 nps, move g5f5
+Benchmark time 3076 ms, 439521 nodes, 143073 nps, move g5h5
+Benchmark time 3186 ms, 460515 nodes, 144725 nps, move g5f5
+Benchmark time 3911 ms, 592630 nodes, 151645 nps, move g5f5
+Benchmark time 4087 ms, 621328 nodes, 152174 nps, move g5h5
+Benchmark time 7699 ms, 1181500 nodes, 153541 nps, move g5h5
+Benchmark time 10001 ms, 1515156 nodes, 151561 nps, move g5h5
+bestmove g5h5
+
+Position: 20/34 8/6pk/1p6/8/PP3p1p/5P2/4KP1q/3Q4 w - - 0 1
+Benchmark time 6 ms, 2 nodes, 666 nps, move a4a5
+Benchmark time 9 ms, 5 nodes, 1000 nps, move a4a5
+Benchmark time 12 ms, 7 nodes, 875 nps, move d1f1
+Benchmark time 15 ms, 8 nodes, 727 nps, move d1f1
+Benchmark time 18 ms, 10 nodes, 714 nps, move d1f1
+Benchmark time 21 ms, 16 nodes, 941 nps, move a4a5
+Benchmark time 23 ms, 17 nodes, 850 nps, move a4a5
+Benchmark time 23 ms, 21 nodes, 1050 nps, move d1d3
+Benchmark time 24 ms, 23 nodes, 1150 nps, move d1d3
+Benchmark time 24 ms, 24 nodes, 1200 nps, move a4a5
+Benchmark time 26 ms, 25 nodes, 1086 nps, move d1d3
+Benchmark time 32 ms, 30 nodes, 1071 nps, move a4a5
+Benchmark time 34 ms, 40 nodes, 1333 nps, move a4a5
+Benchmark time 37 ms, 47 nodes, 1424 nps, move d1d3
+Benchmark time 37 ms, 51 nodes, 1545 nps, move a4a5
+Benchmark time 37 ms, 53 nodes, 1606 nps, move d1d3
+Benchmark time 37 ms, 57 nodes, 1727 nps, move a4a5
+Benchmark time 42 ms, 74 nodes, 1897 nps, move a4a5
+Benchmark time 49 ms, 97 nodes, 2108 nps, move d1d3
+Benchmark time 54 ms, 130 nodes, 2600 nps, move d1d3
+Benchmark time 55 ms, 137 nodes, 2634 nps, move a4a5
+Benchmark time 65 ms, 175 nodes, 2868 nps, move a4a5
+Benchmark time 71 ms, 278 nodes, 4088 nps, move a4a5
+Benchmark time 76 ms, 343 nodes, 4698 nps, move a4a5
+Benchmark time 85 ms, 493 nodes, 6012 nps, move a4a5
+Benchmark time 103 ms, 911 nodes, 9110 nps, move a4a5
+Benchmark time 128 ms, 1264 nodes, 10112 nps, move a4a5
+Benchmark time 157 ms, 1891 nodes, 12279 nps, move a4a5
+Benchmark time 187 ms, 3045 nodes, 16639 nps, move a4a5
+Benchmark time 204 ms, 3512 nodes, 17472 nps, move a4a5
+Benchmark time 240 ms, 5169 nodes, 21902 nps, move a4a5
+Benchmark time 259 ms, 6312 nodes, 24656 nps, move a4a5
+Benchmark time 266 ms, 6964 nodes, 26580 nps, move a4a5
+Benchmark time 283 ms, 8427 nodes, 30204 nps, move a4a5
+Benchmark time 417 ms, 20278 nodes, 49099 nps, move d1c2
+Benchmark time 469 ms, 26085 nodes, 55976 nps, move d1c2
+Benchmark time 476 ms, 26585 nodes, 56324 nps, move d1c2
+Benchmark time 552 ms, 33849 nodes, 61655 nps, move a4a5
+Benchmark time 645 ms, 45826 nodes, 71380 nps, move a4a5
+Benchmark time 957 ms, 85829 nodes, 90061 nps, move a4a5
+Benchmark time 1345 ms, 141207 nodes, 105299 nps, move a4a5
+Benchmark time 1351 ms, 142101 nodes, 105494 nps, move a4a5
+Benchmark time 1674 ms, 185435 nodes, 110972 nps, move a4a5
+Benchmark time 1676 ms, 185810 nodes, 111130 nps, move a4a5
+Benchmark time 1676 ms, 185829 nodes, 111141 nps, move a4a5
+Benchmark time 1677 ms, 186052 nodes, 111208 nps, move a4a5
+Benchmark time 1680 ms, 186837 nodes, 111411 nps, move a4a5
+Benchmark time 2391 ms, 286989 nodes, 120179 nps, move a4a5
+Benchmark time 2940 ms, 368826 nodes, 125621 nps, move a4a5
+Benchmark time 4631 ms, 634258 nodes, 137047 nps, move a4a5
+Benchmark time 4650 ms, 636542 nodes, 136979 nps, move a4a5
+Benchmark time 9651 ms, 1270752 nodes, 131725 nps, move a4a5
+Benchmark time 10000 ms, 1316315 nodes, 131684 nps, move a4a5
+bestmove a4a5
+
+Position: 21/34 7k/3p2pp/4q3/8/4Q3/5Kp1/P6b/8 w - - 0 1
+Benchmark time 6 ms, 2 nodes, 666 nps, move e4e6
+Benchmark time 9 ms, 3 nodes, 500 nps, move e4e6
+Benchmark time 15 ms, 7 nodes, 636 nps, move e4a8
+Benchmark time 18 ms, 8 nodes, 571 nps, move e4a8
+Benchmark time 20 ms, 10 nodes, 588 nps, move e4e6
+Benchmark time 21 ms, 11 nodes, 647 nps, move e4e6
+Benchmark time 24 ms, 13 nodes, 650 nps, move e4e6
+Benchmark time 27 ms, 14 nodes, 608 nps, move e4e6
+Benchmark time 65 ms, 74 nodes, 1193 nps, move e4h4
+Benchmark time 70 ms, 94 nodes, 1402 nps, move e4h4
+Benchmark time 73 ms, 116 nodes, 1657 nps, move e4e6
+Benchmark time 76 ms, 138 nodes, 1890 nps, move e4f4
+Benchmark time 76 ms, 144 nodes, 1972 nps, move e4b4
+Benchmark time 77 ms, 157 nodes, 2150 nps, move e4b4
+Benchmark time 82 ms, 196 nodes, 2481 nps, move e4e3
+Benchmark time 85 ms, 226 nodes, 2756 nps, move e4e3
+Benchmark time 88 ms, 251 nodes, 2952 nps, move e4e3
+Benchmark time 91 ms, 297 nodes, 3413 nps, move e4h4
+Benchmark time 92 ms, 305 nodes, 3465 nps, move e4h4
+Benchmark time 97 ms, 356 nodes, 3827 nps, move e4h4
+Benchmark time 100 ms, 386 nodes, 4020 nps, move e4h4
+Benchmark time 101 ms, 416 nodes, 4288 nps, move e4h4
+Benchmark time 104 ms, 470 nodes, 4700 nps, move e4e6
+Benchmark time 165 ms, 1538 nodes, 9493 nps, move e4e6
+Benchmark time 173 ms, 1778 nodes, 10458 nps, move e4e6
+Benchmark time 183 ms, 2134 nodes, 11855 nps, move e4e6
+Benchmark time 201 ms, 2641 nodes, 13338 nps, move e4e6
+Benchmark time 205 ms, 2827 nodes, 14064 nps, move e4e6
+Benchmark time 211 ms, 3452 nodes, 16596 nps, move e4e6
+Benchmark time 223 ms, 4205 nodes, 19113 nps, move e4e6
+Benchmark time 224 ms, 4234 nodes, 19245 nps, move e4e6
+Benchmark time 226 ms, 4326 nodes, 19486 nps, move e4e6
+Benchmark time 237 ms, 4654 nodes, 19974 nps, move e4e6
+Benchmark time 239 ms, 4825 nodes, 20444 nps, move e4e6
+Benchmark time 246 ms, 5323 nodes, 21905 nps, move e4e6
+Benchmark time 257 ms, 6225 nodes, 24604 nps, move e4e6
+Benchmark time 286 ms, 8314 nodes, 29378 nps, move e4e6
+Benchmark time 376 ms, 17394 nodes, 46758 nps, move e4e6
+Benchmark time 400 ms, 20835 nodes, 52481 nps, move e4e6
+Benchmark time 461 ms, 29960 nodes, 65414 nps, move e4e6
+Benchmark time 495 ms, 33935 nodes, 69114 nps, move e4e6
+Benchmark time 513 ms, 35774 nodes, 70145 nps, move e4e6
+Benchmark time 540 ms, 38125 nodes, 71128 nps, move e4e6
+Benchmark time 694 ms, 54788 nodes, 79402 nps, move e4e6
+Benchmark time 694 ms, 54852 nodes, 79380 nps, move e4e6
+Benchmark time 700 ms, 55364 nodes, 79545 nps, move e4e6
+Benchmark time 718 ms, 57488 nodes, 80515 nps, move e4e6
+Benchmark time 1958 ms, 253826 nodes, 129834 nps, move e4e6
+Benchmark time 1969 ms, 256172 nodes, 130367 nps, move e4e6
+Benchmark time 1984 ms, 258458 nodes, 130534 nps, move e4e6
+Benchmark time 2154 ms, 291166 nodes, 135363 nps, move e4e6
+Benchmark time 2831 ms, 419570 nodes, 148362 nps, move e4e6
+Benchmark time 3849 ms, 622096 nodes, 161751 nps, move e4e6
+Benchmark time 8138 ms, 1472146 nodes, 180986 nps, move e4e6
+Benchmark time 8314 ms, 1504118 nodes, 181000 nps, move e4e6
+Benchmark time 8816 ms, 1593273 nodes, 180786 nps, move e4e6
+Benchmark time 10000 ms, 1808328 nodes, 180905 nps, move e4e6
+bestmove e4e6
+
+Position: 22/34 8/2p5/8/2kPKp1p/2p4P/2P5/3P4/8 w - - 0 1
+Benchmark time 6 ms, 2 nodes, 1000 nps, move d5d6
+Benchmark time 9 ms, 4 nodes, 800 nps, move d5d6
+Benchmark time 10 ms, 6 nodes, 857 nps, move e5f5
+Benchmark time 12 ms, 7 nodes, 875 nps, move d5d6
+Benchmark time 13 ms, 8 nodes, 800 nps, move e5f5
+Benchmark time 15 ms, 10 nodes, 909 nps, move e5f5
+Benchmark time 17 ms, 11 nodes, 785 nps, move d5d6
+Benchmark time 20 ms, 15 nodes, 882 nps, move d5d6
+Benchmark time 20 ms, 16 nodes, 941 nps, move e5f5
+Benchmark time 20 ms, 17 nodes, 1000 nps, move d5d6
+Benchmark time 23 ms, 19 nodes, 950 nps, move d5d6
+Benchmark time 26 ms, 20 nodes, 869 nps, move d5d6
+Benchmark time 29 ms, 22 nodes, 846 nps, move d5d6
+Benchmark time 32 ms, 29 nodes, 1035 nps, move d5d6
+Benchmark time 61 ms, 162 nodes, 2842 nps, move d5d6
+Benchmark time 74 ms, 255 nodes, 3642 nps, move d5d6
+Benchmark time 76 ms, 282 nodes, 3863 nps, move d5d6
+Benchmark time 78 ms, 327 nodes, 4360 nps, move d5d6
+Benchmark time 91 ms, 524 nodes, 5954 nps, move d5d6
+Benchmark time 92 ms, 590 nodes, 6629 nps, move d5d6
+Benchmark time 96 ms, 793 nodes, 8526 nps, move d5d6
+Benchmark time 105 ms, 997 nodes, 9774 nps, move d5d6
+Benchmark time 109 ms, 1150 nodes, 10952 nps, move d5d6
+Benchmark time 115 ms, 1613 nodes, 14531 nps, move d5d6
+Benchmark time 121 ms, 1940 nodes, 16440 nps, move d5d6
+Benchmark time 134 ms, 2235 nodes, 17061 nps, move d5d6
+Benchmark time 144 ms, 2855 nodes, 20248 nps, move d5d6
+Benchmark time 207 ms, 7717 nodes, 38014 nps, move d5d6
+Benchmark time 211 ms, 8515 nodes, 40937 nps, move d5d6
+Benchmark time 216 ms, 9060 nodes, 42735 nps, move d5d6
+Benchmark time 239 ms, 12942 nodes, 54838 nps, move d5d6
+Benchmark time 251 ms, 15503 nodes, 62765 nps, move d5d6
+Benchmark time 270 ms, 19847 nodes, 74333 nps, move d5d6
+Benchmark time 320 ms, 28328 nodes, 89362 nps, move d5d6
+Benchmark time 330 ms, 30683 nodes, 93831 nps, move d5d6
+Benchmark time 344 ms, 33842 nodes, 99243 nps, move d5d6
+Benchmark time 390 ms, 43269 nodes, 112095 nps, move d5d6
+Benchmark time 402 ms, 46736 nodes, 117427 nps, move d5d6
+Benchmark time 419 ms, 50012 nodes, 120510 nps, move d5d6
+Benchmark time 560 ms, 88177 nodes, 158591 nps, move d5d6
+Benchmark time 565 ms, 90219 nodes, 160532 nps, move d5d6
+Benchmark time 582 ms, 94719 nodes, 163590 nps, move d5d6
+Benchmark time 585 ms, 95499 nodes, 164087 nps, move d5d6
+Benchmark time 587 ms, 95788 nodes, 164301 nps, move d5d6
+Benchmark time 657 ms, 117145 nodes, 179120 nps, move d5d6
+Benchmark time 752 ms, 152334 nodes, 203383 nps, move d5d6
+Benchmark time 783 ms, 163265 nodes, 209582 nps, move d5d6
+Benchmark time 951 ms, 219256 nodes, 231526 nps, move d5d6
+Benchmark time 1989 ms, 625470 nodes, 314939 nps, move d5d6
+Benchmark time 2162 ms, 689465 nodes, 319344 nps, move d5d6
+Benchmark time 2708 ms, 889006 nodes, 328652 nps, move d5d6
+Benchmark time 5816 ms, 1977145 nodes, 340183 nps, move d5d6
+Benchmark time 6415 ms, 2185481 nodes, 340842 nps, move d5d6
+Benchmark time 8300 ms, 2818274 nodes, 339714 nps, move d5d6
+Benchmark time 8303 ms, 2819241 nodes, 339708 nps, move d5d6
+Benchmark time 10000 ms, 3405612 nodes, 340663 nps, move d5d6
+bestmove d5d6
+
+Position: 23/34 8/1p3pp1/7p/5P1P/2k3P1/8/2K2P2/8 w - - 0 1
+Benchmark time 6 ms, 2 nodes, 666 nps, move f5f6
+Benchmark time 9 ms, 3 nodes, 600 nps, move f5f6
+Benchmark time 12 ms, 4 nodes, 500 nps, move f5f6
+Benchmark time 15 ms, 5 nodes, 454 nps, move f5f6
+Benchmark time 18 ms, 6 nodes, 428 nps, move f5f6
+Benchmark time 21 ms, 7 nodes, 411 nps, move f5f6
+Benchmark time 24 ms, 8 nodes, 400 nps, move f5f6
+Benchmark time 27 ms, 9 nodes, 391 nps, move f5f6
+Benchmark time 30 ms, 10 nodes, 384 nps, move f5f6
+Benchmark time 32 ms, 12 nodes, 413 nps, move f5f6
+Benchmark time 36 ms, 14 nodes, 424 nps, move f5f6
+Benchmark time 99 ms, 149 nodes, 1568 nps, move f5f6
+Benchmark time 102 ms, 187 nodes, 1908 nps, move f5f6
+Benchmark time 103 ms, 202 nodes, 2040 nps, move f5f6
+Benchmark time 104 ms, 207 nodes, 2070 nps, move f5f6
+Benchmark time 111 ms, 248 nodes, 2296 nps, move f5f6
+Benchmark time 141 ms, 1060 nodes, 7737 nps, move f5f6
+Benchmark time 147 ms, 1295 nodes, 9055 nps, move f5f6
+Benchmark time 163 ms, 1799 nodes, 11243 nps, move f5f6
+Benchmark time 235 ms, 4762 nodes, 20525 nps, move f5f6
+Benchmark time 263 ms, 7255 nodes, 28011 nps, move f5f6
+Benchmark time 271 ms, 7737 nodes, 28977 nps, move f5f6
+Benchmark time 289 ms, 9397 nodes, 32971 nps, move f5f6
+Benchmark time 357 ms, 14381 nodes, 40624 nps, move f5f6
+Benchmark time 379 ms, 16348 nodes, 43478 nps, move f5f6
+Benchmark time 471 ms, 28829 nodes, 61732 nps, move f5f6
+Benchmark time 788 ms, 86949 nodes, 110763 nps, move f5f6
+Benchmark time 1206 ms, 173141 nodes, 144044 nps, move f5f6
+Benchmark time 1226 ms, 177524 nodes, 145154 nps, move f5f6
+Benchmark time 1236 ms, 180573 nodes, 146568 nps, move f5f6
+Benchmark time 1258 ms, 185794 nodes, 148161 nps, move f5f6
+Benchmark time 2820 ms, 633178 nodes, 224850 nps, move f5f6
+Benchmark time 3581 ms, 891394 nodes, 249131 nps, move f5f6
+Benchmark time 3582 ms, 891568 nodes, 249110 nps, move f5f6
+Benchmark time 3583 ms, 891748 nodes, 249161 nps, move f5f6
+Benchmark time 3652 ms, 914711 nodes, 250743 nps, move f5f6
+Benchmark time 8654 ms, 2020035 nodes, 233503 nps, move f5f6
+Benchmark time 10000 ms, 2326639 nodes, 232733 nps, move f5f6
+bestmove f5f6
+
+Position: 24/34 8/pp2r1k1/2p1p3/3pP2p/1P1P1P1P/P5KR/8/8 w - - 0 1
+Benchmark time 6 ms, 2 nodes, 1000 nps, move f4f5
+Benchmark time 9 ms, 4 nodes, 800 nps, move f4f5
+Benchmark time 12 ms, 8 nodes, 1000 nps, move f4f5
+Benchmark time 15 ms, 11 nodes, 1000 nps, move f4f5
+Benchmark time 16 ms, 13 nodes, 1000 nps, move f4f5
+Benchmark time 19 ms, 15 nodes, 937 nps, move f4f5
+Benchmark time 23 ms, 23 nodes, 1150 nps, move f4f5
+Benchmark time 26 ms, 28 nodes, 1217 nps, move f4f5
+Benchmark time 32 ms, 50 nodes, 1724 nps, move f4f5
+Benchmark time 55 ms, 134 nodes, 2627 nps, move f4f5
+Benchmark time 64 ms, 166 nodes, 2766 nps, move f4f5
+Benchmark time 67 ms, 192 nodes, 3047 nps, move f4f5
+Benchmark time 71 ms, 261 nodes, 3895 nps, move f4f5
+Benchmark time 75 ms, 325 nodes, 4577 nps, move f4f5
+Benchmark time 126 ms, 1181 nodes, 9680 nps, move f4f5
+Benchmark time 133 ms, 1294 nodes, 9953 nps, move f4f5
+Benchmark time 156 ms, 1801 nodes, 11771 nps, move f4f5
+Benchmark time 168 ms, 1965 nodes, 11981 nps, move f4f5
+Benchmark time 201 ms, 2963 nodes, 14964 nps, move f4f5
+Benchmark time 280 ms, 5235 nodes, 18898 nps, move f4f5
+Benchmark time 295 ms, 5752 nodes, 19698 nps, move f4f5
+Benchmark time 338 ms, 8126 nodes, 24256 nps, move f4f5
+Benchmark time 339 ms, 8197 nodes, 24468 nps, move f4f5
+Benchmark time 347 ms, 8832 nodes, 25674 nps, move f4f5
+Benchmark time 460 ms, 15212 nodes, 33286 nps, move f4f5
+Benchmark time 816 ms, 48425 nodes, 59563 nps, move f4f5
+Benchmark time 1149 ms, 85381 nodes, 74568 nps, move f4f5
+Benchmark time 1542 ms, 138058 nodes, 89764 nps, move f4f5
+Benchmark time 1716 ms, 162320 nodes, 94757 nps, move f4f5
+Benchmark time 1986 ms, 205358 nodes, 103559 nps, move f4f5
+Benchmark time 2011 ms, 209755 nodes, 104511 nps, move f4f5
+Benchmark time 3900 ms, 542622 nodes, 139276 nps, move f4f5
+Benchmark time 4270 ms, 601890 nodes, 141056 nps, move f4f5
+Benchmark time 4694 ms, 664533 nodes, 141691 nps, move f4f5
+Benchmark time 4738 ms, 670301 nodes, 141563 nps, move f4f5
+Benchmark time 4767 ms, 673847 nodes, 141445 nps, move f4f5
+Benchmark time 5015 ms, 705977 nodes, 140857 nps, move f4f5
+Benchmark time 5615 ms, 785871 nodes, 140058 nps, move f4f5
+Benchmark time 7221 ms, 1004887 nodes, 139238 nps, move f4f5
+Benchmark time 8346 ms, 1153310 nodes, 138236 nps, move f4f5
+Benchmark time 8368 ms, 1156304 nodes, 138231 nps, move f4f5
+Benchmark time 9357 ms, 1273051 nodes, 136111 nps, move f4f5
+Benchmark time 9435 ms, 1282430 nodes, 135980 nps, move f4f5
+Benchmark time 10000 ms, 1352649 nodes, 135319 nps, move f4f5
+bestmove f4f5
+
+Position: 25/34 8/3p4/p1bk3p/Pp6/1Kp1PpPp/2P2P1P/2P5/5B2 b - - 0 1
+Benchmark time 6 ms, 2 nodes, 1000 nps, move c6b7
+Benchmark time 9 ms, 4 nodes, 800 nps, move c6b7
+Benchmark time 11 ms, 9 nodes, 1285 nps, move c6a8
+Benchmark time 12 ms, 10 nodes, 1250 nps, move c6b7
+Benchmark time 16 ms, 15 nodes, 1153 nps, move c6b7
+Benchmark time 19 ms, 16 nodes, 1000 nps, move c6b7
+Benchmark time 23 ms, 29 nodes, 1450 nps, move c6b7
+Benchmark time 25 ms, 35 nodes, 1666 nps, move c6b7
+Benchmark time 26 ms, 37 nodes, 1608 nps, move c6b7
+Benchmark time 35 ms, 57 nodes, 1838 nps, move c6b7
+Benchmark time 38 ms, 74 nodes, 2176 nps, move c6b7
+Benchmark time 39 ms, 79 nodes, 2257 nps, move c6b7
+Benchmark time 53 ms, 200 nodes, 4081 nps, move c6b7
+Benchmark time 55 ms, 218 nodes, 4274 nps, move c6b7
+Benchmark time 57 ms, 233 nodes, 4396 nps, move c6b7
+Benchmark time 58 ms, 237 nodes, 4388 nps, move c6b7
+Benchmark time 61 ms, 245 nodes, 4298 nps, move c6b7
+Benchmark time 61 ms, 258 nodes, 4448 nps, move c6e4
+Benchmark time 64 ms, 267 nodes, 4450 nps, move c6e4
+Benchmark time 67 ms, 300 nodes, 4761 nps, move c6e4
+Benchmark time 92 ms, 547 nodes, 6215 nps, move c6e4
+Benchmark time 95 ms, 607 nodes, 6670 nps, move c6e4
+Benchmark time 98 ms, 674 nodes, 7170 nps, move c6e4
+Benchmark time 101 ms, 773 nodes, 7969 nps, move c6e4
+Benchmark time 101 ms, 797 nodes, 8216 nps, move c6e4
+Benchmark time 121 ms, 1378 nodes, 11677 nps, move c6e4
+Benchmark time 127 ms, 1563 nodes, 12707 nps, move c6e4
+Benchmark time 155 ms, 2260 nodes, 14966 nps, move c6e4
+Benchmark time 224 ms, 5771 nodes, 26113 nps, move c6e4
+Benchmark time 255 ms, 8583 nodes, 34195 nps, move c6e4
+Benchmark time 273 ms, 9652 nodes, 35748 nps, move c6a8
+Benchmark time 310 ms, 14203 nodes, 46415 nps, move c6a8
+Benchmark time 343 ms, 18615 nodes, 54750 nps, move c6a8
+Benchmark time 385 ms, 23319 nodes, 61204 nps, move c6a8
+Benchmark time 396 ms, 25458 nodes, 64778 nps, move c6a8
+Benchmark time 460 ms, 36756 nodes, 80428 nps, move c6a8
+Benchmark time 485 ms, 40822 nodes, 84869 nps, move c6a8
+Benchmark time 586 ms, 57235 nodes, 98173 nps, move c6b7
+Benchmark time 644 ms, 70027 nodes, 109246 nps, move c6b7
+Benchmark time 734 ms, 88760 nodes, 121589 nps, move c6b7
+Benchmark time 754 ms, 92790 nodes, 123555 nps, move c6b7
+Benchmark time 1539 ms, 254783 nodes, 165982 nps, move c6b7
+Benchmark time 1544 ms, 255806 nodes, 166000 nps, move c6b7
+Benchmark time 1821 ms, 315681 nodes, 173641 nps, move c6b7
+Benchmark time 1964 ms, 347390 nodes, 177239 nps, move c6b7
+Benchmark time 5380 ms, 1110727 nodes, 206570 nps, move c6b7
+Benchmark time 5381 ms, 1110862 nodes, 206595 nps, move c6b7
+Benchmark time 5383 ms, 1111357 nodes, 206610 nps, move c6b7
+Benchmark time 6660 ms, 1322526 nodes, 198666 nps, move c6e4
+Benchmark time 7023 ms, 1386521 nodes, 197538 nps, move c6e4
+Benchmark time 7464 ms, 1462555 nodes, 196052 nps, move c6b7
+Benchmark time 7829 ms, 1532459 nodes, 195841 nps, move c6b7
+Benchmark time 10000 ms, 1919243 nodes, 192001 nps, move c6b7
+bestmove c6b7
+
+Position: 26/34 5k2/7R/4P2p/5K2/p1r2P1p/8/8/8 b - - 0 1
+Benchmark time 6 ms, 2 nodes, 1000 nps, move h4h3
+Benchmark time 8 ms, 3 nodes, 600 nps, move h4h3
+Benchmark time 11 ms, 5 nodes, 625 nps, move h4h3
+Benchmark time 14 ms, 6 nodes, 545 nps, move h4h3
+Benchmark time 17 ms, 7 nodes, 500 nps, move h4h3
+Benchmark time 28 ms, 22 nodes, 880 nps, move h4h3
+Benchmark time 33 ms, 34 nodes, 1133 nps, move h4h3
+Benchmark time 39 ms, 50 nodes, 1388 nps, move h4h3
+Benchmark time 48 ms, 87 nodes, 1977 nps, move h4h3
+Benchmark time 66 ms, 195 nodes, 3145 nps, move h4h3
+Benchmark time 68 ms, 199 nodes, 3109 nps, move h4h3
+Benchmark time 79 ms, 335 nodes, 4407 nps, move h4h3
+Benchmark time 82 ms, 413 nodes, 5227 nps, move h4h3
+Benchmark time 84 ms, 486 nodes, 6075 nps, move h4h3
+Benchmark time 87 ms, 570 nodes, 6785 nps, move h4h3
+Benchmark time 92 ms, 725 nodes, 8238 nps, move h4h3
+Benchmark time 113 ms, 1065 nodes, 9770 nps, move h4h3
+Benchmark time 162 ms, 1939 nodes, 12194 nps, move h4h3
+Benchmark time 167 ms, 2419 nodes, 14750 nps, move h4h3
+Benchmark time 269 ms, 6310 nodes, 23811 nps, move h4h3
+Benchmark time 312 ms, 8502 nodes, 27603 nps, move h4h3
+Benchmark time 324 ms, 9493 nodes, 29573 nps, move h4h3
+Benchmark time 362 ms, 12183 nodes, 33935 nps, move h4h3
+Benchmark time 468 ms, 19370 nodes, 41655 nps, move h4h3
+Benchmark time 476 ms, 20282 nodes, 42879 nps, move h4h3
+Benchmark time 664 ms, 38483 nodes, 58219 nps, move h4h3
+Benchmark time 840 ms, 57079 nodes, 68194 nps, move h4h3
+Benchmark time 850 ms, 58546 nodes, 69121 nps, move h4h3
+Benchmark time 1568 ms, 137652 nodes, 87956 nps, move h4h3
+Benchmark time 2387 ms, 240266 nodes, 100782 nps, move h4h3
+Benchmark time 4850 ms, 585958 nodes, 120890 nps, move h4h3
+Benchmark time 5420 ms, 657941 nodes, 121458 nps, move h4h3
+Benchmark time 8531 ms, 1041678 nodes, 122147 nps, move h4h3
+Benchmark time 9281 ms, 1133714 nodes, 122193 nps, move h4h3
+Benchmark time 10000 ms, 1225384 nodes, 122587 nps, move h4h3
+bestmove h4h3
+
+Position: 27/34 6k1/6p1/P6p/r1N5/5p2/7P/1b3PP1/4R1K1 w - - 0 1
+Benchmark time 6 ms, 2 nodes, 1000 nps, move e1e4
+Benchmark time 9 ms, 4 nodes, 800 nps, move e1e4
+Benchmark time 10 ms, 6 nodes, 857 nps, move e1e6
+Benchmark time 12 ms, 9 nodes, 1125 nps, move e1e4
+Benchmark time 18 ms, 18 nodes, 1285 nps, move e1e4
+Benchmark time 20 ms, 19 nodes, 1117 nps, move e1e4
+Benchmark time 39 ms, 51 nodes, 1416 nps, move e1e4
+Benchmark time 39 ms, 52 nodes, 1444 nps, move e1e4
+Benchmark time 39 ms, 58 nodes, 1611 nps, move e1e4
+Benchmark time 45 ms, 82 nodes, 1952 nps, move e1e4
+Benchmark time 47 ms, 89 nodes, 2022 nps, move e1e4
+Benchmark time 54 ms, 102 nodes, 2040 nps, move e1e4
+Benchmark time 56 ms, 110 nodes, 2075 nps, move e1e4
+Benchmark time 63 ms, 148 nodes, 2466 nps, move e1e4
+Benchmark time 72 ms, 194 nodes, 2811 nps, move e1e4
+Benchmark time 80 ms, 275 nodes, 3571 nps, move e1e4
+Benchmark time 94 ms, 356 nodes, 3955 nps, move e1e4
+Benchmark time 101 ms, 447 nodes, 4561 nps, move e1e4
+Benchmark time 118 ms, 698 nodes, 6069 nps, move e1e4
+Benchmark time 125 ms, 793 nodes, 6500 nps, move e1e4
+Benchmark time 230 ms, 2516 nodes, 11083 nps, move e1e4
+Benchmark time 242 ms, 3133 nodes, 13163 nps, move e1e4
+Benchmark time 248 ms, 3419 nodes, 14012 nps, move e1e4
+Benchmark time 310 ms, 5181 nodes, 16931 nps, move e1e4
+Benchmark time 673 ms, 22465 nodes, 33579 nps, move e1e4
+Benchmark time 747 ms, 27343 nodes, 36800 nps, move e1e4
+Benchmark time 1006 ms, 46645 nodes, 46551 nps, move e1e4
+Benchmark time 1468 ms, 84218 nodes, 57486 nps, move e1e4
+Benchmark time 1918 ms, 119713 nodes, 62513 nps, move e1e4
+Benchmark time 2316 ms, 156068 nodes, 67503 nps, move e1e4
+Benchmark time 2868 ms, 206181 nodes, 71990 nps, move e1e4
+Benchmark time 4032 ms, 318382 nodes, 79022 nps, move e1e4
+Benchmark time 9033 ms, 742367 nodes, 82220 nps, move e1e4
+Benchmark time 10000 ms, 823272 nodes, 82360 nps, move e1e4
+bestmove e1e4
+
+Position: 28/34 1r3k2/4q3/2Pp3b/3Bp3/2Q2p2/1p1P2P1/1P2KP2/3N4 w - - 0 1
+Benchmark time 6 ms, 2 nodes, 1000 nps, move g3g4
+Benchmark time 9 ms, 6 nodes, 1000 nps, move g3g4
+Benchmark time 10 ms, 10 nodes, 1428 nps, move d5e6
+Benchmark time 12 ms, 12 nodes, 1333 nps, move d5e6
+Benchmark time 15 ms, 16 nodes, 1454 nps, move d5e6
+Benchmark time 16 ms, 20 nodes, 1538 nps, move d5e6
+Benchmark time 21 ms, 26 nodes, 1529 nps, move d5e6
+Benchmark time 27 ms, 35 nodes, 1521 nps, move g3g4
+Benchmark time 29 ms, 36 nodes, 1384 nps, move c4e4
+Benchmark time 30 ms, 38 nodes, 1461 nps, move c4e4
+Benchmark time 32 ms, 42 nodes, 1500 nps, move c4e4
+Benchmark time 32 ms, 46 nodes, 1586 nps, move c4e4
+Benchmark time 33 ms, 50 nodes, 1666 nps, move c4e4
+Benchmark time 34 ms, 54 nodes, 1800 nps, move c4e4
+Benchmark time 65 ms, 175 nodes, 2822 nps, move g3g4
+Benchmark time 66 ms, 185 nodes, 2983 nps, move c4e4
+Benchmark time 73 ms, 236 nodes, 3420 nps, move c4e4
+Benchmark time 91 ms, 323 nodes, 3712 nps, move c4e4
+Benchmark time 106 ms, 426 nodes, 4176 nps, move c4e4
+Benchmark time 114 ms, 537 nodes, 4881 nps, move c4e4
+Benchmark time 128 ms, 800 nodes, 6451 nps, move c4e4
+Benchmark time 139 ms, 1029 nodes, 7622 nps, move c4e4
+Benchmark time 141 ms, 1058 nodes, 7666 nps, move c4e4
+Benchmark time 248 ms, 2811 nodes, 11520 nps, move d1c3
+Benchmark time 261 ms, 3140 nodes, 12217 nps, move g3g4
+Benchmark time 280 ms, 3697 nodes, 13394 nps, move g3g4
+Benchmark time 355 ms, 5213 nodes, 14851 nps, move c4e4
+Benchmark time 362 ms, 5467 nodes, 15270 nps, move c4e4
+Benchmark time 446 ms, 7951 nodes, 17988 nps, move c4e4
+Benchmark time 494 ms, 8975 nodes, 18316 nps, move c4e4
+Benchmark time 494 ms, 8991 nodes, 18348 nps, move d1c3
+Benchmark time 546 ms, 10026 nodes, 18498 nps, move c4e4
+Benchmark time 556 ms, 10341 nodes, 18733 nps, move d1c3
+Benchmark time 606 ms, 12229 nodes, 20313 nps, move c4e4
+Benchmark time 618 ms, 12760 nodes, 20747 nps, move d1c3
+Benchmark time 667 ms, 15100 nodes, 22775 nps, move d5e6
+Benchmark time 683 ms, 15856 nodes, 23351 nps, move d1c3
+Benchmark time 692 ms, 16341 nodes, 23716 nps, move d1c3
+Benchmark time 708 ms, 17193 nodes, 24387 nps, move d5e6
+Benchmark time 730 ms, 18101 nodes, 24898 nps, move d1c3
+Benchmark time 749 ms, 18920 nodes, 25395 nps, move d5e6
+Benchmark time 770 ms, 19880 nodes, 25953 nps, move d1c3
+Benchmark time 782 ms, 20393 nodes, 26212 nps, move d5e6
+Benchmark time 792 ms, 20648 nodes, 26203 nps, move d1c3
+Benchmark time 793 ms, 20776 nodes, 26298 nps, move d5e6
+Benchmark time 857 ms, 23876 nodes, 27990 nps, move g3g4
+Benchmark time 937 ms, 27269 nodes, 29195 nps, move g3g4
+Benchmark time 948 ms, 27791 nodes, 29439 nps, move g3g4
+Benchmark time 1211 ms, 42567 nodes, 35237 nps, move g3g4
+Benchmark time 1605 ms, 65808 nodes, 41078 nps, move g3g4
+Benchmark time 1778 ms, 76403 nodes, 43068 nps, move g3g4
+Benchmark time 1924 ms, 85400 nodes, 44479 nps, move g3g4
+Benchmark time 1942 ms, 86431 nodes, 44598 nps, move c4e4
+Benchmark time 1943 ms, 86517 nodes, 44619 nps, move g3g4
+Benchmark time 1946 ms, 86682 nodes, 44612 nps, move c4e4
+Benchmark time 2145 ms, 98431 nodes, 45974 nps, move g3g4
+Benchmark time 2198 ms, 102024 nodes, 46501 nps, move c4e4
+Benchmark time 2204 ms, 102612 nodes, 46620 nps, move g3g4
+Benchmark time 2212 ms, 102976 nodes, 46637 nps, move c4e4
+Benchmark time 2845 ms, 141005 nodes, 49632 nps, move g3g4
+Benchmark time 4501 ms, 252117 nodes, 56063 nps, move g3g4
+Benchmark time 4731 ms, 267085 nodes, 56502 nps, move c4e4
+Benchmark time 4806 ms, 272705 nodes, 56778 nps, move g3g4
+Benchmark time 6255 ms, 367927 nodes, 58858 nps, move c4e4
+Benchmark time 7534 ms, 451605 nodes, 59966 nps, move c4e4
+Benchmark time 8850 ms, 537693 nodes, 60776 nps, move c4e4
+Benchmark time 8864 ms, 538534 nodes, 60782 nps, move c4e4
+Benchmark time 10000 ms, 615266 nodes, 61551 nps, move c4e4
+bestmove c4e4
+
+Position: 29/34 6k1/4pp1p/3p2p1/P1pPb3/R7/1r2P1PP/3B1P2/6K1 w - - 0 1
+Benchmark time 6 ms, 2 nodes, 1000 nps, move a5a6
+Benchmark time 9 ms, 4 nodes, 800 nps, move a5a6
+Benchmark time 11 ms, 6 nodes, 857 nps, move g1f1
+Benchmark time 12 ms, 7 nodes, 875 nps, move a5a6
+Benchmark time 16 ms, 14 nodes, 1166 nps, move a5a6
+Benchmark time 16 ms, 16 nodes, 1230 nps, move a5a6
+Benchmark time 19 ms, 18 nodes, 1200 nps, move f2f4
+Benchmark time 19 ms, 19 nodes, 1266 nps, move g1f1
+Benchmark time 19 ms, 20 nodes, 1250 nps, move f2f4
+Benchmark time 20 ms, 22 nodes, 1294 nps, move g1f1
+Benchmark time 21 ms, 24 nodes, 1411 nps, move a5a6
+Benchmark time 34 ms, 46 nodes, 1533 nps, move a5a6
+Benchmark time 38 ms, 56 nodes, 1647 nps, move a5a6
+Benchmark time 47 ms, 78 nodes, 1813 nps, move a5a6
+Benchmark time 49 ms, 91 nodes, 2022 nps, move a5a6
+Benchmark time 49 ms, 92 nodes, 2000 nps, move a5a6
+Benchmark time 57 ms, 114 nodes, 2150 nps, move a5a6
+Benchmark time 60 ms, 136 nodes, 2428 nps, move a5a6
+Benchmark time 62 ms, 158 nodes, 2677 nps, move a5a6
+Benchmark time 108 ms, 727 nodes, 6923 nps, move a5a6
+Benchmark time 118 ms, 877 nodes, 7626 nps, move a5a6
+Benchmark time 145 ms, 1254 nodes, 8893 nps, move a5a6
+Benchmark time 296 ms, 4449 nodes, 15236 nps, move a5a6
+Benchmark time 303 ms, 4712 nodes, 15706 nps, move a5a6
+Benchmark time 501 ms, 11618 nodes, 23329 nps, move a5a6
+Benchmark time 534 ms, 13420 nodes, 25320 nps, move a5a6
+Benchmark time 574 ms, 15551 nodes, 27282 nps, move a5a6
+Benchmark time 585 ms, 16160 nodes, 27814 nps, move a5a6
+Benchmark time 661 ms, 19123 nodes, 29106 nps, move a5a6
+Benchmark time 878 ms, 36325 nodes, 41514 nps, move a5a6
+Benchmark time 1756 ms, 112551 nodes, 64204 nps, move a5a6
+Benchmark time 1866 ms, 124273 nodes, 66705 nps, move a5a6
+Benchmark time 3035 ms, 244607 nodes, 80701 nps, move a5a6
+Benchmark time 3045 ms, 245743 nodes, 80809 nps, move a5a6
+Benchmark time 5648 ms, 514622 nodes, 91180 nps, move a5a6
+Benchmark time 6089 ms, 556183 nodes, 91387 nps, move a5a6
+Benchmark time 7185 ms, 662304 nodes, 92217 nps, move a5a6
+Benchmark time 8471 ms, 785560 nodes, 92779 nps, move a5a6
+Benchmark time 10000 ms, 927525 nodes, 92789 nps, move a5a6
+bestmove a5a6
+
+Position: 30/34 8/3p3B/5p2/5P2/p7/PP5b/k7/6K1 w - - 0 1
+Benchmark time 6 ms, 2 nodes, 1000 nps, move b3a4
+Benchmark time 9 ms, 3 nodes, 600 nps, move b3a4
+Benchmark time 12 ms, 5 nodes, 625 nps, move b3a4
+Benchmark time 15 ms, 6 nodes, 545 nps, move b3a4
+Benchmark time 18 ms, 8 nodes, 571 nps, move b3a4
+Benchmark time 20 ms, 9 nodes, 529 nps, move b3a4
+Benchmark time 24 ms, 12 nodes, 600 nps, move b3a4
+Benchmark time 26 ms, 16 nodes, 695 nps, move b3a4
+Benchmark time 29 ms, 21 nodes, 807 nps, move b3a4
+Benchmark time 39 ms, 31 nodes, 861 nps, move b3a4
+Benchmark time 39 ms, 32 nodes, 888 nps, move b3a4
+Benchmark time 43 ms, 37 nodes, 948 nps, move b3a4
+Benchmark time 51 ms, 49 nodes, 1042 nps, move b3b4
+Benchmark time 54 ms, 57 nodes, 1140 nps, move b3a4
+Benchmark time 58 ms, 71 nodes, 1314 nps, move b3a4
+Benchmark time 61 ms, 82 nodes, 1438 nps, move b3b4
+Benchmark time 62 ms, 95 nodes, 1610 nps, move b3a4
+Benchmark time 66 ms, 115 nodes, 1854 nps, move b3b4
+Benchmark time 79 ms, 174 nodes, 2320 nps, move b3a4
+Benchmark time 80 ms, 187 nodes, 2428 nps, move b3a4
+Benchmark time 85 ms, 210 nodes, 2592 nps, move b3a4
+Benchmark time 88 ms, 235 nodes, 2797 nps, move b3a4
+Benchmark time 88 ms, 241 nodes, 2835 nps, move b3a4
+Benchmark time 89 ms, 255 nodes, 2965 nps, move b3a4
+Benchmark time 91 ms, 303 nodes, 3443 nps, move b3a4
+Benchmark time 107 ms, 516 nodes, 5009 nps, move b3a4
+Benchmark time 119 ms, 621 nodes, 5400 nps, move b3b4
+Benchmark time 130 ms, 858 nodes, 6755 nps, move b3b4
+Benchmark time 148 ms, 1303 nodes, 9048 nps, move b3b4
+Benchmark time 153 ms, 1445 nodes, 9633 nps, move b3b4
+Benchmark time 218 ms, 4312 nodes, 20055 nps, move b3b4
+Benchmark time 221 ms, 4500 nodes, 20642 nps, move b3b4
+Benchmark time 227 ms, 5041 nodes, 22605 nps, move b3b4
+Benchmark time 292 ms, 8071 nodes, 27927 nps, move b3b4
+Benchmark time 390 ms, 16118 nodes, 41756 nps, move b3b4
+Benchmark time 434 ms, 19574 nodes, 45415 nps, move b3b4
+Benchmark time 446 ms, 20322 nodes, 45977 nps, move b3b4
+Benchmark time 495 ms, 24955 nodes, 50721 nps, move b3b4
+Benchmark time 524 ms, 27938 nodes, 53623 nps, move b3a4
+Benchmark time 738 ms, 51270 nodes, 69850 nps, move b3a4
+Benchmark time 748 ms, 52698 nodes, 70735 nps, move b3a4
+Benchmark time 1012 ms, 87409 nodes, 86715 nps, move b3a4
+Benchmark time 1022 ms, 88876 nodes, 87218 nps, move b3a4
+Benchmark time 1289 ms, 125566 nodes, 97716 nps, move b3a4
+Benchmark time 1505 ms, 158156 nodes, 105296 nps, move b3a4
+Benchmark time 2155 ms, 261144 nodes, 121349 nps, move b3a4
+Benchmark time 2158 ms, 261625 nodes, 121460 nps, move b3a4
+Benchmark time 2164 ms, 262633 nodes, 121589 nps, move b3a4
+Benchmark time 2166 ms, 262876 nodes, 121533 nps, move b3a4
+Benchmark time 2295 ms, 284085 nodes, 124000 nps, move b3a4
+Benchmark time 4107 ms, 613295 nodes, 149474 nps, move b3b4
+Benchmark time 4804 ms, 710104 nodes, 147938 nps, move b3a4
+Benchmark time 4805 ms, 710185 nodes, 147924 nps, move b3b4
+Benchmark time 4808 ms, 710520 nodes, 147901 nps, move b3a4
+Benchmark time 5485 ms, 805150 nodes, 146898 nps, move b3a4
+Benchmark time 5578 ms, 819246 nodes, 146976 nps, move b3a4
+Benchmark time 5775 ms, 848719 nodes, 147066 nps, move b3a4
+Benchmark time 8445 ms, 1287633 nodes, 152545 nps, move b3a4
+Benchmark time 10000 ms, 1503144 nodes, 150374 nps, move b3a4
+bestmove b3a4
+
+Position: 31/34 5rk1/q6p/2p3bR/1pPp1rP1/1P1Pp3/P3B1Q1/1K3P2/R7 w - - 93 90
+Benchmark time 6 ms, 2 nodes, 1000 nps, move a1h1
+Benchmark time 9 ms, 4 nodes, 800 nps, move a1h1
+Benchmark time 10 ms, 5 nodes, 714 nps, move g3d6
+Benchmark time 12 ms, 9 nodes, 1125 nps, move g3d6
+Benchmark time 16 ms, 13 nodes, 1000 nps, move g3d6
+Benchmark time 19 ms, 14 nodes, 875 nps, move g3d6
+Benchmark time 22 ms, 17 nodes, 894 nps, move g3d6
+Benchmark time 33 ms, 39 nodes, 1300 nps, move g3d6
+Benchmark time 35 ms, 45 nodes, 1451 nps, move g3d6
+Benchmark time 58 ms, 151 nodes, 2796 nps, move g3d6
+Benchmark time 58 ms, 158 nodes, 2872 nps, move g3d6
+Benchmark time 62 ms, 201 nodes, 3465 nps, move g3d6
+Benchmark time 64 ms, 225 nodes, 3750 nps, move a1a2
+Benchmark time 79 ms, 435 nodes, 5800 nps, move g3d6
+Benchmark time 79 ms, 469 nodes, 6171 nps, move g3d6
+Benchmark time 86 ms, 568 nodes, 6843 nps, move g3d6
+Benchmark time 109 ms, 875 nodes, 8333 nps, move a1a2
+Benchmark time 118 ms, 1037 nodes, 9017 nps, move a1a2
+Benchmark time 119 ms, 1062 nodes, 9234 nps, move a1a2
+Benchmark time 130 ms, 1417 nodes, 11246 nps, move g3d6
+Benchmark time 170 ms, 2656 nodes, 16000 nps, move g3h2
+Benchmark time 287 ms, 6226 nodes, 21922 nps, move g3h2
+Benchmark time 298 ms, 6858 nodes, 23247 nps, move g3h2
+Benchmark time 598 ms, 27837 nodes, 46784 nps, move g3h2
+Benchmark time 686 ms, 34783 nodes, 51001 nps, move g3h2
+Benchmark time 842 ms, 49524 nodes, 59097 nps, move g3h2
+Benchmark time 997 ms, 64185 nodes, 64637 nps, move g3h2
+Benchmark time 1042 ms, 69918 nodes, 67293 nps, move g3h2
+Benchmark time 1355 ms, 102988 nodes, 76230 nps, move g3h2
+Benchmark time 1382 ms, 105622 nodes, 76648 nps, move g3h2
+Benchmark time 1412 ms, 108753 nodes, 77239 nps, move g3h2
+Benchmark time 1917 ms, 165731 nodes, 86588 nps, move g3h2
+Benchmark time 1978 ms, 173185 nodes, 87733 nps, move g3h2
+Benchmark time 3610 ms, 382123 nodes, 105968 nps, move g3h2
+Benchmark time 4962 ms, 554154 nodes, 111769 nps, move g3h2
+Benchmark time 4967 ms, 554847 nodes, 111774 nps, move g3h2
+Benchmark time 7982 ms, 890650 nodes, 111624 nps, move g3h2
+Benchmark time 10000 ms, 1109495 nodes, 110993 nps, move g3h2
+bestmove g3h2
+
+Position: 32/34 4rrk1/1p1nq3/p7/2p1P1pp/3P2bp/3Q1Bn1/PPPB4/1K2R1NR w - - 40 21
+Benchmark time 6 ms, 2 nodes, 1000 nps, move h1h2
+Benchmark time 9 ms, 3 nodes, 600 nps, move h1h2
+Benchmark time 12 ms, 5 nodes, 625 nps, move h1h2
+Benchmark time 16 ms, 12 nodes, 1000 nps, move h1h2
+Benchmark time 21 ms, 22 nodes, 1294 nps, move h1h2
+Benchmark time 24 ms, 31 nodes, 1550 nps, move h1h2
+Benchmark time 34 ms, 42 nodes, 1400 nps, move e5e6
+Benchmark time 35 ms, 43 nodes, 1387 nps, move e5e6
+Benchmark time 47 ms, 65 nodes, 1511 nps, move h1h2
+Benchmark time 51 ms, 83 nodes, 1765 nps, move h1h2
+Benchmark time 60 ms, 106 nodes, 1859 nps, move h1h2
+Benchmark time 62 ms, 109 nodes, 1847 nps, move h1h2
+Benchmark time 63 ms, 112 nodes, 1866 nps, move f3g4
+Benchmark time 66 ms, 124 nodes, 1968 nps, move f3g4
+Benchmark time 80 ms, 189 nodes, 2454 nps, move f3g4
+Benchmark time 83 ms, 210 nodes, 2658 nps, move e5e6
+Benchmark time 109 ms, 507 nodes, 4783 nps, move h1h2
+Benchmark time 110 ms, 518 nodes, 4841 nps, move h1h2
+Benchmark time 117 ms, 570 nodes, 5000 nps, move e5e6
+Benchmark time 224 ms, 1939 nodes, 8813 nps, move e5e6
+Benchmark time 238 ms, 2275 nodes, 9680 nps, move h1h2
+Benchmark time 257 ms, 2458 nodes, 9677 nps, move h1h2
+Benchmark time 259 ms, 2474 nodes, 9664 nps, move h1h2
+Benchmark time 264 ms, 2583 nodes, 9896 nps, move h1h2
+Benchmark time 316 ms, 3908 nodes, 12525 nps, move h1h2
+Benchmark time 341 ms, 4378 nodes, 12991 nps, move f3d5
+Benchmark time 344 ms, 4483 nodes, 13185 nps, move f3d5
+Benchmark time 408 ms, 5586 nodes, 13826 nps, move f3d5
+Benchmark time 448 ms, 6714 nodes, 15121 nps, move f3d5
+Benchmark time 453 ms, 6795 nodes, 15133 nps, move f3d5
+Benchmark time 458 ms, 6982 nodes, 15345 nps, move f3d5
+Benchmark time 633 ms, 11277 nodes, 17900 nps, move f3d5
+Benchmark time 754 ms, 14107 nodes, 18784 nps, move e5e6
+Benchmark time 840 ms, 15673 nodes, 18725 nps, move e5e6
+Benchmark time 1293 ms, 30562 nodes, 23691 nps, move h1h2
+Benchmark time 1607 ms, 46389 nodes, 28920 nps, move h1h2
+Benchmark time 1902 ms, 59628 nodes, 31399 nps, move h1h2
+Benchmark time 2503 ms, 93038 nodes, 37215 nps, move h1h2
+Benchmark time 3984 ms, 177484 nodes, 44593 nps, move h1h2
+Benchmark time 8986 ms, 472298 nodes, 52582 nps, move h1h2
+Benchmark time 10000 ms, 530066 nodes, 53027 nps, move h1h2
+bestmove h1h2
+
+Position: 33/34 r3k2r/3nnpbp/q2pp1p1/p7/Pp1PPPP1/4BNN1/1P5P/R2Q1RK1 w kq - 0 16
+Benchmark time 6 ms, 2 nodes, 666 nps, move f4f5
+Benchmark time 9 ms, 3 nodes, 500 nps, move f4f5
+Benchmark time 12 ms, 5 nodes, 555 nps, move f4f5
+Benchmark time 13 ms, 7 nodes, 700 nps, move f4f5
+Benchmark time 15 ms, 8 nodes, 727 nps, move f4f5
+Benchmark time 18 ms, 10 nodes, 714 nps, move f4f5
+Benchmark time 21 ms, 16 nodes, 941 nps, move f4f5
+Benchmark time 23 ms, 19 nodes, 950 nps, move f4f5
+Benchmark time 23 ms, 21 nodes, 1050 nps, move f4f5
+Benchmark time 45 ms, 81 nodes, 1928 nps, move f4f5
+Benchmark time 51 ms, 108 nodes, 2297 nps, move f4f5
+Benchmark time 54 ms, 139 nodes, 2780 nps, move f4f5
+Benchmark time 69 ms, 343 nodes, 5276 nps, move f4f5
+Benchmark time 69 ms, 349 nodes, 5287 nps, move f4f5
+Benchmark time 74 ms, 404 nodes, 5771 nps, move f4f5
+Benchmark time 114 ms, 975 nodes, 8783 nps, move f4f5
+Benchmark time 221 ms, 2685 nodes, 12373 nps, move f4f5
+Benchmark time 274 ms, 3527 nodes, 13062 nps, move f4f5
+Benchmark time 297 ms, 4040 nodes, 13741 nps, move f4f5
+Benchmark time 382 ms, 5772 nodes, 15269 nps, move f4f5
+Benchmark time 434 ms, 6678 nodes, 15530 nps, move f4f5
+Benchmark time 634 ms, 14515 nodes, 23039 nps, move f4f5
+Benchmark time 651 ms, 15707 nodes, 24239 nps, move f4f5
+Benchmark time 725 ms, 19977 nodes, 27707 nps, move f4f5
+Benchmark time 1215 ms, 50513 nodes, 41677 nps, move f4f5
+Benchmark time 1713 ms, 82251 nodes, 48100 nps, move f4f5
+Benchmark time 1854 ms, 92728 nodes, 50096 nps, move f4f5
+Benchmark time 1933 ms, 98510 nodes, 51067 nps, move f4f5
+Benchmark time 2170 ms, 114736 nodes, 52971 nps, move f4f5
+Benchmark time 2531 ms, 137926 nodes, 54580 nps, move f4f5
+Benchmark time 2705 ms, 150107 nodes, 55574 nps, move f4f5
+Benchmark time 7706 ms, 515928 nodes, 66977 nps, move f4f5
+Benchmark time 7811 ms, 523704 nodes, 67072 nps, move f4f5
+Benchmark time 10001 ms, 679332 nodes, 67953 nps, move f4f5
+bestmove f4f5
+
+Position: 34/34 3Qb1k1/1r2ppb1/pN1n2q1/Pp1Pp1Pr/4P2p/4BP2/4B1R1/1R5K b - - 11 40
+Benchmark time 6 ms, 2 nodes, 1000 nps, move h4h3
+Benchmark time 9 ms, 3 nodes, 600 nps, move h4h3
+Benchmark time 13 ms, 8 nodes, 800 nps, move h4h3
+Benchmark time 16 ms, 12 nodes, 1000 nps, move h5h8
+Benchmark time 16 ms, 15 nodes, 1153 nps, move g7f8
+Benchmark time 19 ms, 17 nodes, 1133 nps, move h4h3
+Benchmark time 19 ms, 18 nodes, 1200 nps, move g7f8
+Benchmark time 19 ms, 19 nodes, 1266 nps, move g7f8
+Benchmark time 21 ms, 21 nodes, 1166 nps, move h4h3
+Benchmark time 22 ms, 24 nodes, 1333 nps, move h4h3
+Benchmark time 35 ms, 55 nodes, 1718 nps, move h4h3
+Benchmark time 38 ms, 64 nodes, 1882 nps, move h4h3
+Benchmark time 66 ms, 164 nodes, 2645 nps, move g8f8
+Benchmark time 74 ms, 250 nodes, 3571 nps, move g8f8
+Benchmark time 84 ms, 332 nodes, 4098 nps, move g8h7
+Benchmark time 95 ms, 432 nodes, 4747 nps, move g8h7
+Benchmark time 98 ms, 519 nodes, 5521 nps, move g7f8
+Benchmark time 106 ms, 789 nodes, 7735 nps, move g7f8
+Benchmark time 111 ms, 903 nodes, 8361 nps, move g7f8
+Benchmark time 122 ms, 1066 nodes, 9033 nps, move g7f8
+Benchmark time 194 ms, 2167 nodes, 11405 nps, move h5h8
+Benchmark time 205 ms, 2503 nodes, 12452 nps, move g7f8
+Benchmark time 206 ms, 2521 nodes, 12480 nps, move h5h8
+Benchmark time 208 ms, 2546 nodes, 12419 nps, move g7f8
+Benchmark time 214 ms, 2741 nodes, 12990 nps, move h5h8
+Benchmark time 225 ms, 3039 nodes, 13689 nps, move h5h8
+Benchmark time 238 ms, 3253 nodes, 13901 nps, move h5h8
+Benchmark time 243 ms, 3379 nodes, 14079 nps, move h5h8
+Benchmark time 252 ms, 3648 nodes, 14650 nps, move g7f8
+Benchmark time 259 ms, 3829 nodes, 14957 nps, move h4h3
+Benchmark time 342 ms, 6223 nodes, 18356 nps, move g7f8
+Benchmark time 344 ms, 6246 nodes, 18370 nps, move h4h3
+Benchmark time 506 ms, 10504 nodes, 20882 nps, move h4h3
+Benchmark time 515 ms, 10701 nodes, 20900 nps, move h4h3
+Benchmark time 527 ms, 11242 nodes, 21495 nps, move h4h3
+Benchmark time 602 ms, 14288 nodes, 23892 nps, move h4h3
+Benchmark time 887 ms, 26207 nodes, 29679 nps, move h4h3
+Benchmark time 1380 ms, 49109 nodes, 35663 nps, move h4h3
+Benchmark time 1510 ms, 56248 nodes, 37349 nps, move h4h3
+Benchmark time 1923 ms, 83765 nodes, 43627 nps, move h4h3
+Benchmark time 2071 ms, 93056 nodes, 45019 nps, move h4h3
+Benchmark time 3860 ms, 218601 nodes, 56676 nps, move h4h3
+Benchmark time 5987 ms, 371871 nodes, 62154 nps, move h4h3
+Benchmark time 6283 ms, 391670 nodes, 62367 nps, move h4h3
+Benchmark time 10000 ms, 645673 nodes, 64586 nps, move h4h3
+bestmove h4h3
+
+===========================
+Total time (ms) : 340462
+Nodes searched  : 36458000
+Nodes/second    : 107084

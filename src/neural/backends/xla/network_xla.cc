@@ -119,7 +119,7 @@ XlaComputation::XlaComputation(const XlaNetwork* network)
           XlaMutableTensor::GetBufferSize(
               network->options_.input->type,
               std::vector<int64_t>{
-                  static_cast<int64_t>(network->runner_->GetMaxBatchSize()),
+                  std::max<int64_t>(256, network->runner_->GetMaxBatchSize()),
                   kInputPlanes, 8, 8})) {}
 
 void XlaComputation::AddInput(InputPlanes&& input) {
@@ -332,18 +332,25 @@ std::unique_ptr<Network> MakeXlaNetwork(const std::optional<WeightsFile>& w,
       }
     }
   } else if (is_tpu) {
-    // TPU MXUs work with 128x128 systolic matrix multipliers.
-    // Compiling a small set of power-of-2 / MXU-aligned buckets minimizes
-    // startup compilation latency (saving ~15 minutes) and eliminates Colab timeouts.
     int max_batch_size = opts.GetOrDefault<int>("max_batch", 256);
-    for (size_t b : {16UL, 64UL, 128UL, 256UL}) {
-      if (b <= static_cast<size_t>(max_batch_size)) {
+    int step = opts.GetOrDefault<int>("step", 0);
+    if (step > 0) {
+      for (int b = step; b <= max_batch_size; b += step) {
         batch_sizes.push_back(b);
       }
-    }
-    if (batch_sizes.empty() ||
-        batch_sizes.back() < static_cast<size_t>(max_batch_size)) {
-      batch_sizes.push_back(max_batch_size);
+      if (batch_sizes.empty() || batch_sizes.back() < static_cast<size_t>(max_batch_size)) {
+        batch_sizes.push_back(max_batch_size);
+      }
+    } else {
+      for (size_t b : {16UL, 64UL, 128UL, 256UL}) {
+        if (b <= static_cast<size_t>(max_batch_size)) {
+          batch_sizes.push_back(b);
+        }
+      }
+      if (batch_sizes.empty() ||
+          batch_sizes.back() < static_cast<size_t>(max_batch_size)) {
+        batch_sizes.push_back(max_batch_size);
+      }
     }
   } else {
     int max_batch_size = opts.GetOrDefault<int>("max_batch", 512);
