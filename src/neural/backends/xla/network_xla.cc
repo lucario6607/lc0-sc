@@ -34,7 +34,9 @@
 #include "neural/network.h"
 #include "neural/onnx/converter.h"
 #include "neural/xla/onnx2hlo.h"
+#include "utils/bf16_utils.h"
 #include "utils/bititer.h"
+#include "utils/fp16_utils.h"
 
 namespace lczero {
 namespace {
@@ -74,7 +76,8 @@ class XlaNetwork : public Network {
  public:
   XlaNetwork(std::unique_ptr<XlaRunner> runner,
              const XlaNetworkOptions& options,
-             const pblczero::NetworkFormat& format);
+             const pblczero::NetworkFormat& format,
+             int mini_batch_size = -1);
 
   const NetworkCapabilities& GetCapabilities() const override {
     return capabilities_;
@@ -83,7 +86,7 @@ class XlaNetwork : public Network {
     return std::make_unique<XlaComputation>(this);
   }
   int GetMiniBatchSize() const override {
-    return runner_->GetMaxBatchSize();
+    return mini_batch_size_ > 0 ? mini_batch_size_ : runner_->GetMaxBatchSize();
   }
   int GetPreferredBatchStep() const override {
     return runner_->GetPreferredBatchStep();
@@ -93,66 +96,100 @@ class XlaNetwork : public Network {
   std::unique_ptr<XlaRunner> runner_;
   XlaNetworkOptions options_;
   NetworkCapabilities capabilities_;
+  int mini_batch_size_;
 
   friend class XlaComputation;
 };
 
+static inline float ReadOutputScalar(const XlaMutableTensor* tensor, size_t idx) {
+  if (tensor->type() == pblczero::XlaShapeProto::BF16) {
+    return BF16toFP32(static_cast<const uint16_t*>(tensor->data())[idx]);
+  } else if (tensor->type() == pblczero::XlaShapeProto::F16) {
+    return FP16toFP32(static_cast<const uint16_t*>(tensor->data())[idx]);
+  } else {
+    return static_cast<const float*>(tensor->data())[idx];
+  }
+}
+
 XlaComputation::XlaComputation(const XlaNetwork* network)
     : network_(network),
       input_tensor_(
-          pblczero::XlaShapeProto::F32,
+          network->options_.input->type,
           std::vector<int64_t>{0, kInputPlanes, 8, 8},
           XlaMutableTensor::GetBufferSize(
-              pblczero::XlaShapeProto::F32,
+              network->options_.input->type,
               std::vector<int64_t>{
                   static_cast<int64_t>(network->runner_->GetMaxBatchSize()),
                   kInputPlanes, 8, 8})) {}
 
 void XlaComputation::AddInput(InputPlanes&& input) {
   auto new_shape = input_tensor_.shape();
-  float* ptr = static_cast<float*>(input_tensor_.mutable_data()) +
-               new_shape[0] * 8 * 8 * kInputPlanes;
+  const size_t sample_idx = new_shape[0];
   ++new_shape[0];
   input_tensor_.Reshape(new_shape);
-  memset(ptr, 0, 8 * 8 * kInputPlanes * sizeof(float));
-  for (const auto& plane : input) {
-    for (auto bit : IterateBits(plane.mask)) ptr[bit] = plane.value;
-    ptr += 8 * 8;
+  const auto input_type = input_tensor_.type();
+  if (input_type == pblczero::XlaShapeProto::BF16) {
+    uint16_t* ptr = static_cast<uint16_t*>(input_tensor_.mutable_data()) +
+                    sample_idx * 8 * 8 * kInputPlanes;
+    memset(ptr, 0, 8 * 8 * kInputPlanes * sizeof(uint16_t));
+    for (const auto& plane : input) {
+      const uint16_t val = FP32toBF16(plane.value);
+      for (auto bit : IterateBits(plane.mask)) ptr[bit] = val;
+      ptr += 8 * 8;
+    }
+  } else if (input_type == pblczero::XlaShapeProto::F16) {
+    uint16_t* ptr = static_cast<uint16_t*>(input_tensor_.mutable_data()) +
+                    sample_idx * 8 * 8 * kInputPlanes;
+    memset(ptr, 0, 8 * 8 * kInputPlanes * sizeof(uint16_t));
+    for (const auto& plane : input) {
+      const uint16_t val = FP32toFP16(plane.value);
+      for (auto bit : IterateBits(plane.mask)) ptr[bit] = val;
+      ptr += 8 * 8;
+    }
+  } else {
+    float* ptr = static_cast<float*>(input_tensor_.mutable_data()) +
+                 sample_idx * 8 * 8 * kInputPlanes;
+    memset(ptr, 0, 8 * 8 * kInputPlanes * sizeof(float));
+    for (const auto& plane : input) {
+      for (auto bit : IterateBits(plane.mask)) ptr[bit] = plane.value;
+      ptr += 8 * 8;
+    }
   }
 }
 
 float XlaComputation::GetQVal(int sample) const {
   if (network_->options_.output_wdl) {
-    const float* data = reinterpret_cast<const float*>(
-        outputs_[network_->options_.output_wdl->idx]->data());
-    return data[sample * 3 + 0] - data[sample * 3 + 2];
+    const auto* tensor =
+        outputs_[network_->options_.output_wdl->idx].get();
+    return ReadOutputScalar(tensor, sample * 3 + 0) -
+           ReadOutputScalar(tensor, sample * 3 + 2);
   } else {
-    const float* data = reinterpret_cast<const float*>(
-        outputs_[network_->options_.output_value->idx]->data());
-    return data[sample];
+    const auto* tensor =
+        outputs_[network_->options_.output_value->idx].get();
+    return ReadOutputScalar(tensor, sample);
   }
 }
 
 float XlaComputation::GetDVal(int sample) const {
   if (network_->options_.output_wdl) {
-    const float* data = reinterpret_cast<const float*>(
-        outputs_[network_->options_.output_wdl->idx]->data());
-    return data[sample * 3 + 1];
+    const auto* tensor =
+        outputs_[network_->options_.output_wdl->idx].get();
+    return ReadOutputScalar(tensor, sample * 3 + 1);
   }
   return 0.0f;
 }
 
 float XlaComputation::GetPVal(int sample, int move_id) const {
-  const float* data = reinterpret_cast<const float*>(
-      outputs_[network_->options_.output_policy->idx]->data());
-  return data[sample * 1858 + move_id];
+  const auto* tensor =
+      outputs_[network_->options_.output_policy->idx].get();
+  return ReadOutputScalar(tensor, sample * 1858 + move_id);
 }
 
 float XlaComputation::GetMVal(int sample) const {
   if (network_->options_.output_mlh) {
-    const float* data = reinterpret_cast<const float*>(
-        outputs_[network_->options_.output_mlh->idx]->data());
-    return data[sample];
+    const auto* tensor =
+        outputs_[network_->options_.output_mlh->idx].get();
+    return ReadOutputScalar(tensor, sample);
   }
   return 0.0f;
 }
@@ -160,23 +197,20 @@ float XlaComputation::GetMVal(int sample) const {
 int XlaComputation::GetBatchSize() const { return input_tensor_.shape()[0]; }
 
 void XlaComputation::ComputeBlocking() {
-  input_tensor_.Cast(network_->options_.input->type);
-  outputs_ = network_->runner_->ExecuteBlocking({&input_tensor_});
-  for (const auto& output :
-       {network_->options_.output_value, network_->options_.output_wdl,
-        network_->options_.output_policy, network_->options_.output_mlh}) {
-    if (output) {
-      outputs_[output->idx]->Cast(pblczero::XlaShapeProto::F32);
-    }
+  if (input_tensor_.type() != network_->options_.input->type) {
+    input_tensor_.Cast(network_->options_.input->type);
   }
+  outputs_ = network_->runner_->ExecuteBlocking({&input_tensor_});
 }
 
 XlaNetwork::XlaNetwork(std::unique_ptr<XlaRunner> runner,
                        const XlaNetworkOptions& options,
-                       const pblczero::NetworkFormat& format)
+                       const pblczero::NetworkFormat& format,
+                       int mini_batch_size)
     : runner_(std::move(runner)),
       options_(options),
-      capabilities_{format.input(), format.output(), format.moves_left()} {}
+      capabilities_{format.input(), format.output(), format.moves_left()},
+      mini_batch_size_(mini_batch_size) {}
 
 // Converts ONNX model to HLO (for various batch sizes) and adds them to the
 // XlaRunner.
@@ -354,8 +388,10 @@ std::unique_ptr<Network> MakeXlaNetwork(const std::optional<WeightsFile>& w,
                                     batch_sizes, io_type);
   }
 
+  int mini_batch = opts.GetOrDefault<int>("batch", -1);
   return std::make_unique<XlaNetwork>(std::move(runner), options,
-                                      w->format().network_format());
+                                      w->format().network_format(),
+                                      mini_batch);
 }
 
 REGISTER_NETWORK("xla", MakeXlaNetwork, 34)
