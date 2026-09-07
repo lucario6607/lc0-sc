@@ -320,6 +320,12 @@ std::unique_ptr<Network> MakeXlaNetwork(const std::optional<WeightsFile>& w,
       opts.GetOrDefault<std::string>("plugin_path", default_plugin);
 
 #if !defined(_WIN32)
+  if (is_tpu) {
+    const char* cur_args = getenv("LIBTPU_INIT_ARGS");
+    if (!cur_args || strlen(cur_args) == 0) {
+      setenv("LIBTPU_INIT_ARGS", "--xla_tpu_use_aggressive_scheduling=true", 1);
+    }
+  }
   if (opts.Exists<std::string>("libtpu_args")) {
     setenv("LIBTPU_INIT_ARGS", opts.Get<std::string>("libtpu_args").c_str(), 1);
   }
@@ -340,10 +346,10 @@ std::unique_ptr<Network> MakeXlaNetwork(const std::optional<WeightsFile>& w,
     }
   } else if (is_tpu) {
     // TPU MXUs work with 128x128 systolic matrix multipliers.
-    // Compiling a small set of power-of-2 / MXU-aligned buckets minimizes
-    // startup compilation latency (saving ~15 minutes) and eliminates Colab timeouts.
+    // Compiling key batch buckets (16, 24, 64, 128, 256) avoids wasteful
+    // padding for chess tree search while minimizing startup compilation latency.
     int max_batch_size = opts.GetOrDefault<int>("max_batch", 256);
-    for (size_t b : {16UL, 64UL, 128UL, 256UL}) {
+    for (size_t b : {16UL, 24UL, 64UL, 128UL, 256UL}) {
       if (b <= static_cast<size_t>(max_batch_size)) {
         batch_sizes.push_back(b);
       }

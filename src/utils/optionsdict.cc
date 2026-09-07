@@ -134,7 +134,7 @@ class Lexer {
     }
 
     // Identifier
-    if (std::isalnum(str_[idx_]) || str_[idx_] == '/') {
+    if (std::isalnum(str_[idx_]) || str_[idx_] == '/' || str_[idx_] == ':') {
       ReadIdentifier();
       return;
     }
@@ -174,7 +174,7 @@ class Lexer {
   void ReadIdentifier() {
     string_val_ = "";
     type_ = L_IDENTIFIER;
-    static const std::string kAllowedPunctuation = "_-./";
+    static const std::string kAllowedPunctuation = "_-./:";
     for (; idx_ < str_.size(); ++idx_) {
       if (!std::isalnum(str_[idx_]) &&
           kAllowedPunctuation.find(str_[idx_]) == std::string::npos) {
@@ -194,6 +194,20 @@ class Lexer {
       if (kFloatChars.find(str_[idx_]) != std::string::npos) is_float = true;
     }
 
+    if (idx_ < str_.size() && (str_[idx_] == ':' || str_[idx_] == '_' || std::isalnum(str_[idx_]))) {
+      // It's a compound colon-separated or alphanumeric string (e.g. "16:24:64").
+      static const std::string kIdentPunctuation = "_-./:";
+      for (; idx_ < str_.size(); ++idx_) {
+        if (!std::isalnum(str_[idx_]) &&
+            kIdentPunctuation.find(str_[idx_]) == std::string::npos) {
+          break;
+        }
+      }
+      type_ = L_IDENTIFIER;
+      string_val_ = str_.substr(last_offset_, idx_ - last_offset_);
+      return;
+    }
+
     try {
       if (is_float) {
         type_ = L_FLOAT;
@@ -203,6 +217,7 @@ class Lexer {
         type_ = L_INTEGER;
         int_val_ = stoi(str_.substr(last_offset_, idx_ - last_offset_));
       }
+
 
     } catch (...) {
       RaiseError("Unable to parse number");

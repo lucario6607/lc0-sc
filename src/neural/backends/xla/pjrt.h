@@ -183,6 +183,7 @@ class PjrtDeviceBuffer : protected PjrtCommon {
   [[nodiscard]] std::unique_ptr<PjrtEvent> DeviceToHost(void* dst, size_t size);
   PjrtType GetType() const;
   std::vector<int64_t> GetDimensions() const;
+  PJRT_Buffer* buffer() const { return buffer_; }
 
  private:
   PJRT_Buffer* buffer_;
@@ -197,6 +198,11 @@ class PjrtExecutable : protected PjrtCommon {
   // modified. The function allocates the output buffers and returns them.
   std::vector<std::unique_ptr<PjrtDeviceBuffer>> Execute(
       const std::vector<PjrtDeviceBuffer*>& inputs,
+      const std::vector<int64_t>& non_donatable_indices,
+      bool wait_for_device = false);
+  std::vector<std::unique_ptr<PjrtDeviceBuffer>> ExecuteRaw(
+      PJRT_Buffer* const* inputs,
+      size_t num_inputs,
       const std::vector<int64_t>& non_donatable_indices,
       bool wait_for_device = false);
   std::vector<std::unique_ptr<PjrtDeviceBuffer>> ExecuteBlocking(

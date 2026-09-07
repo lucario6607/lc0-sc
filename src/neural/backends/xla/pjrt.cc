@@ -149,8 +149,9 @@ PjrtExecutable::~PjrtExecutable() {
 
 size_t PjrtExecutable::GetNumOutputs() const { return num_outputs_; }
 
-std::vector<std::unique_ptr<PjrtDeviceBuffer>> PjrtExecutable::Execute(
-    const std::vector<PjrtDeviceBuffer*>& inputs,
+std::vector<std::unique_ptr<PjrtDeviceBuffer>> PjrtExecutable::ExecuteRaw(
+    PJRT_Buffer* const* inputs,
+    size_t num_inputs,
     const std::vector<int64_t>& non_donatable_indices,
     bool wait_for_device) {
   auto options = MakeStruct<PJRT_ExecuteOptions>();
@@ -162,11 +163,8 @@ std::vector<std::unique_ptr<PjrtDeviceBuffer>> PjrtExecutable::Execute(
   args.executable = executable_;
   args.options = &options;
   args.num_devices = 1;
-  std::vector<PJRT_Buffer*> buffers(inputs.size());
-  for (size_t i = 0; i < inputs.size(); ++i) buffers[i] = inputs[i]->buffer_;
-  PJRT_Buffer* const* buffers_ptr = buffers.data();
-  args.num_args = inputs.size();
-  args.argument_lists = &buffers_ptr;
+  args.num_args = num_inputs;
+  args.argument_lists = &inputs;
 
   std::vector<PJRT_Buffer*> outputs(num_outputs_);
   PJRT_Buffer** outputs_ptr = outputs.data();
@@ -187,6 +185,16 @@ std::vector<std::unique_ptr<PjrtDeviceBuffer>> PjrtExecutable::Execute(
         std::make_unique<PjrtDeviceBuffer>(api_, outputs[i]));
   }
   return output_buffers;
+}
+
+std::vector<std::unique_ptr<PjrtDeviceBuffer>> PjrtExecutable::Execute(
+    const std::vector<PjrtDeviceBuffer*>& inputs,
+    const std::vector<int64_t>& non_donatable_indices,
+    bool wait_for_device) {
+  std::vector<PJRT_Buffer*> buffers(inputs.size());
+  for (size_t i = 0; i < inputs.size(); ++i) buffers[i] = inputs[i]->buffer_;
+  PJRT_Buffer* const* buffers_ptr = buffers.data();
+  return ExecuteRaw(buffers_ptr, inputs.size(), non_donatable_indices, wait_for_device);
 }
 
 std::vector<std::unique_ptr<PjrtDeviceBuffer>> PjrtExecutable::ExecuteBlocking(

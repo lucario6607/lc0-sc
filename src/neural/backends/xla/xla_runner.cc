@@ -168,6 +168,22 @@ void XlaRunner::SetFrozenInputs(
       buffers_[i] = owned_buffers_.back().get();
     }
   }
+
+  raw_buffers_.clear();
+  raw_buffers_.resize(inputs.size());
+  for (size_t i = 0; i < inputs.size(); ++i) {
+    if (buffers_[i]) {
+      raw_buffers_[i] = buffers_[i]->buffer();
+    }
+  }
+
+  non_donatable_indices_.clear();
+  non_donatable_indices_.reserve(inputs.size());
+  for (size_t i = 0; i < inputs.size(); ++i) {
+    if (i != param_idxs_[0]) {
+      non_donatable_indices_.push_back(i);
+    }
+  }
 }
 
 size_t XlaRunner::GetMaxBatchSize() const { return executables_.back().first; }
@@ -213,23 +229,13 @@ std::vector<const XlaMutableTensor*> XlaRunner::ExecuteBlocking(
   auto input_buffer = transfer->ReleaseBufferWithoutAwait();
   auto h2d_event = transfer->TakeEvent();
 
-  // Make a copy to support multiple concurrent calls.
-  auto input_buffers = buffers_;
-  input_buffers[param_idxs_[0]] = input_buffer.get();
+  // Set the dynamic input buffer pointer in preallocated raw buffer array.
+  raw_buffers_[param_idxs_[0]] = input_buffer->buffer();
 
-  // Mark all frozen inputs as non-donatable, while leaving the dynamic input planes
-  // buffer donatable so XLA can reuse its memory for intermediate activations/outputs.
-  std::vector<int64_t> non_donatable_indices;
-  non_donatable_indices.reserve(buffers_.size());
-  for (size_t i = 0; i < buffers_.size(); ++i) {
-    if (i != param_idxs_[0]) {
-      non_donatable_indices.push_back(i);
-    }
-  }
-
-  // Submit execution to TPU device stream asynchronously (do not block CPU on device completion).
-  auto outputs = iter->second->Execute(input_buffers, non_donatable_indices,
-                                       /*wait_for_device=*/false);
+  // Submit execution to TPU device stream asynchronously using preallocated raw buffer array.
+  auto outputs = iter->second->ExecuteRaw(raw_buffers_.data(), raw_buffers_.size(),
+                                          non_donatable_indices_,
+                                          /*wait_for_device=*/false);
 
   // Reuse or allocate cached host output buffers to eliminate per-batch heap churn.
   auto& cached_tensors = output_buffers_cache_[batch_size];
