@@ -330,6 +330,7 @@ std::unique_ptr<Network> MakeXlaNetwork(const std::optional<WeightsFile>& w,
   std::vector<size_t> batch_sizes;
   if (opts.Exists<std::string>("batch_buckets")) {
     std::string buckets_str = opts.Get<std::string>("batch_buckets");
+    std::replace(buckets_str.begin(), buckets_str.end(), ':', ',');
     std::stringstream ss(buckets_str);
     std::string item;
     while (std::getline(ss, item, ',')) {
