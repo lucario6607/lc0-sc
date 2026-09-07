@@ -134,6 +134,7 @@ void XlaRunner::AddModule(size_t minibatch_size,
       ->mutable_device_assignment()
       ->add_computation_devices()
       ->add_replica_device_ids(device_);
+  options.mutable_executable_build_options()->set_alias_passthrough_params(true);
   auto executable = pjrt_client_->CompileHlo(module.OutputAsString(),
                                              options.OutputAsString());
   executables_.push_back({minibatch_size, std::move(executable)});
@@ -172,7 +173,7 @@ void XlaRunner::SetFrozenInputs(
 size_t XlaRunner::GetMaxBatchSize() const { return executables_.back().first; }
 size_t XlaRunner::GetPreferredBatchStep() const { return executables_.front().first; }
 
-std::vector<std::unique_ptr<XlaMutableTensor>> XlaRunner::ExecuteBlocking(
+std::vector<const XlaMutableTensor*> XlaRunner::ExecuteBlocking(
     const std::vector<XlaMutableTensor*>& inputs) {
   if (inputs.size() != 1) {
     throw Exception("Only one input is kinda supported.");
@@ -204,36 +205,65 @@ std::vector<std::unique_ptr<XlaMutableTensor>> XlaRunner::ExecuteBlocking(
     memset(data_ptr + valid_elements * elem_size, 0,
            (total_elements - valid_elements) * elem_size);
   }
-  // Transfer the input to the device.
-  auto input_buffer =
-      pjrt_client_
-          ->HostToDevice(
-              {static_cast<const char*>(inputs[0]->data()), inputs[0]->size()},
-              XlaTypeToPjrtType(inputs[0]->type()), new_shape,
-              devices_.at(device_).get())
-          ->AwaitAndReleaseBuffer();
-  // Make a copy to support multiple concurrent calls, not sure if it's needed.
+  // Asynchronously initiate transfer of the input to the device without blocking CPU.
+  auto transfer = pjrt_client_->HostToDevice(
+      {static_cast<const char*>(inputs[0]->data()), inputs[0]->size()},
+      XlaTypeToPjrtType(inputs[0]->type()), new_shape,
+      devices_.at(device_).get());
+  auto input_buffer = transfer->ReleaseBufferWithoutAwait();
+  auto h2d_event = transfer->TakeEvent();
+
+  // Make a copy to support multiple concurrent calls.
   auto input_buffers = buffers_;
   input_buffers[param_idxs_[0]] = input_buffer.get();
-  // Execute!
-  auto outputs = iter->second->ExecuteBlocking(input_buffers);
 
-  // Now we need to transfer the outputs back to the host.
-  std::vector<std::unique_ptr<XlaMutableTensor>> result;
-  result.reserve(outputs.size());
+  // Mark all frozen inputs as non-donatable, while leaving the dynamic input planes
+  // buffer donatable so XLA can reuse its memory for intermediate activations/outputs.
+  std::vector<int64_t> non_donatable_indices;
+  non_donatable_indices.reserve(buffers_.size());
+  for (size_t i = 0; i < buffers_.size(); ++i) {
+    if (i != param_idxs_[0]) {
+      non_donatable_indices.push_back(i);
+    }
+  }
+
+  // Submit execution to TPU device stream asynchronously (do not block CPU on device completion).
+  auto outputs = iter->second->Execute(input_buffers, non_donatable_indices,
+                                       /*wait_for_device=*/false);
+
+  // Reuse or allocate cached host output buffers to eliminate per-batch heap churn.
+  auto& cached_tensors = output_buffers_cache_[batch_size];
+  if (cached_tensors.size() != outputs.size()) {
+    cached_tensors.clear();
+    cached_tensors.reserve(outputs.size());
+    for (size_t i = 0; i < outputs.size(); ++i) {
+      cached_tensors.push_back(std::make_unique<XlaMutableTensor>(
+          PjrtTypeToXlaType(outputs[i]->GetType()),
+          outputs[i]->GetDimensions()));
+    }
+  }
+
+  // Initiate transfers from device to host directly into cached buffers.
   std::vector<std::unique_ptr<PjrtEvent>> done_events;
   done_events.reserve(outputs.size());
-  // Initialte transfers from device to host.
   for (size_t i = 0; i < outputs.size(); ++i) {
-    const auto& output = outputs[i];
-    auto new_tensor = std::make_unique<XlaMutableTensor>(
-        PjrtTypeToXlaType(output->GetType()), output->GetDimensions());
-    done_events.push_back(
-        output->DeviceToHost(new_tensor->mutable_data(), new_tensor->size()));
-    result.push_back(std::move(new_tensor));
+    done_events.push_back(outputs[i]->DeviceToHost(
+        cached_tensors[i]->mutable_data(), cached_tensors[i]->size()));
   }
-  // Wait for the transfers to complete.
-  for (size_t i = 0; i < outputs.size(); ++i) done_events[i]->Await();
+
+  // Single consolidated wait on completion of D2H transfers.
+  for (size_t i = 0; i < outputs.size(); ++i) {
+    done_events[i]->Await();
+  }
+  if (h2d_event) {
+    h2d_event->Await();
+  }
+
+  std::vector<const XlaMutableTensor*> result;
+  result.reserve(outputs.size());
+  for (size_t i = 0; i < outputs.size(); ++i) {
+    result.push_back(cached_tensors[i].get());
+  }
   return result;
 }
 

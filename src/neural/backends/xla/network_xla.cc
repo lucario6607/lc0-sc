@@ -56,7 +56,7 @@ class XlaComputation : public NetworkComputation {
  private:
   const XlaNetwork* network_;
   XlaMutableTensor input_tensor_;
-  std::vector<std::unique_ptr<XlaMutableTensor>> outputs_;
+  std::vector<const XlaMutableTensor*> outputs_;
 };
 
 // Indices of various heads in the HLO output.
@@ -160,12 +160,12 @@ void XlaComputation::AddInput(InputPlanes&& input) {
 float XlaComputation::GetQVal(int sample) const {
   if (network_->options_.output_wdl) {
     const auto* tensor =
-        outputs_[network_->options_.output_wdl->idx].get();
+        outputs_[network_->options_.output_wdl->idx];
     return ReadOutputScalar(tensor, sample * 3 + 0) -
            ReadOutputScalar(tensor, sample * 3 + 2);
   } else {
     const auto* tensor =
-        outputs_[network_->options_.output_value->idx].get();
+        outputs_[network_->options_.output_value->idx];
     return ReadOutputScalar(tensor, sample);
   }
 }
@@ -173,7 +173,7 @@ float XlaComputation::GetQVal(int sample) const {
 float XlaComputation::GetDVal(int sample) const {
   if (network_->options_.output_wdl) {
     const auto* tensor =
-        outputs_[network_->options_.output_wdl->idx].get();
+        outputs_[network_->options_.output_wdl->idx];
     return ReadOutputScalar(tensor, sample * 3 + 1);
   }
   return 0.0f;
@@ -181,14 +181,14 @@ float XlaComputation::GetDVal(int sample) const {
 
 float XlaComputation::GetPVal(int sample, int move_id) const {
   const auto* tensor =
-      outputs_[network_->options_.output_policy->idx].get();
+      outputs_[network_->options_.output_policy->idx];
   return ReadOutputScalar(tensor, sample * 1858 + move_id);
 }
 
 float XlaComputation::GetMVal(int sample) const {
   if (network_->options_.output_mlh) {
     const auto* tensor =
-        outputs_[network_->options_.output_mlh->idx].get();
+        outputs_[network_->options_.output_mlh->idx];
     return ReadOutputScalar(tensor, sample);
   }
   return 0.0f;
@@ -318,6 +318,12 @@ std::unique_ptr<Network> MakeXlaNetwork(const std::optional<WeightsFile>& w,
       is_tpu ? "libtpu.so" : "./pjrt_c_api_gpu_plugin.so";
   std::string plugin_path =
       opts.GetOrDefault<std::string>("plugin_path", default_plugin);
+
+#if !defined(_WIN32)
+  if (opts.Exists<std::string>("libtpu_args")) {
+    setenv("LIBTPU_INIT_ARGS", opts.Get<std::string>("libtpu_args").c_str(), 1);
+  }
+#endif
 
   auto runner = std::make_unique<XlaRunner>(plugin_path.c_str(), device);
 

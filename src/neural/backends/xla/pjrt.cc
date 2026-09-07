@@ -149,14 +149,14 @@ PjrtExecutable::~PjrtExecutable() {
 
 size_t PjrtExecutable::GetNumOutputs() const { return num_outputs_; }
 
-std::vector<std::unique_ptr<PjrtDeviceBuffer>> PjrtExecutable::ExecuteBlocking(
-    const std::vector<PjrtDeviceBuffer*>& inputs) {
+std::vector<std::unique_ptr<PjrtDeviceBuffer>> PjrtExecutable::Execute(
+    const std::vector<PjrtDeviceBuffer*>& inputs,
+    const std::vector<int64_t>& non_donatable_indices,
+    bool wait_for_device) {
   auto options = MakeStruct<PJRT_ExecuteOptions>();
-  options.num_non_donatable_input_indices = inputs.size();
-  std::vector<int64_t> non_donatable_indices(inputs.size());
-  // TODO the buffer 0 is actually donatable.
-  std::iota(non_donatable_indices.begin(), non_donatable_indices.end(), 0);
-  options.non_donatable_input_indices = non_donatable_indices.data();
+  options.num_non_donatable_input_indices = non_donatable_indices.size();
+  options.non_donatable_input_indices =
+      non_donatable_indices.empty() ? nullptr : non_donatable_indices.data();
 
   auto args = MakeStruct<PJRT_LoadedExecutable_Execute_Args>();
   args.executable = executable_;
@@ -172,10 +172,10 @@ std::vector<std::unique_ptr<PjrtDeviceBuffer>> PjrtExecutable::ExecuteBlocking(
   PJRT_Buffer** outputs_ptr = outputs.data();
   PJRT_Event* event_ptr = nullptr;
   args.output_lists = &outputs_ptr;
-  args.device_complete_events = &event_ptr;
+  args.device_complete_events = wait_for_device ? &event_ptr : nullptr;
   CheckError(api_->PJRT_LoadedExecutable_Execute(&args));
 
-  if (event_ptr) {
+  if (wait_for_device && event_ptr) {
     PjrtEvent event(api_, event_ptr);
     event.Await();
   }
@@ -187,6 +187,13 @@ std::vector<std::unique_ptr<PjrtDeviceBuffer>> PjrtExecutable::ExecuteBlocking(
         std::make_unique<PjrtDeviceBuffer>(api_, outputs[i]));
   }
   return output_buffers;
+}
+
+std::vector<std::unique_ptr<PjrtDeviceBuffer>> PjrtExecutable::ExecuteBlocking(
+    const std::vector<PjrtDeviceBuffer*>& inputs) {
+  std::vector<int64_t> non_donatable_indices(inputs.size());
+  std::iota(non_donatable_indices.begin(), non_donatable_indices.end(), 0);
+  return Execute(inputs, non_donatable_indices, true);
 }
 
 PjrtDevice::PjrtDevice(const PJRT_Api* api, PJRT_Device* device)
@@ -323,8 +330,25 @@ PjrtHostToDeviceTransfer::AwaitAndReleaseBuffer() {
   return res;
 }
 
+std::unique_ptr<PjrtDeviceBuffer>
+PjrtHostToDeviceTransfer::ReleaseBufferWithoutAwait() {
+  if (!buffer_) {
+    throw PjrtException(PjrtErrorCode::INVALID_ARGUMENT,
+                        "Buffer already released");
+  }
+  auto res = std::make_unique<PjrtDeviceBuffer>(api_, buffer_);
+  buffer_ = nullptr;
+  return res;
+}
+
+std::unique_ptr<PjrtEvent> PjrtHostToDeviceTransfer::TakeEvent() {
+  return std::move(event_);
+}
+
 PjrtHostToDeviceTransfer::~PjrtHostToDeviceTransfer() {
-  Await();
+  if (event_) {
+    Await();
+  }
   if (buffer_) {
     auto args = MakeStruct<PJRT_Buffer_Destroy_Args>();
     args.buffer = buffer_;

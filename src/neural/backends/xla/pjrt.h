@@ -195,6 +195,10 @@ class PjrtExecutable : protected PjrtCommon {
   ~PjrtExecutable();
   // Executes the executable with the given inputs. The inputs are not owned or
   // modified. The function allocates the output buffers and returns them.
+  std::vector<std::unique_ptr<PjrtDeviceBuffer>> Execute(
+      const std::vector<PjrtDeviceBuffer*>& inputs,
+      const std::vector<int64_t>& non_donatable_indices,
+      bool wait_for_device = false);
   std::vector<std::unique_ptr<PjrtDeviceBuffer>> ExecuteBlocking(
       const std::vector<PjrtDeviceBuffer*>& inputs);
   size_t GetNumOutputs() const;
@@ -217,6 +221,11 @@ class PjrtHostToDeviceTransfer : protected PjrtCommon {
   // Waits for the transfer to complete and releases the ownership of the
   // buffer.
   std::unique_ptr<PjrtDeviceBuffer> AwaitAndReleaseBuffer();
+  // Releases the device buffer handle immediately without awaiting the transfer.
+  // The transfer is ordered on the device stream by PJRT.
+  std::unique_ptr<PjrtDeviceBuffer> ReleaseBufferWithoutAwait();
+  // Relinquishes ownership of the transfer event.
+  std::unique_ptr<PjrtEvent> TakeEvent();
 
  private:
   PJRT_Buffer* buffer_;

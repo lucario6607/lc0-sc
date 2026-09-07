@@ -51,7 +51,7 @@ class XlaRunner {
   // Transfers inputs to the device and execute the executable corresponding to
   // the batch size. Only non-frozen inputs are passed as arguments.
   // Currnetly only single input is supported (just because we don't need more).
-  std::vector<std::unique_ptr<XlaMutableTensor>> ExecuteBlocking(
+  std::vector<const XlaMutableTensor*> ExecuteBlocking(
       const std::vector<XlaMutableTensor*>& inputs);
   // Inputs that are shared between all calls (i.e. network weights passed as
   // parameters). These inputs are transferred to device immediately (and not
@@ -74,6 +74,9 @@ class XlaRunner {
   // inputs (input planes) are created and filled in every request.
   std::vector<PjrtDeviceBuffer*> buffers_;
   std::vector<size_t> param_idxs_;
+  // Reusable host output buffers indexed by batch size to avoid heap churn.
+  std::unordered_map<size_t, std::vector<std::unique_ptr<XlaMutableTensor>>>
+      output_buffers_cache_;
   int device_;
 };
 
