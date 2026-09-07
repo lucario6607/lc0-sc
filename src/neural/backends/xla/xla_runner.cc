@@ -229,6 +229,7 @@ std::vector<const XlaMutableTensor*> XlaRunner::ExecuteBlocking(
   auto input_buffer = transfer->ReleaseBufferWithoutAwait();
   auto h2d_event = transfer->TakeEvent();
 
+  std::unique_lock<std::mutex> lock(mutex_);
   // Set the dynamic input buffer pointer in preallocated raw buffer array.
   raw_buffers_[param_idxs_[0]] = input_buffer->buffer();
 

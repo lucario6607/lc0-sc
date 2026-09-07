@@ -28,6 +28,7 @@
 #pragma once
 
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -79,6 +80,7 @@ class XlaRunner {
   // Reusable host output buffers indexed by batch size to avoid heap churn.
   std::unordered_map<size_t, std::vector<std::unique_ptr<XlaMutableTensor>>>
       output_buffers_cache_;
+  std::mutex mutex_;
   int device_;
 };
 
