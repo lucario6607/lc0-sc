@@ -189,7 +189,7 @@ void XlaRunner::SetFrozenInputs(
 size_t XlaRunner::GetMaxBatchSize() const { return executables_.back().first; }
 size_t XlaRunner::GetPreferredBatchStep() const { return executables_.front().first; }
 
-std::vector<const XlaMutableTensor*> XlaRunner::ExecuteBlocking(
+const std::vector<const XlaMutableTensor*>& XlaRunner::ExecuteBlocking(
     const std::vector<XlaMutableTensor*>& inputs) {
   if (inputs.size() != 1) {
     throw Exception("Only one input is kinda supported.");
@@ -240,38 +240,37 @@ std::vector<const XlaMutableTensor*> XlaRunner::ExecuteBlocking(
 
   // Reuse or allocate cached host output buffers to eliminate per-batch heap churn.
   auto& cached_tensors = output_buffers_cache_[batch_size];
+  auto& cached_ptrs = cached_tensor_ptrs_[batch_size];
   if (cached_tensors.size() != outputs.size()) {
     cached_tensors.clear();
     cached_tensors.reserve(outputs.size());
+    cached_ptrs.clear();
+    cached_ptrs.reserve(outputs.size());
     for (size_t i = 0; i < outputs.size(); ++i) {
       cached_tensors.push_back(std::make_unique<XlaMutableTensor>(
           PjrtTypeToXlaType(outputs[i]->GetType()),
           outputs[i]->GetDimensions()));
+      cached_ptrs.push_back(cached_tensors.back().get());
     }
   }
 
   // Initiate transfers from device to host directly into cached buffers.
-  std::vector<std::unique_ptr<PjrtEvent>> done_events;
-  done_events.reserve(outputs.size());
+  reusable_done_events_.clear();
+  reusable_done_events_.reserve(outputs.size());
   for (size_t i = 0; i < outputs.size(); ++i) {
-    done_events.push_back(outputs[i]->DeviceToHost(
+    reusable_done_events_.push_back(outputs[i]->DeviceToHost(
         cached_tensors[i]->mutable_data(), cached_tensors[i]->size()));
   }
 
   // Single consolidated wait on completion of D2H transfers.
   for (size_t i = 0; i < outputs.size(); ++i) {
-    done_events[i]->Await();
+    reusable_done_events_[i]->Await();
   }
   if (h2d_event) {
     h2d_event->Await();
   }
 
-  std::vector<const XlaMutableTensor*> result;
-  result.reserve(outputs.size());
-  for (size_t i = 0; i < outputs.size(); ++i) {
-    result.push_back(cached_tensors[i].get());
-  }
-  return result;
+  return cached_ptrs;
 }
 
 }  // namespace lczero

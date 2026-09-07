@@ -56,7 +56,7 @@ class XlaComputation : public NetworkComputation {
  private:
   const XlaNetwork* network_;
   XlaMutableTensor input_tensor_;
-  std::vector<const XlaMutableTensor*> outputs_;
+  const std::vector<const XlaMutableTensor*>* outputs_ = nullptr;
 };
 
 // Indices of various heads in the HLO output.
@@ -133,7 +133,7 @@ void XlaComputation::AddInput(InputPlanes&& input) {
                     sample_idx * 8 * 8 * kInputPlanes;
     memset(ptr, 0, 8 * 8 * kInputPlanes * sizeof(uint16_t));
     for (const auto& plane : input) {
-      const uint16_t val = FP32toBF16(plane.value);
+      const uint16_t val = (plane.value == 1.0f) ? 0x3F80 : FP32toBF16(plane.value);
       for (auto bit : IterateBits(plane.mask)) ptr[bit] = val;
       ptr += 8 * 8;
     }
@@ -142,7 +142,7 @@ void XlaComputation::AddInput(InputPlanes&& input) {
                     sample_idx * 8 * 8 * kInputPlanes;
     memset(ptr, 0, 8 * 8 * kInputPlanes * sizeof(uint16_t));
     for (const auto& plane : input) {
-      const uint16_t val = FP32toFP16(plane.value);
+      const uint16_t val = (plane.value == 1.0f) ? 0x3C00 : FP32toFP16(plane.value);
       for (auto bit : IterateBits(plane.mask)) ptr[bit] = val;
       ptr += 8 * 8;
     }
@@ -160,12 +160,12 @@ void XlaComputation::AddInput(InputPlanes&& input) {
 float XlaComputation::GetQVal(int sample) const {
   if (network_->options_.output_wdl) {
     const auto* tensor =
-        outputs_[network_->options_.output_wdl->idx];
+        (*outputs_)[network_->options_.output_wdl->idx];
     return ReadOutputScalar(tensor, sample * 3 + 0) -
            ReadOutputScalar(tensor, sample * 3 + 2);
   } else {
     const auto* tensor =
-        outputs_[network_->options_.output_value->idx];
+        (*outputs_)[network_->options_.output_value->idx];
     return ReadOutputScalar(tensor, sample);
   }
 }
@@ -173,7 +173,7 @@ float XlaComputation::GetQVal(int sample) const {
 float XlaComputation::GetDVal(int sample) const {
   if (network_->options_.output_wdl) {
     const auto* tensor =
-        outputs_[network_->options_.output_wdl->idx];
+        (*outputs_)[network_->options_.output_wdl->idx];
     return ReadOutputScalar(tensor, sample * 3 + 1);
   }
   return 0.0f;
@@ -181,14 +181,14 @@ float XlaComputation::GetDVal(int sample) const {
 
 float XlaComputation::GetPVal(int sample, int move_id) const {
   const auto* tensor =
-      outputs_[network_->options_.output_policy->idx];
+      (*outputs_)[network_->options_.output_policy->idx];
   return ReadOutputScalar(tensor, sample * 1858 + move_id);
 }
 
 float XlaComputation::GetMVal(int sample) const {
   if (network_->options_.output_mlh) {
     const auto* tensor =
-        outputs_[network_->options_.output_mlh->idx];
+        (*outputs_)[network_->options_.output_mlh->idx];
     return ReadOutputScalar(tensor, sample);
   }
   return 0.0f;
@@ -200,7 +200,7 @@ void XlaComputation::ComputeBlocking() {
   if (input_tensor_.type() != network_->options_.input->type) {
     input_tensor_.Cast(network_->options_.input->type);
   }
-  outputs_ = network_->runner_->ExecuteBlocking({&input_tensor_});
+  outputs_ = &network_->runner_->ExecuteBlocking({&input_tensor_});
 }
 
 XlaNetwork::XlaNetwork(std::unique_ptr<XlaRunner> runner,
