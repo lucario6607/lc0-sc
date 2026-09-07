@@ -344,6 +344,8 @@ std::unique_ptr<Network> MakeXlaNetwork(const std::optional<WeightsFile>& w,
         batch_sizes.push_back(std::stoul(item));
       }
     }
+  } else if (opts.Exists<int>("batch_buckets")) {
+    batch_sizes.push_back(opts.Get<int>("batch_buckets"));
   } else if (is_tpu) {
     // TPU MXUs work with 128x128 systolic matrix multipliers.
     // Compiling key batch buckets (16, 24, 64, 128, 256) avoids wasteful
