@@ -105,6 +105,16 @@ PjrtType XlaTypeToPjrtType(pblczero::XlaShapeProto::Type type) {
                       pblczero::XlaShapeProto::Type_Name(type));
   }
 }
+
+struct ThreadContext {
+  std::vector<PJRT_Buffer*> raw_buffers;
+  std::unordered_map<size_t, std::vector<std::unique_ptr<XlaMutableTensor>>>
+      output_buffers_cache;
+  std::unordered_map<size_t, std::vector<const XlaMutableTensor*>>
+      cached_tensor_ptrs;
+  std::vector<std::unique_ptr<PjrtEvent>> done_events;
+};
+
 }  // namespace
 
 XlaRunner::XlaRunner(const char* library_path, int device)
@@ -169,14 +179,6 @@ void XlaRunner::SetFrozenInputs(
     }
   }
 
-  raw_buffers_.clear();
-  raw_buffers_.resize(inputs.size());
-  for (size_t i = 0; i < inputs.size(); ++i) {
-    if (buffers_[i]) {
-      raw_buffers_[i] = buffers_[i]->buffer();
-    }
-  }
-
   non_donatable_indices_.clear();
   non_donatable_indices_.reserve(inputs.size());
   for (size_t i = 0; i < inputs.size(); ++i) {
@@ -229,18 +231,27 @@ const std::vector<const XlaMutableTensor*>& XlaRunner::ExecuteBlocking(
   auto input_buffer = transfer->ReleaseBufferWithoutAwait();
   auto h2d_event = transfer->TakeEvent();
 
-  std::unique_lock<std::mutex> lock(mutex_);
-  // Set the dynamic input buffer pointer in preallocated raw buffer array.
-  raw_buffers_[param_idxs_[0]] = input_buffer->buffer();
+  // Thread-local execution context eliminates all mutex contention and allows
+  // true multi-threaded concurrent pipelining across TPU hardware streams.
+  thread_local ThreadContext tc;
+  if (tc.raw_buffers.size() != buffers_.size()) {
+    tc.raw_buffers.resize(buffers_.size());
+    for (size_t i = 0; i < buffers_.size(); ++i) {
+      tc.raw_buffers[i] = buffers_[i] ? buffers_[i]->buffer() : nullptr;
+    }
+  }
 
-  // Submit execution to TPU device stream asynchronously using preallocated raw buffer array.
-  auto outputs = iter->second->ExecuteRaw(raw_buffers_.data(), raw_buffers_.size(),
+  // Set the dynamic input buffer pointer in the thread's raw buffer array.
+  tc.raw_buffers[param_idxs_[0]] = input_buffer->buffer();
+
+  // Submit execution to TPU device stream asynchronously using thread-local raw buffer array.
+  auto outputs = iter->second->ExecuteRaw(tc.raw_buffers.data(), tc.raw_buffers.size(),
                                           non_donatable_indices_,
                                           /*wait_for_device=*/false);
 
   // Reuse or allocate cached host output buffers to eliminate per-batch heap churn.
-  auto& cached_tensors = output_buffers_cache_[batch_size];
-  auto& cached_ptrs = cached_tensor_ptrs_[batch_size];
+  auto& cached_tensors = tc.output_buffers_cache[batch_size];
+  auto& cached_ptrs = tc.cached_tensor_ptrs[batch_size];
   if (cached_tensors.size() != outputs.size()) {
     cached_tensors.clear();
     cached_tensors.reserve(outputs.size());
@@ -255,16 +266,16 @@ const std::vector<const XlaMutableTensor*>& XlaRunner::ExecuteBlocking(
   }
 
   // Initiate transfers from device to host directly into cached buffers.
-  reusable_done_events_.clear();
-  reusable_done_events_.reserve(outputs.size());
+  tc.done_events.clear();
+  tc.done_events.reserve(outputs.size());
   for (size_t i = 0; i < outputs.size(); ++i) {
-    reusable_done_events_.push_back(outputs[i]->DeviceToHost(
+    tc.done_events.push_back(outputs[i]->DeviceToHost(
         cached_tensors[i]->mutable_data(), cached_tensors[i]->size()));
   }
 
   // Single consolidated wait on completion of D2H transfers.
   for (size_t i = 0; i < outputs.size(); ++i) {
-    reusable_done_events_[i]->Await();
+    tc.done_events[i]->Await();
   }
   if (h2d_event) {
     h2d_event->Await();

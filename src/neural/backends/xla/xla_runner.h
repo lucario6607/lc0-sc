@@ -74,16 +74,8 @@ class XlaRunner {
   // parameters (constants) are pre-filled in SetFrozenInputs(), and non-frozen
   // inputs (input planes) are created and filled in every request.
   std::vector<PjrtDeviceBuffer*> buffers_;
-  std::vector<PJRT_Buffer*> raw_buffers_;
   std::vector<int64_t> non_donatable_indices_;
   std::vector<size_t> param_idxs_;
-  // Reusable host output buffers indexed by batch size to avoid heap churn.
-  std::unordered_map<size_t, std::vector<std::unique_ptr<XlaMutableTensor>>>
-      output_buffers_cache_;
-  std::unordered_map<size_t, std::vector<const XlaMutableTensor*>>
-      cached_tensor_ptrs_;
-  std::vector<std::unique_ptr<PjrtEvent>> reusable_done_events_;
-  std::mutex mutex_;
   int device_;
 };
 
